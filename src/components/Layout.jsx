@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet } from 'lucide-react';
+import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [

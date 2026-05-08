@@ -32,7 +32,7 @@ function hasSimilarity(a, b) {
   return wordsA.some(w => wordsB.includes(w));
 }
 
-export default function TransactionPreviewModal({ data, incomeSources, payables, receivables, cards = [], onSave, onCancel }) {
+export default function TransactionPreviewModal({ data, incomeSources, payables, receivables, cards = [], accounts = [], onSave, onCancel }) {
   const [form, setForm] = useState({ ...data });
   const [paymentMethod, setPaymentMethod] = useState('');
   const [reconcileSuggestion, setReconcileSuggestion] = useState(null);
@@ -87,9 +87,11 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
 
   // Monta opções de pagamento
   const paymentOptions = [
-    'Dinheiro', 'Pix', 'Transferência',
-    ...cards.filter(c => c.active && (c.type === 'credit' || c.type === 'both')).map(c => `Cartão Crédito - ${c.name}`),
-    ...cards.filter(c => c.active && (c.type === 'debit' || c.type === 'both')).map(c => `Cartão Débito - ${c.name}`),
+    'Dinheiro', 'Pix',
+    ...accounts.filter(a => a.active !== false && (a.type === 'corrente' || a.type === 'digital')).map(a => `${a.name}${a.bank ? ` - ${a.bank}` : ''}`),
+    ...cards.filter(c => c.active !== false && (c.type === 'credit' || c.type === 'both')).map(c => `Cartão Crédito - ${c.name}`),
+    ...cards.filter(c => c.active !== false && (c.type === 'debit' || c.type === 'both')).map(c => `Cartão Débito - ${c.name}`),
+    ...accounts.filter(a => a.active !== false && a.type === 'poupanca').map(a => `Poupança - ${a.name}`),
     'Boleto', 'Outro',
   ];
 

@@ -38,6 +38,11 @@ export default function WhatsAppInput() {
     queryFn: () => base44.entities.Card.list(),
   });
 
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => base44.entities.Account.list(),
+  });
+
   const processInput = async (inputText, fileUrl = null, fileType = null) => {
     setProcessing(true);
     const pendingPayables = payables.filter(p => p.status === 'pending');
@@ -209,6 +214,7 @@ Extraia e retorne em JSON:
           payables={payables}
           receivables={receivables}
           cards={cards}
+          accounts={accounts}
           onSave={handleSave}
           onCancel={() => setPreview(null)}
         />

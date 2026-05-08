@@ -217,6 +217,7 @@ export default function CalendarPage() {
           shifts={monthShifts}
           hospitals={hospitals}
           sources={sources}
+          currentMonth={currentMonth}
           onClose={() => setShowClose(false)}
           onConfirm={handleCloseMonth}
         />

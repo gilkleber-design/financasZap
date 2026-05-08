@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { format, addDays } from 'date-fns';
+import { format, addDays, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
@@ -15,7 +15,7 @@ const kindColor = {
   sobreaviso: 'bg-orange-100 text-orange-700',
 };
 
-export default function CloseMonthModal({ shifts, hospitals, sources, onClose, onConfirm }) {
+export default function CloseMonthModal({ shifts, hospitals, sources, currentMonth, onClose, onConfirm }) {
   const [statuses, setStatuses] = useState(() =>
     Object.fromEntries(shifts.map(s => [s.id, s.status === 'cancelled' ? 'cancelled' : 'done']))
   );
@@ -39,9 +39,9 @@ export default function CloseMonthModal({ shifts, hospitals, sources, onClose, o
     const hospital = hospitals.find(h => h.id === hid);
     const source = sources.find(s => s.id === hospital?.income_source_id);
     const total = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
-    // Due date = última data do plantão + dias de atraso
-    const lastDate = hshifts.map(s => s.date).sort().at(-1);
-    const dueDate = addDays(new Date(lastDate + 'T12:00:00'), hospital?.dias_atraso || 0);
+    // Due date = último dia do mês de competência + dias de atraso
+    const refDate = currentMonth || new Date(hshifts[0].date + 'T12:00:00');
+    const dueDate = addDays(endOfMonth(refDate), hospital?.dias_atraso || 0);
     return { hospital, source, total, dueDate, shifts: hshifts };
   });
 

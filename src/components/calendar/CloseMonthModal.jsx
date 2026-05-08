@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { format, addDays, startOfMonth, addMonths } from 'date-fns';
+import { format, startOfMonth, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
@@ -41,10 +41,14 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
     const totalBruto = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
     const taxRate = source?.default_tax_rate || 0;
     const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
-    // Due date = 1º do mês seguinte ao de competência + dias de atraso
-    // Ex: competência abril → 1º de maio + 30 dias = 31 de maio ≈ início de junho
+    // Due date = dia X do mês (competência + offset)
+    // Ex: dia 1, offset 2 → competência abril → 1º/junho
+    // Ex: dia 15, offset 1 → competência abril → 15/maio
     const refDate = currentMonth || new Date(hshifts[0].date + 'T12:00:00');
-    const dueDate = addDays(startOfMonth(addMonths(refDate, 1)), hospital?.dias_atraso || 0);
+    const offset = hospital?.payment_months_offset ?? 1;
+    const day = hospital?.payment_day || 1;
+    const targetMonth = addMonths(startOfMonth(refDate), offset);
+    const dueDate = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), day);
     return { hospital, source, total, totalBruto, taxRate, dueDate, shifts: hshifts };
   });
 

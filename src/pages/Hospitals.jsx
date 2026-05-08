@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 const emptyForm = {
-  name: '', sigla: '', income_source_id: '', dias_atraso: '',
+  name: '', sigla: '', income_source_id: '', payment_day: '1', payment_months_offset: '1',
   valor_sd_semana: '', valor_sn_semana: '', valor_sd_fds: '', valor_sn_fds: '', valor_sobreaviso: '',
 };
 
@@ -53,7 +53,8 @@ export default function Hospitals() {
     if (!form.name || !form.sigla) return toast.error('Nome e sigla são obrigatórios');
     createMutation.mutate({
       ...form,
-      dias_atraso: parseInt(form.dias_atraso) || 0,
+      payment_day: parseInt(form.payment_day) || 1,
+      payment_months_offset: parseInt(form.payment_months_offset) || 1,
       valor_sd_semana: parseFloat(form.valor_sd_semana) || 0,
       valor_sn_semana: parseFloat(form.valor_sn_semana) || 0,
       valor_sd_fds: parseFloat(form.valor_sd_fds) || 0,
@@ -111,10 +112,20 @@ export default function Hospitals() {
               </div>
 
               <div>
-                <Label>Dias de Atraso no Pagamento</Label>
-                <Input type="number" value={form.dias_atraso} onChange={e => set('dias_atraso', e.target.value)} className="mt-1" placeholder="Ex: 30" />
+                <Label>Dia do pagamento</Label>
+                <Input type="number" min="1" max="31" value={form.payment_day} onChange={e => set('payment_day', e.target.value)} className="mt-1" placeholder="Ex: 1, 10, 15" />
               </div>
-              <div />
+              <div>
+                <Label>Meses após competência</Label>
+                <Select value={form.payment_months_offset} onValueChange={v => set('payment_months_offset', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 mês (mês seguinte)</SelectItem>
+                    <SelectItem value="2">2 meses</SelectItem>
+                    <SelectItem value="3">3 meses</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               <p className="col-span-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-1">Valores dos Plantões</p>
 
@@ -172,7 +183,7 @@ export default function Hospitals() {
                       <span>SD: {fmt(h.valor_sd_semana)} / {fmt(h.valor_sd_fds)} FDS</span>
                       <span>·</span>
                       <span>SN: {fmt(h.valor_sn_semana)} / {fmt(h.valor_sn_fds)} FDS</span>
-                      {h.dias_atraso > 0 && <span>· {h.dias_atraso}d atraso</span>}
+                      {h.payment_day && <span>· Pgto dia {h.payment_day}/{h.payment_months_offset > 1 ? `+${h.payment_months_offset}m` : 'mês seg.'}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -192,7 +203,7 @@ export default function Hospitals() {
                     <div className="flex justify-between"><span className="text-muted-foreground">SD FDS</span><span className="font-medium">{fmt(h.valor_sd_fds)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">SN FDS</span><span className="font-medium">{fmt(h.valor_sn_fds)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Sobreaviso</span><span className="font-medium">{fmt(h.valor_sobreaviso)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Dias atraso pgto</span><span className="font-medium">{h.dias_atraso || 0} dias</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Pagamento esperado</span><span className="font-medium">Dia {h.payment_day || 1} · {h.payment_months_offset || 1} mês(es) depois</span></div>
                   </div>
                 )}
               </CardContent>

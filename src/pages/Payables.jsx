@@ -28,6 +28,7 @@ const CATEGORY_LABELS = {
 export default function Payables() {
   const [showForm, setShowForm] = useState(false);
   const [filterMonth, setFilterMonth] = useState(null);
+  const [filterBy, setFilterBy] = useState('due_date');
   const queryClient = useQueryClient();
 
   const { data: payables = [] } = useQuery({
@@ -53,9 +54,16 @@ export default function Payables() {
 
   const filtered = filterMonth
     ? payables.filter(p => {
-        if (!p.due_date) return false;
-        const d = new Date(p.due_date + 'T12:00:00');
-        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        if (filterBy === 'due_date') {
+          if (!p.due_date) return false;
+          const d = new Date(p.due_date + 'T12:00:00');
+          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        } else {
+          // competencia (created_date)
+          if (!p.created_date) return false;
+          const d = new Date(p.created_date);
+          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        }
       })
     : payables;
 
@@ -76,27 +84,50 @@ export default function Payables() {
       </div>
 
       {/* Filtro de mês */}
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <Button
-          variant={filterMonth ? 'secondary' : 'ghost'}
-          size="sm"
-          onClick={() => setFilterMonth(filterMonth ? null : new Date())}
-          className="min-w-[120px] text-sm capitalize"
-        >
-          {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
-        </Button>
-        {filterMonth && (
-          <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
-            <ChevronRight className="w-4 h-4" />
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
+            <ChevronLeft className="w-4 h-4" />
           </Button>
-        )}
-        {filterMonth && (
-          <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
-            Limpar
+          <Button
+            variant={filterMonth ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setFilterMonth(filterMonth ? null : new Date())}
+            className="min-w-[120px] text-sm capitalize"
+          >
+            {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
           </Button>
+          {filterMonth && (
+            <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          )}
+          {filterMonth && (
+            <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
+              Limpar
+            </Button>
+          )}
+        </div>
+        {filterMonth && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Filtrar por:</span>
+            <Button
+              variant={filterBy === 'due_date' ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setFilterBy('due_date')}
+              className="text-xs"
+            >
+              Data de Vencimento
+            </Button>
+            <Button
+              variant={filterBy === 'competencia' ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setFilterBy('competencia')}
+              className="text-xs"
+            >
+              Competência
+            </Button>
+          </div>
         )}
       </div>
 

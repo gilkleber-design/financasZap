@@ -15,6 +15,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function Receivables() {
   const [showForm, setShowForm] = useState(false);
   const [filterMonth, setFilterMonth] = useState(null); // null = todos
+  const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' ou 'competencia'
   const queryClient = useQueryClient();
 
   const { data: receivables = [] } = useQuery({
@@ -45,9 +46,16 @@ export default function Receivables() {
 
   const filtered = filterMonth
     ? receivables.filter(r => {
-        if (!r.due_date) return false;
-        const d = new Date(r.due_date + 'T12:00:00');
-        return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        if (filterBy === 'due_date') {
+          if (!r.due_date) return false;
+          const d = new Date(r.due_date + 'T12:00:00');
+          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        } else {
+          // competencia (created_date)
+          if (!r.created_date) return false;
+          const d = new Date(r.created_date);
+          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+        }
       })
     : receivables;
 
@@ -68,27 +76,50 @@ export default function Receivables() {
       </div>
 
       {/* Filtro de mês */}
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <Button
-          variant={filterMonth ? 'secondary' : 'ghost'}
-          size="sm"
-          onClick={() => setFilterMonth(filterMonth ? null : new Date())}
-          className="min-w-[120px] text-sm"
-        >
-          {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
-        </Button>
-        {filterMonth && (
-          <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
-            <ChevronRight className="w-4 h-4" />
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setFilterMonth(filterMonth ? subMonths(filterMonth, 1) : subMonths(new Date(), 1))}>
+            <ChevronLeft className="w-4 h-4" />
           </Button>
-        )}
-        {filterMonth && (
-          <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
-            Limpar
+          <Button
+            variant={filterMonth ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setFilterMonth(filterMonth ? null : new Date())}
+            className="min-w-[120px] text-sm"
+          >
+            {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Todos os meses'}
           </Button>
+          {filterMonth && (
+            <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          )}
+          {filterMonth && (
+            <Button variant="ghost" size="sm" onClick={() => setFilterMonth(null)} className="text-muted-foreground text-xs">
+              Limpar
+            </Button>
+          )}
+        </div>
+        {filterMonth && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Filtrar por:</span>
+            <Button
+              variant={filterBy === 'due_date' ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setFilterBy('due_date')}
+              className="text-xs"
+            >
+              Data de Recebimento
+            </Button>
+            <Button
+              variant={filterBy === 'competencia' ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setFilterBy('competencia')}
+              className="text-xs"
+            >
+              Competência
+            </Button>
+          </div>
         )}
       </div>
 

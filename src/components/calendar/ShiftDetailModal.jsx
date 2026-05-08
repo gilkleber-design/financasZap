@@ -106,7 +106,7 @@ export default function ShiftDetailModal({ shift, hospital, onClose, onPass, onD
               a partir de <strong className="capitalize">{format(new Date(shift.date + 'T12:00:00'), "dd/MM/yyyy")}</strong>.
             </p>
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-              Plantões já realizados, cancelados ou com passe e contas a receber geradas <strong>não serão afetados</strong>.
+              Apenas os plantões <strong>ainda não fechados</strong> serão removidos. Plantões realizados, cancelados, passados e qualquer <strong>conta a receber já gerada continuam intactos</strong>.
             </p>
           </div>
           <div className="flex gap-2">

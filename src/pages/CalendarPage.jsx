@@ -91,18 +91,7 @@ export default function CalendarPage() {
   };
 
   const handleDeleteFromHere = async (shift) => {
-    // Busca todos os shifts futuros com mesmo hospital/tipo/natureza a partir desta data
-    const toDelete = shifts.filter(
-      s => s.hospital_id === shift.hospital_id &&
-           s.type === shift.type &&
-           s.shift_kind === shift.shift_kind &&
-           s.date >= shift.date &&
-           s.status === 'scheduled'
-    );
-    // Deleta em paralelo
-    await Promise.all(toDelete.map(s => base44.entities.Shift.delete(s.id)));
-    // Também busca shifts futuros fora do mês atual (nos próximos meses)
-    // Para isso, fazemos uma query mais ampla
+    // Busca todos os shifts futuros (inclusive além do mês visível)
     const allFuture = await base44.entities.Shift.filter({
       hospital_id: shift.hospital_id,
       type: shift.type,
@@ -110,10 +99,12 @@ export default function CalendarPage() {
       date: { $gte: shift.date },
       status: 'scheduled',
     });
-    await Promise.all(allFuture.map(s => base44.entities.Shift.delete(s.id)));
+    // Deleta apenas os que NÃO têm recebível vinculado (ou seja, não foram fechados/pagos)
+    const toDelete = allFuture.filter(s => !s.receivable_id);
+    await Promise.all(toDelete.map(s => base44.entities.Shift.delete(s.id)));
     queryClient.invalidateQueries({ queryKey: ['shifts'] });
     setSelectedShift(null);
-    toast.success('Plantões futuros deletados!');
+    toast.success(`${toDelete.length} plantão(s) futuro(s) deletado(s). Recebíveis preservados.`);
   };
 
   const handleCloseMonth = async (statuses, receivablePreview) => {

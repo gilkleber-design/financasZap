@@ -68,6 +68,10 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
           <div className="space-y-2">
             {shifts.map(s => {
               const hospital = hospitals.find(h => h.id === s.hospital_id);
+              const source = sources.find(src => src.id === hospital?.income_source_id);
+              const taxRate = source?.default_tax_rate || 0;
+              const bruto = s.valor || 0;
+              const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
               const cancelled = statuses[s.id] === 'cancelled';
               return (
                 <button
@@ -95,9 +99,12 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                       {format(new Date(s.date + 'T12:00:00'), "dd/MM/yyyy (EEEE)", { locale: ptBR })}
                     </p>
                   </div>
-                  <span className={`text-sm font-semibold ${cancelled ? 'line-through text-muted-foreground' : 'text-emerald-600'}`}>
-                    {fmt(s.valor)}
-                  </span>
+                  <div className={`text-right ${cancelled ? 'line-through text-muted-foreground' : ''}`}>
+                    <p className={`text-sm font-semibold ${cancelled ? '' : 'text-emerald-600'}`}>{fmt(liquido)}</p>
+                    {taxRate > 0 && !cancelled && (
+                      <p className="text-xs text-muted-foreground">{fmt(bruto)} bruto</p>
+                    )}
+                  </div>
                 </button>
               );
             })}
@@ -121,13 +128,13 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                         {source && ` · PJ: ${source.name}`}
                         {taxRate > 0 && ` · ${taxRate}% imposto`}
                       </p>
-                      {taxRate > 0 && (
-                        <p className="text-xs text-emerald-500 mt-0.5">Bruto: {fmt(totalBruto)}</p>
-                      )}
                     </div>
                     <div className="text-right">
-                      <span className="text-sm font-bold text-emerald-700">{fmt(total)}</span>
-                      {taxRate > 0 && <p className="text-xs text-emerald-500">líquido</p>}
+                      <p className="text-base font-bold text-emerald-700">{fmt(total)}</p>
+                      {taxRate > 0
+                        ? <p className="text-xs text-emerald-500">{fmt(totalBruto)} bruto</p>
+                        : <p className="text-xs text-emerald-500">líquido</p>
+                      }
                     </div>
                   </div>
                 ))}
@@ -137,10 +144,17 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
 
           {/* Total */}
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex justify-between items-center">
-            <span className="text-sm font-semibold">Total Líquido a Receber</span>
-            <span className="text-lg font-bold text-primary">
-              {fmt(receivablePreview.reduce((acc, r) => acc + r.total, 0))}
-            </span>
+            <span className="text-sm font-semibold">Total a Receber</span>
+            <div className="text-right">
+              <p className="text-xl font-bold text-primary">
+                {fmt(receivablePreview.reduce((acc, r) => acc + r.total, 0))}
+              </p>
+              {receivablePreview.some(r => r.taxRate > 0) && (
+                <p className="text-xs text-muted-foreground">
+                  {fmt(receivablePreview.reduce((acc, r) => acc + r.totalBruto, 0))} bruto
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

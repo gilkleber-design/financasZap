@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, Building2, MessageSquare, ExternalLink, CreditCard } from 'lucide-react';
+import { Plus, Trash2, Building2, MessageSquare, ExternalLink, CreditCard, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -21,9 +21,33 @@ export default function Settings() {
   const [cardForm, setCardForm] = useState({ name: '', type: 'credit', bank: '' });
   const setCard = (k, v) => setCardForm(p => ({ ...p, [k]: v }));
 
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [accountForm, setAccountForm] = useState({ name: '', type: 'corrente', bank: '' });
+  const setAcc = (k, v) => setAccountForm(p => ({ ...p, [k]: v }));
+
   const { data: cards = [] } = useQuery({
     queryKey: ['cards'],
     queryFn: () => base44.entities.Card.list(),
+  });
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => base44.entities.Account.list(),
+  });
+
+  const createAccountMutation = useMutation({
+    mutationFn: (data) => base44.entities.Account.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setShowAccountForm(false);
+      setAccountForm({ name: '', type: 'corrente', bank: '' });
+      toast.success('Conta adicionada!');
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: (id) => base44.entities.Account.delete(id),
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Conta removida'); },
   });
 
   const createCardMutation = useMutation({
@@ -149,71 +173,145 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Cards */}
+      {/* Contas & Cartões */}
       <Card className="border-0 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-primary" />
-            Meus Cartões
+            <Landmark className="w-4 h-4 text-primary" />
+            Contas & Cartões
           </CardTitle>
-          <Button size="sm" onClick={() => setShowCardForm(!showCardForm)}>
-            <Plus className="w-4 h-4 mr-1" /> Adicionar
-          </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {showCardForm && (
-            <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-accent/20">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label>Nome do Cartão *</Label>
-                  <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú Platinum" />
-                </div>
-                <div>
-                  <Label>Tipo</Label>
-                  <Select value={cardForm.type} onValueChange={v => setCard('type', v)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="credit">Crédito</SelectItem>
-                      <SelectItem value="debit">Débito</SelectItem>
-                      <SelectItem value="both">Crédito e Débito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Banco</Label>
-                  <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
-                <Button size="sm" onClick={() => { if (!cardForm.name) return toast.error('Informe o nome'); createCardMutation.mutate({ ...cardForm, active: true }); }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
-              </div>
-            </div>
-          )}
-          {cards.length === 0 && !showCardForm && (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum cartão cadastrado. Adicione seus cartões para usá-los nos lançamentos via WhatsApp.</p>
-          )}
-          {cards.map(c => (
-            <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
-                  <CreditCard className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">{c.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
-                      {c.type === 'credit' ? 'Crédito' : c.type === 'debit' ? 'Débito' : 'Crédito e Débito'}
-                    </Badge>
-                    {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}
-                  </div>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteCardMutation.mutate(c.id)}>
-                <Trash2 className="w-3.5 h-3.5" />
+        <CardContent className="space-y-4">
+
+          {/* --- Contas Bancárias --- */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contas Bancárias</p>
+              <Button size="sm" variant="outline" onClick={() => setShowAccountForm(!showAccountForm)}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
               </Button>
             </div>
-          ))}
+
+            {showAccountForm && (
+              <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-accent/20 mb-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <Label>Nome da Conta *</Label>
+                    <Input value={accountForm.name} onChange={e => setAcc('name', e.target.value)} className="mt-1" placeholder="Ex: Conta Corrente Itaú, Nubank" />
+                  </div>
+                  <div>
+                    <Label>Tipo</Label>
+                    <Select value={accountForm.type} onValueChange={v => setAcc('type', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="corrente">Corrente</SelectItem>
+                        <SelectItem value="poupanca">Poupança</SelectItem>
+                        <SelectItem value="digital">Digital</SelectItem>
+                        <SelectItem value="investimento">Investimento</SelectItem>
+                        <SelectItem value="carteira">Carteira (dinheiro)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Banco</Label>
+                    <Input value={accountForm.bank} onChange={e => setAcc('bank', e.target.value)} className="mt-1" placeholder="Ex: Itaú, Nubank, XP" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowAccountForm(false)} className="flex-1">Cancelar</Button>
+                  <Button size="sm" onClick={() => { if (!accountForm.name) return toast.error('Informe o nome'); createAccountMutation.mutate({ ...accountForm, active: true }); }} disabled={createAccountMutation.isPending} className="flex-1">Salvar</Button>
+                </div>
+              </div>
+            )}
+
+            {accounts.length === 0 && !showAccountForm && (
+              <p className="text-sm text-muted-foreground text-center py-3">Nenhuma conta cadastrada.</p>
+            )}
+            {accounts.map(a => (
+              <div key={a.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600">
+                    <Landmark className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{a.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant="outline" className="text-xs py-0 h-4 px-1.5 capitalize">{a.type}</Badge>
+                      {a.bank && <span className="text-xs text-muted-foreground">{a.bank}</span>}
+                    </div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteAccountMutation.mutate(a.id)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-border pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cartões</p>
+              <Button size="sm" variant="outline" onClick={() => setShowCardForm(!showCardForm)}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
+              </Button>
+            </div>
+
+            {showCardForm && (
+              <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-accent/20 mb-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <Label>Nome do Cartão *</Label>
+                    <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú Platinum" />
+                  </div>
+                  <div>
+                    <Label>Tipo</Label>
+                    <Select value={cardForm.type} onValueChange={v => setCard('type', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="credit">Crédito</SelectItem>
+                        <SelectItem value="debit">Débito</SelectItem>
+                        <SelectItem value="both">Crédito e Débito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Banco</Label>
+                    <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
+                  <Button size="sm" onClick={() => { if (!cardForm.name) return toast.error('Informe o nome'); createCardMutation.mutate({ ...cardForm, active: true }); }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
+                </div>
+              </div>
+            )}
+
+            {cards.length === 0 && !showCardForm && (
+              <p className="text-sm text-muted-foreground text-center py-3">Nenhum cartão cadastrado.</p>
+            )}
+            {cards.map(c => (
+              <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{c.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
+                        {c.type === 'credit' ? 'Crédito' : c.type === 'debit' ? 'Débito' : 'Crédito e Débito'}
+                      </Badge>
+                      {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}
+                    </div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteCardMutation.mutate(c.id)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
         </CardContent>
       </Card>
 

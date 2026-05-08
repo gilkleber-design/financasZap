@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, addDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, addDays, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import ShiftModal from '@/components/calendar/ShiftModal';
 import CloseMonthModal from '@/components/calendar/CloseMonthModal';
@@ -73,6 +73,71 @@ export default function CalendarPage() {
     setSelectedDate(null);
   };
 
+  const handleReplicateMonth = () => {
+    const nextMonth = addMonths(currentMonth, 1);
+    const nextMonthStart = startOfMonth(nextMonth);
+    const nextMonthEnd = endOfMonth(nextMonth);
+    const nextMonthDays = eachDayOfInterval({ start: nextMonthStart, end: nextMonthEnd });
+
+    const nextMonthStart_str = format(nextMonthStart, 'yyyy-MM-dd');
+    const nextMonthEnd_str = format(nextMonthEnd, 'yyyy-MM-dd');
+
+    // Plantões ativos do mês atual agrupados por (hospital_id, type, shift_kind, dayOfWeek)
+    const activeShifts = monthShifts.filter(s => s.status !== 'cancelled');
+
+    // Para cada plantão, encontra todos os dias do mesmo dia da semana no próximo mês
+    const newShifts = [];
+    const seen = new Set(); // evita duplicatas
+
+    for (const s of activeShifts) {
+      const dow = new Date(s.date + 'T12:00:00').getDay();
+      const matchingDays = nextMonthDays.filter(d => getDay(d) === dow);
+
+      for (const d of matchingDays) {
+        const dateStr = format(d, 'yyyy-MM-dd');
+        const key = `${s.hospital_id}-${s.type}-${s.shift_kind}-${dateStr}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        // Calcula valor para o novo dia (pode ser FDS diferente)
+        const hospital = hospitals.find(h => h.id === s.hospital_id);
+        const newDow = getDay(d);
+        const isFds = newDow === 0 || newDow === 6;
+        let valor = s.valor;
+        if (hospital) {
+          if (s.shift_kind === 'sobreaviso') {
+            valor = hospital.valor_sobreaviso || 0;
+          } else if (s.type === 'SD') {
+            valor = isFds ? (hospital.valor_sd_fds || 0) : (hospital.valor_sd_semana || 0);
+          } else {
+            valor = isFds ? (hospital.valor_sn_fds || 0) : (hospital.valor_sn_semana || 0);
+          }
+        }
+
+        newShifts.push({
+          hospital_id: s.hospital_id,
+          type: s.type,
+          shift_kind: s.shift_kind,
+          status: 'scheduled',
+          date: dateStr,
+          valor,
+        });
+      }
+    }
+
+    if (newShifts.length === 0) {
+      toast.error('Nenhum plantão para replicar.');
+      return;
+    }
+
+    createShiftsMutation.mutate(newShifts, {
+      onSuccess: () => {
+        setCurrentMonth(nextMonth);
+        toast.success(`${newShifts.length} plantão(s) replicado(s) para ${format(nextMonth, 'MMMM/yyyy', { locale: ptBR })}!`);
+      }
+    });
+  };
+
   const handleCloseMonth = async (statuses, receivablePreview) => {
     // Atualiza status de cada plantão
     const updates = Object.entries(statuses).map(([id, status]) =>
@@ -125,9 +190,17 @@ export default function CalendarPage() {
             <ChevronRight className="w-4 h-4" />
           </Button>
           <Button
+            variant="outline"
+            onClick={handleReplicateMonth}
+            disabled={monthShifts.filter(s => s.status !== 'cancelled').length === 0 || createShiftsMutation.isPending}
+            className="ml-2"
+          >
+            <Copy className="w-4 h-4 mr-2" />
+            Replicar Mês
+          </Button>
+          <Button
             onClick={() => setShowClose(true)}
             disabled={monthShifts.filter(s => s.status === 'scheduled').length === 0}
-            className="ml-2"
           >
             <Lock className="w-4 h-4 mr-2" />
             Fechar Mês

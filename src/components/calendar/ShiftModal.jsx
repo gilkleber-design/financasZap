@@ -41,9 +41,13 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
     if (repeat === 'none') {
       addShift(startDate);
     } else if (repeat === 'biweekly') {
-      // Apenas hoje + daqui 2 semanas
-      addShift(startDate);
-      addShift(addWeeks(startDate, 2));
+      // Quinzenal indefinido: gera 24 meses à frente
+      const endDate = addMonths(startDate, 24);
+      let current = startDate;
+      while (current <= endDate) {
+        addShift(current);
+        current = addWeeks(current, 2);
+      }
     } else if (repeat === 'weekly') {
       // Semanal indefinido: gera 24 meses à frente
       const endDate = addMonths(startDate, 24);
@@ -109,7 +113,7 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Não repete (plantão único)</SelectItem>
-                <SelectItem value="biweekly">Quinzenal (hoje + daqui 2 semanas)</SelectItem>
+                <SelectItem value="biweekly">Quinzenal (toda quinzena, indefinidamente)</SelectItem>
                 <SelectItem value="weekly">Semanal (todo semana, indefinidamente)</SelectItem>
               </SelectContent>
             </Select>
@@ -126,7 +130,7 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
               {repeat === 'weekly'
                 ? 'Serão criados ~104 plantões (toda semana pelos próximos 2 anos). Cancele individualmente os que não ocorrerem.'
-                : 'Serão criados 2 plantões (hoje + daqui a 2 semanas).'}
+                : 'Serão criados ~52 plantões (toda quinzena pelos próximos 2 anos). Cancele individualmente os que não ocorrerem.'}
             </p>
           )}
         </div>

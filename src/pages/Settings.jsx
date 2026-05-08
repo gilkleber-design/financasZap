@@ -43,6 +43,9 @@ export default function Settings() {
       setAccountForm({ name: '', type: 'corrente', bank: '' });
       toast.success('Conta adicionada!');
     },
+    onError: (err) => {
+      toast.error('Erro ao salvar: ' + (err?.message || 'tente novamente'));
+    },
   });
 
   const deleteAccountMutation = useMutation({
@@ -57,6 +60,9 @@ export default function Settings() {
       setShowCardForm(false);
       setCardForm({ name: '', type: 'credit', bank: '' });
       toast.success('Cartão adicionado!');
+    },
+    onError: (err) => {
+      toast.error('Erro ao salvar: ' + (err?.message || 'tente novamente'));
     },
   });
 

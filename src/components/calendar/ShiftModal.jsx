@@ -17,7 +17,7 @@ function calcValor(hospital, date, shiftType, shiftKind) {
   return isFds ? (hospital.valor_sn_fds || 0) : (hospital.valor_sn_semana || 0);
 }
 
-export default function ShiftModal({ date, hospitals, onSave, onClose }) {
+export default function ShiftModal({ date, hospitals, existingShifts = [], onSave, onClose, onCancelShift }) {
   const [hospitalId, setHospitalId] = useState('');
   const [shiftType, setShiftType] = useState('SD');
   const [shiftKind, setShiftKind] = useState('regular');
@@ -25,6 +25,7 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
 
   const hospital = hospitals.find(h => h.id === hospitalId);
   const valor = hospital ? calcValor(hospital, date, shiftType, shiftKind) : 0;
+  const activeShifts = existingShifts.filter(s => s.status !== 'cancelled');
 
   const handleSave = () => {
     if (!hospitalId) return;
@@ -71,6 +72,29 @@ export default function ShiftModal({ date, hospitals, onSave, onClose }) {
         </DialogHeader>
 
         <div className="space-y-4 py-1">
+          {/* Plantões existentes no dia */}
+          {activeShifts.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-700">Plantões já agendados neste dia:</p>
+              {activeShifts.map(s => {
+                const h = hospitals.find(h => h.id === s.hospital_id);
+                return (
+                  <div key={s.id} className="flex items-center justify-between text-xs">
+                    <span className="text-amber-800 font-medium">{h?.sigla} — {s.type} ({s.shift_kind})</span>
+                    {onCancelShift && (
+                      <button
+                        onClick={() => onCancelShift(s.id)}
+                        className="text-red-500 hover:text-red-700 underline ml-2"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div>
             <Label>Hospital *</Label>
             <Select value={hospitalId} onValueChange={setHospitalId}>

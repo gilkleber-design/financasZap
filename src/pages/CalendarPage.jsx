@@ -73,6 +73,10 @@ export default function CalendarPage() {
     setSelectedDate(null);
   };
 
+  const handleCancelShift = (id) => {
+    updateShiftMutation.mutate({ id, data: { status: 'cancelled' } });
+  };
+
   const handleCloseMonth = async (statuses, receivablePreview) => {
     // Atualiza status de cada plantão
     const updates = Object.entries(statuses).map(([id, status]) =>
@@ -206,7 +210,9 @@ export default function CalendarPage() {
         <ShiftModal
           date={selectedDate}
           hospitals={hospitals}
+          existingShifts={shifts.filter(s => s.date === selectedDate)}
           onSave={handleSaveShifts}
+          onCancelShift={handleCancelShift}
           onClose={() => setSelectedDate(null)}
         />
       )}

@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import ShiftModal from '@/components/calendar/ShiftModal';
 import CloseMonthModal from '@/components/calendar/CloseMonthModal';
+import ShiftDetailModal from '@/components/calendar/ShiftDetailModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -17,11 +18,13 @@ const kindStyle = {
   extra: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   sobreaviso: 'bg-orange-100 text-orange-800 border-orange-200',
   cancelled: 'bg-gray-100 text-gray-400 border-gray-200 line-through',
+  passed: 'bg-gray-100 text-gray-400 border-gray-200 italic',
 };
 
 export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedShift, setSelectedShift] = useState(null);
   const [showClose, setShowClose] = useState(false);
   const queryClient = useQueryClient();
 
@@ -75,6 +78,42 @@ export default function CalendarPage() {
 
   const handleCancelShift = (id) => {
     updateShiftMutation.mutate({ id, data: { status: 'cancelled' } });
+  };
+
+  const handlePassShift = (id, data) => {
+    updateShiftMutation.mutate({ id, data }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        setSelectedShift(null);
+        toast.success('Plantão marcado como passado!');
+      }
+    });
+  };
+
+  const handleDeleteFromHere = async (shift) => {
+    // Busca todos os shifts futuros com mesmo hospital/tipo/natureza a partir desta data
+    const toDelete = shifts.filter(
+      s => s.hospital_id === shift.hospital_id &&
+           s.type === shift.type &&
+           s.shift_kind === shift.shift_kind &&
+           s.date >= shift.date &&
+           s.status === 'scheduled'
+    );
+    // Deleta em paralelo
+    await Promise.all(toDelete.map(s => base44.entities.Shift.delete(s.id)));
+    // Também busca shifts futuros fora do mês atual (nos próximos meses)
+    // Para isso, fazemos uma query mais ampla
+    const allFuture = await base44.entities.Shift.filter({
+      hospital_id: shift.hospital_id,
+      type: shift.type,
+      shift_kind: shift.shift_kind,
+      date: { $gte: shift.date },
+      status: 'scheduled',
+    });
+    await Promise.all(allFuture.map(s => base44.entities.Shift.delete(s.id)));
+    queryClient.invalidateQueries({ queryKey: ['shifts'] });
+    setSelectedShift(null);
+    toast.success('Plantões futuros deletados!');
   };
 
   const handleCloseMonth = async (statuses, receivablePreview) => {
@@ -179,12 +218,15 @@ export default function CalendarPage() {
                 <div className="space-y-0.5">
                   {dayShifts.slice(0, 3).map(s => {
                     const h = hospitals.find(h => h.id === s.hospital_id);
+                    const styleKey = s.status === 'cancelled' ? 'cancelled' : s.status === 'passed' ? 'passed' : s.shift_kind;
                     return (
                       <div
                         key={s.id}
-                        className={`text-xs px-1.5 py-0.5 rounded border truncate ${kindStyle[s.status === 'cancelled' ? 'cancelled' : s.shift_kind]}`}
+                        onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
+                        className={`text-xs px-1.5 py-0.5 rounded border truncate cursor-pointer hover:opacity-80 ${kindStyle[styleKey]}`}
                       >
                         {h?.sigla} {s.type}
+                        {s.status === 'passed' && ' ↗'}
                       </div>
                     );
                   })}
@@ -203,7 +245,7 @@ export default function CalendarPage() {
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-200 border border-blue-300" /><span>Regular</span></div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-200 border border-yellow-300" /><span>Extra</span></div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-orange-200 border border-orange-300" /><span>Sobreaviso</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-200 border border-gray-300" /><span>Cancelado</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-200 border border-gray-300" /><span>Cancelado / Passado</span></div>
       </div>
 
       {selectedDate && (
@@ -214,6 +256,16 @@ export default function CalendarPage() {
           onSave={handleSaveShifts}
           onCancelShift={handleCancelShift}
           onClose={() => setSelectedDate(null)}
+        />
+      )}
+
+      {selectedShift && (
+        <ShiftDetailModal
+          shift={selectedShift}
+          hospital={hospitals.find(h => h.id === selectedShift.hospital_id)}
+          onClose={() => setSelectedShift(null)}
+          onPass={handlePassShift}
+          onDeleteFromHere={handleDeleteFromHere}
         />
       )}
 

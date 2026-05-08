@@ -34,7 +34,8 @@
       "enum": [
         "scheduled",
         "done",
-        "cancelled"
+        "cancelled",
+        "passed"
       ],
       "default": "scheduled",
       "description": "Status do plant\u00e3o"
@@ -42,6 +43,19 @@
     "valor": {
       "type": "number",
       "description": "Valor calculado do plant\u00e3o"
+    },
+    "passed_to": {
+      "type": "string",
+      "description": "Nome de quem assumiu o plant\u00e3o (quando passou)"
+    },
+    "passed_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data em que o passe foi acordado/realizado"
+    },
+    "passed_notes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es sobre o passe do plant\u00e3o"
     },
     "receivable_id": {
       "type": "string",

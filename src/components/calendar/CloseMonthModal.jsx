@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ const kindColor = {
 };
 
 export default function CloseMonthModal({ shifts, hospitals, sources, currentMonth, onClose, onConfirm }) {
+  const [loading, setLoading] = useState(false);
   const [statuses, setStatuses] = useState(() =>
     Object.fromEntries(shifts.map(s => [
       s.id,
@@ -235,13 +237,17 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
+          <Button variant="outline" onClick={onClose} disabled={loading} className="flex-1">Cancelar</Button>
           <Button
-            onClick={() => onConfirm(statuses, receivablePreview)}
-            disabled={doableShifts.length === 0}
+            onClick={async () => {
+              setLoading(true);
+              await onConfirm(statuses, receivablePreview);
+              setLoading(false);
+            }}
+            disabled={doableShifts.length === 0 || loading}
             className="flex-1"
           >
-            Confirmar Fechamento
+            {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processando...</> : 'Confirmar Fechamento'}
           </Button>
         </div>
       </DialogContent>

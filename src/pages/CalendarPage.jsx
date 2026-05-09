@@ -5,7 +5,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, LockOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import ShiftModal from '@/components/calendar/ShiftModal';
 import CloseMonthModal from '@/components/calendar/CloseMonthModal';
@@ -28,6 +28,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedShift, setSelectedShift] = useState(null);
   const [showClose, setShowClose] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const queryClient = useQueryClient();
 
   const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
@@ -109,6 +110,27 @@ export default function CalendarPage() {
     toast.success(`${toDelete.length} plantão(s) futuro(s) deletado(s). Recebíveis preservados.`);
   };
 
+  // Reabrir mês: reverte plantões done->scheduled e deleta recebíveis vinculados
+  const handleReopenMonth = async () => {
+    if (!window.confirm('Isso irá reverter todos os plantões fechados para "agendado" e deletar as contas a receber geradas no fechamento. Confirmar?')) return;
+    setReopening(true);
+    try {
+      const closedShifts = monthShifts.filter(s => s.status === 'done' && s.receivable_id);
+      // Coleta IDs únicos de recebíveis vinculados
+      const receivableIds = [...new Set(closedShifts.map(s => s.receivable_id).filter(Boolean))];
+      // Reverte plantões para scheduled (em paralelo)
+      await Promise.all(closedShifts.map(s =>
+        base44.entities.Shift.update(s.id, { status: 'scheduled', receivable_id: null })
+      ));
+      // Deleta os recebíveis gerados (em paralelo)
+      await Promise.all(receivableIds.map(id => base44.entities.Receivable.delete(id)));
+      queryClient.invalidateQueries();
+      toast.success(`Mês reaberto! ${closedShifts.length} plantão(s) revertido(s) e ${receivableIds.length} conta(s) a receber removida(s).`);
+    } finally {
+      setReopening(false);
+    }
+  };
+
   const handleCloseMonth = async (statuses, receivablePreview) => {
     // Atualiza apenas os plantões que estavam como 'scheduled' (não mexe em cancelados/passados já existentes)
     const updates = Object.entries(statuses)
@@ -168,6 +190,16 @@ export default function CalendarPage() {
           <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
             <ChevronRight className="w-4 h-4" />
           </Button>
+          {monthShifts.some(s => s.status === 'done' && s.receivable_id) && (
+            <Button
+              variant="outline"
+              onClick={handleReopenMonth}
+              disabled={reopening}
+            >
+              <LockOpen className="w-4 h-4 mr-2" />
+              {reopening ? 'Revertendo...' : 'Reabrir Mês'}
+            </Button>
+          )}
           <Button
             onClick={() => setShowClose(true)}
             disabled={monthShifts.filter(s => s.status === 'scheduled').length === 0}

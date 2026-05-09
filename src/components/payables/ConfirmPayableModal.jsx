@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -17,24 +17,48 @@ export default function ConfirmPayableModal({ payable, onClose }) {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
 
-  const [form, setForm] = useState({
-    date: format(new Date(), 'yyyy-MM-dd'),
-    amount: String(payable.amount || ''),
-    account_id: '',
-  });
-
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => base44.entities.Account.list(),
   });
 
+  const initialAmount = payable.amount || 0;
+  const fmtInitial = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(initialAmount);
+
+  const [form, setForm] = useState({
+    date: format(new Date(), 'yyyy-MM-dd'),
+    amount: fmtInitial,
+    account_id: '',
+  });
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  // Default Bradesco quando as contas carregarem
+  useEffect(() => {
+    if (accounts.length > 0 && !form.account_id) {
+      const bradesco = accounts.find(a => a.bank?.toLowerCase().includes('bradesco'));
+      if (bradesco) set('account_id', bradesco.id);
+    }
+  }, [accounts]);
+
+  const parseAmount = (str) => {
+    // Remove tudo exceto dígitos
+    const digits = str.replace(/\D/g, '');
+    return parseFloat(digits) / 100;
+  };
+
+  const formatCurrency = (str) => {
+    const digits = str.replace(/\D/g, '');
+    const num = parseFloat(digits) / 100;
+    if (!digits) return '';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+  };
+
   const handleConfirm = async () => {
     if (!form.date || !form.amount) return toast.error('Preencha data e valor');
     setSaving(true);
 
-    const amount = parseFloat(form.amount);
+    const amount = parseAmount(form.amount);
 
     // Cria lançamento de despesa
     const tx = await base44.entities.Transaction.create({
@@ -99,8 +123,15 @@ export default function ConfirmPayableModal({ payable, onClose }) {
             <Input type="date" className="mt-1" value={form.date} onChange={e => set('date', e.target.value)} />
           </div>
           <div>
-            <Label>Valor Pago (R$) *</Label>
-            <Input type="number" className="mt-1" value={form.amount} onChange={e => set('amount', e.target.value)} />
+            <Label>Valor Pago *</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              className="mt-1"
+              value={form.amount}
+              onChange={e => set('amount', formatCurrency(e.target.value))}
+              placeholder="R$ 0,00"
+            />
           </div>
           <div>
             <Label>Conta de Pagamento</Label>

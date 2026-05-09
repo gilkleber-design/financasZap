@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -18,9 +18,12 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
   const [done, setDone] = useState(false);
   const [transactionId, setTransactionId] = useState(null);
 
+  const initialAmount = receivable.net_amount || receivable.amount || 0;
+  const fmtInitial = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(initialAmount);
+
   const [form, setForm] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
-    amount: String(receivable.net_amount || receivable.amount || ''),
+    amount: fmtInitial,
     account_id: '',
   });
 
@@ -31,11 +34,19 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
     queryFn: () => base44.entities.Account.list(),
   });
 
+  // Default Bradesco quando as contas carregarem
+  useEffect(() => {
+    if (accounts.length > 0 && !form.account_id) {
+      const bradesco = accounts.find(a => a.bank?.toLowerCase().includes('bradesco'));
+      if (bradesco) set('account_id', bradesco.id);
+    }
+  }, [accounts]);
+
   const handleConfirm = async () => {
     if (!form.date || !form.amount) return toast.error('Preencha data e valor');
     setSaving(true);
 
-    const amount = parseFloat(form.amount);
+    const amount = parseFloat(form.amount.replace(/\D/g, '')) / 100;
     const taxRate = receivable.tax_rate || 0;
     const grossAmount = taxRate > 0 ? amount / (1 - taxRate / 100) : amount;
 
@@ -114,8 +125,20 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
             <Input type="date" className="mt-1" value={form.date} onChange={e => set('date', e.target.value)} />
           </div>
           <div>
-            <Label>Valor Recebido (R$) *</Label>
-            <Input type="number" className="mt-1" value={form.amount} onChange={e => set('amount', e.target.value)} />
+            <Label>Valor Recebido *</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              className="mt-1"
+              value={form.amount}
+              onChange={e => {
+                const digits = e.target.value.replace(/\D/g, '');
+                if (!digits) { set('amount', ''); return; }
+                const num = parseFloat(digits) / 100;
+                set('amount', new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num));
+              }}
+              placeholder="R$ 0,00"
+            />
           </div>
           <div>
             <Label>Conta de Recebimento</Label>

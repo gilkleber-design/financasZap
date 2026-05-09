@@ -10,8 +10,8 @@ import { ptBR } from 'date-fns/locale';
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 function calcValor(hospital, date, shiftType, shiftKind) {
-  if (hospital.remuneration_model === 'producao') return 0; // será informado manualmente
-  if (shiftKind === 'sobreaviso') return hospital.valor_sobreaviso || 0;
+  if (hospital.remuneration_model === 'producao') return 0;
+  if (shiftType === 'sobreaviso') return hospital.valor_sobreaviso || 0;
   const dow = new Date(date + 'T12:00:00').getDay();
   const isFds = dow === 0 || dow === 6;
   if (shiftType === 'SD') return isFds ? (hospital.valor_sd_fds || 0) : (hospital.valor_sd_semana || 0);
@@ -23,32 +23,34 @@ function calcLiquido(bruto, source) {
   return taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
 }
 
-// Cores por natureza (Mirtilo/Banana/Tomate/Grafite/Verde)
 const kindStyle = {
   regular: 'border-blue-300 bg-blue-50 text-blue-800',
   extra: 'border-yellow-300 bg-yellow-50 text-yellow-800',
-  sobreaviso: 'border-red-300 bg-red-50 text-red-800',
   avista: 'border-green-300 bg-green-50 text-green-800',
+  sobreaviso: 'border-red-300 bg-red-50 text-red-800',
 };
-
-const kindLabel = { regular: '🫐 Regular', extra: '🍌 Extra', sobreaviso: '🍅 Sobreaviso', avista: '💵 À Vista' };
 
 export default function ShiftModal({ date, hospitals, sources = [], existingShifts = [], onSave, onClose, onCancelShift }) {
   const [hospitalId, setHospitalId] = useState('');
-  const [shiftType, setShiftType] = useState('SD');
-  const [shiftKind, setShiftKind] = useState('regular');
+  const [shiftType, setShiftType] = useState('SD'); // SD | SN | sobreaviso
+  const [shiftKind, setShiftKind] = useState('regular'); // regular | extra | avista
   const [repeat, setRepeat] = useState('none');
   const [producaoValor, setProducaoValor] = useState('');
 
+  const isSobreaviso = shiftType === 'sobreaviso';
   const isAvista = shiftKind === 'avista';
 
   const hospital = hospitals.find(h => h.id === hospitalId);
   const source = hospital ? sources.find(s => s.id === hospital.income_source_id) : null;
   const isProducao = hospital?.remuneration_model === 'producao';
 
+  // Para salvar na entidade: shift_kind vira 'sobreaviso' quando tipo for sobreaviso
+  const effectiveKind = isSobreaviso ? 'sobreaviso' : shiftKind;
+  const effectiveType = isSobreaviso ? 'SD' : shiftType; // tipo guardado na entidade (SD/SN), sobreaviso vai no kind
+
   const bruto = isProducao
     ? (parseFloat(producaoValor) || 0)
-    : (hospital ? calcValor(hospital, date, shiftType, shiftKind) : 0);
+    : (hospital ? calcValor(hospital, date, shiftType, effectiveKind) : 0);
   const liquido = calcLiquido(bruto, source);
   const taxRate = source?.default_tax_rate || 0;
 
@@ -61,21 +63,19 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
     const shifts = [];
     const base = {
       hospital_id: hospitalId,
-      type: shiftType,
-      shift_kind: shiftKind,
-      // À vista: já nasce como done; demais: scheduled
+      type: effectiveType,
+      shift_kind: effectiveKind,
       status: isAvista ? 'done' : 'scheduled',
     };
     const startDate = new Date(date + 'T12:00:00');
 
     const addShift = (d) => {
       const dateStr = format(d, 'yyyy-MM-dd');
-      const v = isProducao ? parseFloat(producaoValor) || 0 : calcValor(hospital, dateStr, shiftType, shiftKind);
+      const v = isProducao ? parseFloat(producaoValor) || 0 : calcValor(hospital, dateStr, shiftType, effectiveKind);
       shifts.push({ ...base, date: dateStr, valor: v });
     };
 
-    // À vista não permite repetição
-    if (repeat === 'none' || isAvista) {
+    if (repeat === 'none' || isAvista || isSobreaviso) {
       addShift(startDate);
     } else if (repeat === 'biweekly') {
       const endDate = addMonths(startDate, 24);
@@ -111,7 +111,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                 return (
                   <div key={s.id} className="flex items-center justify-between text-xs">
                     <span className="text-amber-800 font-medium">
-                      {h?.sigla} — {s.type} ({s.shift_kind})
+                      {h?.sigla} — {s.shift_kind === 'sobreaviso' ? '🍅 Sobreaviso' : `${s.type} (${s.shift_kind})`}
                       {' · '}
                       <span className="text-emerald-700">{fmt(liq)}</span>
                       {src?.default_tax_rate > 0 && <span className="text-muted-foreground ml-1">({fmt(s.valor)} bruto)</span>}
@@ -141,31 +141,35 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
 
           {hospital && (
             <div className="grid grid-cols-2 gap-3">
-              {/* Tipo SD/SN só para plantão */}
+              {/* Tipo: SD / SN / Sobreaviso */}
               {!isProducao && (
                 <div>
                   <Label>Tipo</Label>
-                  <Select value={shiftType} onValueChange={setShiftType}>
+                  <Select value={shiftType} onValueChange={v => { setShiftType(v); if (v === 'sobreaviso') setShiftKind('regular'); }}>
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="SD">SD (Diurno)</SelectItem>
                       <SelectItem value="SN">SN (Noturno)</SelectItem>
+                      <SelectItem value="sobreaviso">🍅 Sobreaviso</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               )}
-              <div className={isProducao ? 'col-span-2' : ''}>
-                <Label>Natureza</Label>
-                <Select value={shiftKind} onValueChange={setShiftKind}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="regular">🫐 Regular</SelectItem>
-                    <SelectItem value="extra">🍌 Extra</SelectItem>
-                    <SelectItem value="sobreaviso">🍅 Sobreaviso</SelectItem>
-                    <SelectItem value="avista">💵 À Vista</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+              {/* Natureza: Regular / Extra / À Vista — oculta se Sobreaviso */}
+              {!isSobreaviso && (
+                <div className={isProducao ? 'col-span-2' : ''}>
+                  <Label>Natureza</Label>
+                  <Select value={shiftKind} onValueChange={setShiftKind}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">🫐 Regular</SelectItem>
+                      <SelectItem value="extra">🍌 Extra</SelectItem>
+                      <SelectItem value="avista">💵 À Vista</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
 
@@ -183,7 +187,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
             </div>
           )}
 
-          {!isProducao && !isAvista && hospital && (
+          {!isProducao && !isAvista && !isSobreaviso && hospital && (
             <div>
               <Label>Repetição</Label>
               <Select value={repeat} onValueChange={setRepeat}>
@@ -204,7 +208,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
           )}
 
           {hospital && (bruto > 0 || isProducao) && (
-            <div className={`rounded-xl p-3 border ${kindStyle[shiftKind] || 'bg-accent/30 border-border'}`}>
+            <div className={`rounded-xl p-3 border ${kindStyle[isSobreaviso ? 'sobreaviso' : shiftKind] || 'bg-accent/30 border-border'}`}>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Valor líquido</span>
                 <span className="font-bold text-lg">{fmt(liquido)}</span>
@@ -218,7 +222,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
             </div>
           )}
 
-          {repeat !== 'none' && (
+          {repeat !== 'none' && !isSobreaviso && (
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
               {repeat === 'weekly'
                 ? 'Serão criados ~104 plantões (toda semana pelos próximos 2 anos).'
@@ -235,7 +239,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
             disabled={!hospitalId || (isProducao && !producaoValor)}
             className="flex-1"
           >
-            {repeat !== 'none' ? 'Criar Plantões' : 'Criar Plantão'}
+            {repeat !== 'none' && !isSobreaviso ? 'Criar Plantões' : 'Criar Plantão'}
           </Button>
         </div>
       </DialogContent>

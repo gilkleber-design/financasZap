@@ -134,9 +134,8 @@ export default function CalendarPage() {
   const handleCloseMonth = async (statuses, receivablePreview) => {
     // Atualiza apenas os plantões que estavam como 'scheduled' (não mexe em cancelados/passados já existentes)
     const updates = Object.entries(statuses)
-      .filter(([id, status]) => {
+      .filter(([id]) => {
         const shift = monthShifts.find(s => s.id === id);
-        // Só atualiza se o plantão estava 'scheduled'
         return shift?.status === 'scheduled';
       })
       .map(([id, status]) => updateShiftMutation.mutateAsync({ id, data: { status } }));
@@ -158,16 +157,16 @@ export default function CalendarPage() {
       });
 
       // Vincula receivable_id apenas nos plantões confirmados (done), não nos cancelados/passados
-      for (const s of hshifts) {
-        if (statuses[s.id] === 'done') {
-          await updateShiftMutation.mutateAsync({ id: s.id, data: { receivable_id: rec.id } });
-        }
-      }
+      await Promise.all(
+        hshifts
+          .filter(s => statuses[s.id] === 'done')
+          .map(s => updateShiftMutation.mutateAsync({ id: s.id, data: { receivable_id: rec.id } }))
+      );
     }
 
-    queryClient.invalidateQueries();
+    await queryClient.invalidateQueries();
     setShowClose(false);
-    toast.success('Fechamento realizado! Contas a receber geradas.');
+    toast.success(`Fechamento de ${format(currentMonth, 'MMMM/yyyy', { locale: ptBR })} realizado! ${receivablePreview.length} conta(s) a receber gerada(s).`);
   };
 
   return (

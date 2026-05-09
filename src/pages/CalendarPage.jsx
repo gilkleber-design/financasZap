@@ -78,7 +78,19 @@ export default function CalendarPage() {
   };
 
   const monthShifts = shifts.filter(s => s.date >= monthStart && s.date <= monthEnd);
-  const totalMonth = monthShifts.filter(s => s.status !== 'cancelled').reduce((acc, s) => acc + (s.valor || 0), 0);
+  
+  const totalMonth = monthShifts
+    .filter(s => s.status !== 'cancelled')
+    .reduce((acc, s) => {
+      const hospital = hospitals.find(h => h.id === s.hospital_id);
+      const source = hospital ? sources.find(src => src.id === hospital.income_source_id) : null;
+      const taxRate = source?.default_tax_rate || 0;
+      const bruto = s.valor || 0;
+      const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
+      return acc + liquido;
+    }, 0);
+
+  const isMonthClosed = monthShifts.some(s => s.status === 'done' && s.receivable_id && s.shift_kind !== 'avista');
 
   const handleSaveShifts = async (newShifts, meta) => {
     if (meta?.isAvista && newShifts.length === 1) {
@@ -227,7 +239,7 @@ export default function CalendarPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {monthShifts.some(s => s.status === 'done' && s.receivable_id) ? (
+          {isMonthClosed ? (
             <Button
               variant="outline"
               onClick={handleReopenMonth}

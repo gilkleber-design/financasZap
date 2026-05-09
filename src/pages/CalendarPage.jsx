@@ -166,8 +166,6 @@ export default function CalendarPage() {
     }
 
     await queryClient.invalidateQueries();
-    setShowClose(false);
-    toast.success(`Fechamento de ${format(currentMonth, 'MMMM/yyyy', { locale: ptBR })} realizado! ${receivablePreview.length} conta(s) a receber gerada(s).`);
   };
 
   return (

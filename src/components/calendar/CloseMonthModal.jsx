@@ -18,6 +18,7 @@ const kindColor = {
 
 export default function CloseMonthModal({ shifts, hospitals, sources, currentMonth, onClose, onConfirm }) {
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(null); // { count, total }
   const [statuses, setStatuses] = useState(() =>
     Object.fromEntries(shifts.map(s => [
       s.id,
@@ -236,20 +237,34 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={loading} className="flex-1">Cancelar</Button>
-          <Button
-            onClick={async () => {
-              setLoading(true);
-              await onConfirm(statuses, receivablePreview);
-              setLoading(false);
-            }}
-            disabled={doableShifts.length === 0 || loading}
-            className="flex-1"
-          >
-            {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processando...</> : 'Confirmar Fechamento'}
-          </Button>
-        </div>
+        {done ? (
+          <div className="flex flex-col items-center gap-4 py-4">
+            <CheckCircle2 className="w-14 h-14 text-emerald-500" />
+            <div className="text-center">
+              <p className="text-lg font-bold text-emerald-700">Fechamento realizado com sucesso!</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {done.count} conta(s) a receber gerada(s) · {fmt(done.total)} líquido
+              </p>
+            </div>
+            <Button onClick={onClose} className="w-full">Fechar</Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={loading} className="flex-1">Cancelar</Button>
+            <Button
+              onClick={async () => {
+                setLoading(true);
+                await onConfirm(statuses, receivablePreview);
+                setDone({ count: receivablePreview.length, total: grandTotal });
+                setLoading(false);
+              }}
+              disabled={doableShifts.length === 0 || loading}
+              className="flex-1"
+            >
+              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processando...</> : 'Confirmar Fechamento'}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

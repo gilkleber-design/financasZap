@@ -31,6 +31,11 @@ export default function Receivables() {
     queryFn: () => base44.entities.IncomeSource.list(),
   });
 
+  const { data: hospitals = [] } = useQuery({
+    queryKey: ['hospitals'],
+    queryFn: () => base44.entities.Hospital.list(),
+  });
+
 
 
   const deleteMutation = useMutation({
@@ -53,6 +58,14 @@ export default function Receivables() {
     return r.status;
   };
 
+  // Helper: nome do hospital para um recebível (via income_source_id)
+  const hospitalName = (r) => {
+    const hosp = hospitals.find(h => h.income_source_id === r.income_source_id);
+    if (hosp) return hosp.sigla || hosp.name;
+    const src = incomeSources.find(s => s.id === r.income_source_id);
+    return src?.name || '';
+  };
+
   const filtered = receivables
     .filter(r => {
       // filtro de status
@@ -72,6 +85,15 @@ export default function Receivables() {
         const d = new Date(raw + 'T12:00:00');
         return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
       }
+    })
+    .sort((a, b) => {
+      const hA = hospitalName(a).toLowerCase();
+      const hB = hospitalName(b).toLowerCase();
+      if (hA !== hB) return hA.localeCompare(hB, 'pt-BR');
+      // depois por competência (ou due_date como fallback)
+      const cA = a.competencia || a.due_date || '';
+      const cB = b.competencia || b.due_date || '';
+      return cA.localeCompare(cB);
     });
 
   const totalPending = filtered.filter(r => r.status === 'pending').reduce((s, r) => s + (r.net_amount || r.amount), 0);

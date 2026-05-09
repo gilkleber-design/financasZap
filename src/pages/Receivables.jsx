@@ -51,9 +51,10 @@ export default function Receivables() {
           const d = new Date(r.due_date + 'T12:00:00');
           return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
         } else {
-          // competencia (created_date)
-          if (!r.created_date) return false;
-          const d = new Date(r.created_date);
+          // competencia — usa campo dedicado, com fallback para due_date
+          const raw = r.competencia || r.due_date;
+          if (!raw) return false;
+          const d = new Date(raw + 'T12:00:00');
           return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
         }
       })

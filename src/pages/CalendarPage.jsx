@@ -148,6 +148,7 @@ export default function CalendarPage() {
         amount: isPdt ? 0 : totalBruto,
         net_amount: isPdt ? 0 : total,
         due_date: format(dueDate, 'yyyy-MM-dd'),
+        competencia: format(startOfMonth(currentMonth), 'yyyy-MM-dd'),
         income_source_id: hospital.income_source_id || source?.id || '',
         tax_rate: isPdt ? 0 : (taxRate || 0),
         status: 'pending',

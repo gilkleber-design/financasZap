@@ -28,6 +28,13 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   const [extraIncomes, setExtraIncomes] = useState([]);
   const [showExtraForm, setShowExtraForm] = useState(false);
   const [extraForm, setExtraForm] = useState({ description: '', amount: '', taxRate: '', sourceId: '' });
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+
+  const extraTemplates = {
+    salario_afya: { description: 'SALÁRIO AFYA', amount: 5199.58, taxRate: 0, sourceId: '' },
+    bolsa_residencia: { description: 'BOLSA PRECEPTORIA RESIDENCIA', amount: 2500, taxRate: 13, sourceId: '' },
+    bolsa_internato: { description: 'BOLSA INTERNATO', amount: '', taxRate: 0, sourceId: '' },
+  };
 
   const toggle = (id) => {
     const shift = shifts.find(s => s.id === id);
@@ -121,6 +128,17 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
     }
   });
 
+  const handleTemplateSelect = (templateKey) => {
+    if (templateKey === 'outro') {
+      setSelectedTemplate('outro');
+      setExtraForm({ description: '', amount: '', taxRate: '', sourceId: '' });
+    } else {
+      const template = extraTemplates[templateKey];
+      setSelectedTemplate(templateKey);
+      setExtraForm({ ...template });
+    }
+  };
+
   const addExtraIncome = () => {
     if (!extraForm.description || !extraForm.amount) return;
     const amount = parseFloat(extraForm.amount);
@@ -128,6 +146,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
     const netAmount = taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
     setExtraIncomes([...extraIncomes, { ...extraForm, amount, taxRate, netAmount }]);
     setExtraForm({ description: '', amount: '', taxRate: '', sourceId: '' });
+    setSelectedTemplate('');
     setShowExtraForm(false);
   };
 
@@ -176,15 +195,61 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
               </Button>
             </div>
 
-            {showExtraForm && (
+            {showExtraForm && !selectedTemplate && (
               <div className="bg-accent/30 border border-border rounded-xl p-3 space-y-3">
-                <input
-                  type="text"
-                  placeholder="Descrição (ex: Bolsa Internato, Salário Professor)"
-                  value={extraForm.description}
-                  onChange={e => setExtraForm({ ...extraForm, description: e.target.value })}
-                  className="w-full px-2 py-1.5 text-sm rounded border border-input bg-background"
-                />
+                <p className="text-xs font-semibold text-muted-foreground">Selecione ou adicione uma renda extra:</p>
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    onClick={() => handleTemplateSelect('salario_afya')}
+                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-foreground">SALÁRIO AFYA</p>
+                    <p className="text-xs text-muted-foreground">CLT · R$ 5.199,58</p>
+                  </button>
+                  <button
+                    onClick={() => handleTemplateSelect('bolsa_residencia')}
+                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-foreground">BOLSA PRECEPTORIA RESIDENCIA</p>
+                    <p className="text-xs text-muted-foreground">PJ Vitruvian · R$ 2.500,00 (13% imposto)</p>
+                  </button>
+                  <button
+                    onClick={() => handleTemplateSelect('bolsa_internato')}
+                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-foreground">BOLSA INTERNATO</p>
+                    <p className="text-xs text-muted-foreground">Valor variável · Crédito direto</p>
+                  </button>
+                  <button
+                    onClick={() => handleTemplateSelect('outro')}
+                    className="text-left p-2.5 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-foreground">OUTRO</p>
+                    <p className="text-xs text-muted-foreground">Adicionar renda customizada</p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {showExtraForm && selectedTemplate && (
+              <div className="bg-accent/30 border border-border rounded-xl p-3 space-y-3">
+                {selectedTemplate !== 'outro' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                    <p className="text-xs font-semibold text-blue-700">{extraForm.description}</p>
+                    {extraForm.taxRate > 0 && (
+                      <p className="text-xs text-blue-600 mt-1">Imposto: {extraForm.taxRate}%</p>
+                    )}
+                  </div>
+                )}
+                {selectedTemplate === 'outro' && (
+                  <input
+                    type="text"
+                    placeholder="Descrição"
+                    value={extraForm.description}
+                    onChange={e => setExtraForm({ ...extraForm, description: e.target.value })}
+                    className="w-full px-2 py-1.5 text-sm rounded border border-input bg-background"
+                  />
+                )}
                 <div className="grid grid-cols-3 gap-2">
                   <input
                     type="number"
@@ -202,6 +267,14 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                   />
                   <Button size="sm" onClick={addExtraIncome} className="h-8">Adicionar</Button>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setSelectedTemplate(''); setExtraForm({ description: '', amount: '', taxRate: '', sourceId: '' }); }}
+                  className="w-full text-xs"
+                >
+                  Voltar
+                </Button>
               </div>
             )}
 

@@ -92,6 +92,7 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
           <Select value={String(form.payment_months_offset)} onValueChange={v => set('payment_months_offset', v)}>
             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="0">0 (mês atual)</SelectItem>
               <SelectItem value="1">1 mês (mês seguinte)</SelectItem>
               <SelectItem value="2">2 meses</SelectItem>
               <SelectItem value="3">3 meses</SelectItem>

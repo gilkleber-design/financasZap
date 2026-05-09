@@ -110,7 +110,7 @@ export default function Receivables() {
               onClick={() => setFilterBy('due_date')}
               className="text-xs"
             >
-              Data de Recebimento
+              Data de Vencimento
             </Button>
             <Button
               variant={filterBy === 'competencia' ? 'secondary' : 'outline'}

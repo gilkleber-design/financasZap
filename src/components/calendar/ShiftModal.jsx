@@ -156,20 +156,18 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                 </div>
               )}
 
-              {/* Natureza: Regular / Extra / À Vista — oculta se Sobreaviso */}
-              {!isSobreaviso && (
-                <div className={isProducao ? 'col-span-2' : ''}>
-                  <Label>Natureza</Label>
-                  <Select value={shiftKind} onValueChange={setShiftKind}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="regular">🫐 Regular</SelectItem>
-                      <SelectItem value="extra">🍌 Extra</SelectItem>
-                      <SelectItem value="avista">💵 À Vista</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Natureza: Regular / Extra / À Vista */}
+              <div className={isProducao ? 'col-span-2' : ''}>
+                <Label>Natureza</Label>
+                <Select value={shiftKind} onValueChange={setShiftKind}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">🫐 Regular</SelectItem>
+                    <SelectItem value="extra">🍌 Extra</SelectItem>
+                    <SelectItem value="avista">💵 À Vista</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 

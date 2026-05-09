@@ -9,7 +9,7 @@ import ConfirmReceivableModal from './ConfirmReceivableModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-export default function PendingAlerts({ payables, receivables }) {
+export default function PendingAlerts({ payables, receivables, onRefresh }) {
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
 
   const allAlerts = [
@@ -73,7 +73,10 @@ export default function PendingAlerts({ payables, receivables }) {
       {confirmingReceivable && (
         <ConfirmReceivableModal
           receivable={confirmingReceivable}
-          onClose={() => setConfirmingReceivable(null)}
+          onClose={() => {
+            setConfirmingReceivable(null);
+            onRefresh?.();
+          }}
         />
       )}
     </>

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { startOfMonth, endOfMonth, format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,6 +15,7 @@ const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
 const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.list('-date', 200),
@@ -89,7 +90,11 @@ export default function Dashboard() {
           <RecentTransactions transactions={transactions.slice(0, 8)} />
         </div>
         <div>
-          <PendingAlerts payables={pendingPayables} receivables={pendingReceivables} />
+          <PendingAlerts
+            payables={pendingPayables}
+            receivables={pendingReceivables}
+            onRefresh={() => queryClient.invalidateQueries()}
+          />
         </div>
       </div>
     </div>

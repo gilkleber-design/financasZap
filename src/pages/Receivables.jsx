@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
 import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -36,6 +36,15 @@ export default function Receivables() {
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Receivable.delete(id),
     onSuccess: () => { queryClient.invalidateQueries(); toast.success('Removido'); },
+  });
+
+  const undoPaymentMutation = useMutation({
+    mutationFn: async (r) => {
+      // Remove o lançamento vinculado (se existir) e reverte o recebível para pending
+      if (r.transaction_id) await base44.entities.Transaction.delete(r.transaction_id);
+      await base44.entities.Receivable.update(r.id, { status: 'pending', transaction_id: null });
+    },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Pagamento desfeito!'); },
   });
 
   const getStatus = (r) => {
@@ -159,6 +168,11 @@ export default function Receivables() {
                   {status !== 'received' && (
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => markReceivedMutation.mutate(r.id)}>
                       <CheckCircle2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {status === 'received' && (
+                    <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer pagamento" onClick={() => undoPaymentMutation.mutate(r)}>
+                      <Undo2 className="w-4 h-4" />
                     </Button>
                   )}
                   <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(r.id)}>

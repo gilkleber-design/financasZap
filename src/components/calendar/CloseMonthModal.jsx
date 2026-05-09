@@ -133,9 +133,9 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
             Revise os plantões. Clique para marcar como <strong>cancelado</strong> (não gerará recebível).
           </p>
 
-          {/* Lista de plantões — excluindo os "à vista" que já têm recebível próprio */}
+          {/* Lista de plantões — excluindo os "à vista" que já têm recebível próprio e os já passados */}
           <div className="space-y-2">
-            {shifts.filter(s => s.shift_kind !== 'avista').map(s => {
+            {shifts.filter(s => s.shift_kind !== 'avista' && s.status !== 'passed').map(s => {
               const hospital = hospitals.find(h => h.id === s.hospital_id);
               const source = sources.find(src => src.id === hospital?.income_source_id);
               const taxRate = source?.default_tax_rate || 0;

@@ -87,9 +87,10 @@ export default function Receivables() {
       }
     })
     .sort((a, b) => {
-      const hA = hospitalName(a).toLowerCase();
-      const hB = hospitalName(b).toLowerCase();
-      if (hA !== hB) return hA.localeCompare(hB, 'pt-BR');
+      // Extrai a sigla do hospital da descrição (tudo antes do " —")
+      const siglaA = (a.description.split('—')[0] || '').trim().toLowerCase();
+      const siglaB = (b.description.split('—')[0] || '').trim().toLowerCase();
+      if (siglaA !== siglaB) return siglaA.localeCompare(siglaB, 'pt-BR');
       // depois por competência (ou due_date como fallback)
       const cA = a.competencia || a.due_date || '';
       const cB = b.competencia || b.due_date || '';

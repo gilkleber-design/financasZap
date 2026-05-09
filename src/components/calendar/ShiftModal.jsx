@@ -19,8 +19,7 @@ function calcValor(hospital, date, shiftType, shiftKind) {
   else if (shiftType === 'SN') valor = isFds ? (hospital.valor_sn_fds || 0) : (hospital.valor_sn_semana || 0);
   else if (shiftType === 'turno') {
     const baseSd = isFds ? (hospital.valor_sd_fds || 0) : (hospital.valor_sd_semana || 0);
-    const baseSn = isFds ? (hospital.valor_sn_fds || 0) : (hospital.valor_sn_semana || 0);
-    valor = (baseSd + baseSn) / 2; // Média entre SD e SN
+    valor = baseSd / 2; // 50% do valor do SD
   }
   return valor;
 }

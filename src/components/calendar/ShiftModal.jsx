@@ -152,7 +152,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
              {!isProducao && (
                <div>
                  <Label>Tipo</Label>
-                 <Select value={shiftType} onValueChange={v => { setShiftType(v); if (v === 'sobreaviso') setShiftKind('regular'); }}>
+                 <Select value={shiftType} onValueChange={(v) => { setShiftType(v); if (v === 'sobreaviso') setShiftKind('regular'); }}>
                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                    <SelectContent>
                      <SelectItem value="SD">SD (Diurno)</SelectItem>

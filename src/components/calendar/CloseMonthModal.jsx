@@ -17,15 +17,23 @@ const kindColor = {
 
 export default function CloseMonthModal({ shifts, hospitals, sources, currentMonth, onClose, onConfirm }) {
   const [statuses, setStatuses] = useState(() =>
-    Object.fromEntries(shifts.map(s => [s.id, s.status === 'cancelled' ? 'cancelled' : 'done']))
+    Object.fromEntries(shifts.map(s => [
+      s.id,
+      (s.status === 'cancelled' || s.status === 'passed') ? s.status : 'done'
+    ]))
   );
 
-  const toggle = (id) => setStatuses(prev => ({
-    ...prev,
-    [id]: prev[id] === 'cancelled' ? 'done' : 'cancelled',
-  }));
+  const toggle = (id) => {
+    const shift = shifts.find(s => s.id === id);
+    // Não permite alterar plantões que já eram passed antes do fechamento
+    if (shift?.status === 'passed') return;
+    setStatuses(prev => ({
+      ...prev,
+      [id]: prev[id] === 'cancelled' ? 'done' : 'cancelled',
+    }));
+  };
 
-  const doableShifts = shifts.filter(s => statuses[s.id] !== 'cancelled');
+  const doableShifts = shifts.filter(s => statuses[s.id] === 'done');
 
   // Agrupar shifts confirmados por hospital
   const byHospital = doableShifts.reduce((acc, s) => {

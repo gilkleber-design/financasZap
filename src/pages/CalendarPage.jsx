@@ -110,29 +110,36 @@ export default function CalendarPage() {
   };
 
   const handleCloseMonth = async (statuses, receivablePreview) => {
-    // Atualiza status de cada plantão
-    const updates = Object.entries(statuses).map(([id, status]) =>
-      updateShiftMutation.mutateAsync({ id, data: { status } })
-    );
+    // Atualiza apenas os plantões que estavam como 'scheduled' (não mexe em cancelados/passados já existentes)
+    const updates = Object.entries(statuses)
+      .filter(([id, status]) => {
+        const shift = monthShifts.find(s => s.id === id);
+        // Só atualiza se o plantão estava 'scheduled'
+        return shift?.status === 'scheduled';
+      })
+      .map(([id, status]) => updateShiftMutation.mutateAsync({ id, data: { status } }));
     await Promise.all(updates);
 
-    // Gera Receivables por hospital
-    for (const { hospital, source, total, totalBruto, taxRate, dueDate, shifts: hshifts } of receivablePreview) {
-      const monthLabel = format(currentMonth, 'MMMM/yyyy', { locale: ptBR });
+    // Gera Receivables usando exatamente o receivablePreview (já filtrado sem cancelados)
+    for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt } of receivablePreview) {
       const rec = await createReceivableMutation.mutateAsync({
-        description: `${hospital.sigla} — Plantões ${monthLabel}`,
-        amount: totalBruto,
-        net_amount: total,
+        description: label,
+        amount: isPdt ? 0 : totalBruto,
+        net_amount: isPdt ? 0 : total,
         due_date: format(dueDate, 'yyyy-MM-dd'),
         income_source_id: hospital.income_source_id || source?.id || '',
-        tax_rate: taxRate || 0,
+        tax_rate: isPdt ? 0 : (taxRate || 0),
         status: 'pending',
-        notes: `Fechamento automático: ${hshifts.length} plantão(s)`,
+        notes: isPdt
+          ? `PDT — aguardando valor (${hshifts.length} plantão(s))`
+          : `Fechamento automático: ${hshifts.length} plantão(s)`,
       });
 
-      // Vincula receivable_id nos plantões do hospital
+      // Vincula receivable_id apenas nos plantões confirmados (done), não nos cancelados/passados
       for (const s of hshifts) {
-        await updateShiftMutation.mutateAsync({ id: s.id, data: { receivable_id: rec.id } });
+        if (statuses[s.id] === 'done') {
+          await updateShiftMutation.mutateAsync({ id: s.id, data: { receivable_id: rec.id } });
+        }
       }
     }
 

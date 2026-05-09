@@ -110,19 +110,38 @@ export default function CalendarPage() {
     toast.success(`${toDelete.length} plantão(s) futuro(s) deletado(s). Recebíveis preservados.`);
   };
 
-  // Reabrir mês: reverte plantões done->scheduled e deleta recebíveis vinculados
+  // Reabrir mês: verifica pagamentos já realizados antes de reverter
   const handleReopenMonth = async () => {
-    if (!window.confirm('Isso irá reverter todos os plantões fechados para "agendado" e deletar as contas a receber geradas no fechamento. Confirmar?')) return;
     setReopening(true);
     try {
       const closedShifts = monthShifts.filter(s => s.status === 'done' && s.receivable_id);
-      // Coleta IDs únicos de recebíveis vinculados
       const receivableIds = [...new Set(closedShifts.map(s => s.receivable_id).filter(Boolean))];
-      // Reverte plantões para scheduled (em paralelo)
+
+      // Busca os recebíveis vinculados para checar se já foram pagos
+      const receivables = await Promise.all(receivableIds.map(id => base44.entities.Receivable.filter({ id })));
+      const flatReceivables = receivables.flat();
+      const paidReceivables = flatReceivables.filter(r => r.status === 'received' || r.transaction_id);
+
+      if (paidReceivables.length > 0) {
+        const names = paidReceivables.map(r => `• ${r.description}`).join('\n');
+        const ok = window.confirm(
+          `⚠️ Atenção! ${paidReceivables.length} conta(s) a receber já foram marcadas como pagas:\n\n${names}\n\nReabrir o mês irá deletar essas contas E os lançamentos de receita vinculados.\n\nDeseja continuar mesmo assim?`
+        );
+        if (!ok) { setReopening(false); return; }
+
+        // Deleta os lançamentos de receita vinculados aos recebíveis pagos
+        const txIds = paidReceivables.map(r => r.transaction_id).filter(Boolean);
+        await Promise.all(txIds.map(id => base44.entities.Transaction.delete(id)));
+      } else {
+        const ok = window.confirm('Isso irá reverter todos os plantões fechados para "agendado" e deletar as contas a receber geradas no fechamento. Confirmar?');
+        if (!ok) { setReopening(false); return; }
+      }
+
+      // Reverte plantões para scheduled
       await Promise.all(closedShifts.map(s =>
         base44.entities.Shift.update(s.id, { status: 'scheduled', receivable_id: null })
       ));
-      // Deleta os recebíveis gerados (em paralelo)
+      // Deleta os recebíveis
       await Promise.all(receivableIds.map(id => base44.entities.Receivable.delete(id)));
       await queryClient.invalidateQueries();
       toast.success(`Mês reaberto! ${closedShifts.length} plantão(s) revertido(s) e ${receivableIds.length} conta(s) a receber removida(s).`);

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sparkles, Loader2, X } from 'lucide-react';
+import { Sparkles, Loader2, X, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCategories } from '@/hooks/useCategories';
 
@@ -32,8 +33,10 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [categorySuggestion, setCategorySuggestion] = useState(null);
   const [suggestingCategory, setSuggestingCategory] = useState(false);
+  const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
   const { flatForSelect } = useCategories();
   const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
+  const queryClient = useQueryClient();
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -147,7 +150,14 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
           </div>
           <div>
             <Label>Categoria *</Label>
-            <Select value={form.category} onValueChange={v => { set('category', v); setCategorySuggestion(null); }}>
+            <Select value={form.category} onValueChange={v => {
+              if (v === '__new_category__') {
+                setShowNewCategoryForm(true);
+              } else {
+                set('category', v);
+                setCategorySuggestion(null);
+              }
+            }}>
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Selecionar categoria" />
               </SelectTrigger>
@@ -155,6 +165,9 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
                 {categories.map(c => (
                   <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                 ))}
+                <SelectItem value="__new_category__" className="border-t pt-2">
+                  <Plus className="w-4 h-4 mr-2 inline" /> Nova categoria
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -178,6 +191,91 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
           <Button onClick={handleSave} disabled={saving} className="flex-1">
             {saving ? 'Salvando...' : 'Criar e Gerar Lançamentos'}
           </Button>
+        </div>
+      </DialogContent>
+
+      {showNewCategoryForm && (
+        <NewCategoryFormModal
+          onClose={() => setShowNewCategoryForm(false)}
+          onSaved={(newCategory) => {
+            set('category', newCategory.slug);
+            queryClient.invalidateQueries(['categories']);
+            setShowNewCategoryForm(false);
+          }}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+function NewCategoryFormModal({ onClose, onSaved }) {
+  const [newCatForm, setNewCatForm] = useState({ name: '', slug: '', color: '#6366f1' });
+  const [saving, setSaving] = useState(false);
+
+  const autoSlug = (name) => name.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+
+  const handleSave = async () => {
+    if (!newCatForm.name || !newCatForm.slug) {
+      toast.error('Nome e slug são obrigatórios');
+      return;
+    }
+    setSaving(true);
+    const category = await base44.entities.Category.create({
+      name: newCatForm.name,
+      slug: newCatForm.slug,
+      color: newCatForm.color,
+      active: true,
+    });
+    setSaving(false);
+    onSaved(category);
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Nova Categoria</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Nome *</Label>
+            <Input
+              value={newCatForm.name}
+              onChange={e => {
+                setNewCatForm(p => ({ ...p, name: e.target.value, slug: autoSlug(e.target.value) }));
+              }}
+              className="mt-1"
+              placeholder="Ex: Streaming"
+            />
+          </div>
+          <div>
+            <Label>Identificador (slug)</Label>
+            <Input
+              value={newCatForm.slug}
+              onChange={e => setNewCatForm(p => ({ ...p, slug: e.target.value }))}
+              className="mt-1 font-mono text-xs"
+              placeholder="streaming"
+            />
+          </div>
+          <div>
+            <Label>Cor</Label>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => setNewCatForm(p => ({ ...p, color: c }))}
+                  className={`w-7 h-7 rounded-full transition-all ${newCatForm.color === c ? 'ring-2 ring-offset-2 ring-foreground scale-110' : ''}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving} className="flex-1">Salvar</Button>
         </div>
       </DialogContent>
     </Dialog>

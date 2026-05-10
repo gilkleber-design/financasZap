@@ -102,6 +102,7 @@ export default function Receivables() {
     if (t.receivable_id) receivedDateMap[t.receivable_id] = t.date;
   });
 
+  const currentYear = new Date().getFullYear();
   const filtered = allItems
     .filter(r => {
       // filtro de status
@@ -110,7 +111,12 @@ export default function Receivables() {
       return true;
     })
     .filter(r => {
-      if (!filterMonth) return true;
+      if (!filterMonth) {
+        // Sem filtro de mês: mostrar apenas ano corrente
+        const dateField = r.due_date || r.competencia;
+        if (!dateField) return false;
+        return new Date(dateField).getFullYear() === currentYear;
+      }
       const mStart = startOfMonth(filterMonth);
       const mEnd = endOfMonth(filterMonth);
 
@@ -122,19 +128,19 @@ export default function Receivables() {
           : (receivedDateMap[r.id] || r.due_date);
         if (!payDate) return false;
         const d = new Date(payDate + 'T12:00:00');
-        return d >= mStart && d <= mEnd;
+        return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
       }
 
       // Para em aberto / todas não recebidas: filtro normal
       if (filterBy === 'due_date') {
         if (!r.due_date) return false;
         const d = new Date(r.due_date + 'T12:00:00');
-        return d >= mStart && d <= mEnd;
+        return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
       } else {
         const raw = r.competencia || r.due_date;
         if (!raw) return false;
         const d = new Date(raw + 'T12:00:00');
-        return d >= mStart && d <= mEnd;
+        return d.getFullYear() === currentYear && d >= mStart && d <= mEnd;
       }
     })
     .sort((a, b) => {

@@ -38,11 +38,13 @@ export default function Transactions() {
     onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamento removido'); },
   });
 
+  const currentYear = new Date().getFullYear();
   const filtered = transactions.filter(t => {
     const matchSearch = !search || t.description?.toLowerCase().includes(search.toLowerCase());
     const matchType = filterType === 'all' || t.type === filterType;
     const matchCat = filterCategory === 'all' || t.category === filterCategory;
-    return matchSearch && matchType && matchCat;
+    const matchYear = t.date && new Date(t.date).getFullYear() === currentYear;
+    return matchSearch && matchType && matchCat && matchYear;
   });
 
   return (

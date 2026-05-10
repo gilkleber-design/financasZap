@@ -22,12 +22,13 @@ export default function Reports() {
     queryFn: () => base44.entities.Transaction.list('-date', 500),
   });
 
-  // Last 6 months data
+  // Last 6 months data (current year only)
+  const currentYear = new Date().getFullYear();
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = subMonths(new Date(), 5 - i);
     const start = format(startOfMonth(d), 'yyyy-MM-dd');
     const end = format(endOfMonth(d), 'yyyy-MM-dd');
-    const monthTx = transactions.filter(t => t.date >= start && t.date <= end);
+    const monthTx = transactions.filter(t => t.date >= start && t.date <= end && new Date(t.date).getFullYear() === currentYear);
     const income = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
     const expense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     return {
@@ -38,11 +39,11 @@ export default function Reports() {
     };
   });
 
-  // Category breakdown current month
+  // Category breakdown current month (current year only)
   const now = new Date();
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
-  const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
+  const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
 
   const expenseByCategory = monthTx
     .filter(t => t.type === 'expense')
@@ -56,9 +57,9 @@ export default function Reports() {
     .map(([name, value]) => ({ name: CATEGORY_LABELS[name] || name, value }))
     .sort((a, b) => b.value - a.value);
 
-  // Tax report by source
+  // Tax report by source (current year only)
   const taxBySource = {};
-  transactions.filter(t => t.type === 'income' && t.tax_amount > 0).forEach(t => {
+  transactions.filter(t => t.type === 'income' && t.tax_amount > 0 && new Date(t.date).getFullYear() === currentYear).forEach(t => {
     const key = t.income_source_id || 'Outras';
     if (!taxBySource[key]) taxBySource[key] = { gross: 0, tax: 0, net: 0 };
     taxBySource[key].gross += t.amount;
@@ -67,8 +68,8 @@ export default function Reports() {
   });
 
   const totalTax = Object.values(taxBySource).reduce((s, v) => s + v.tax, 0);
-  const totalGross = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalNet = transactions.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
+  const totalGross = transactions.filter(t => t.type === 'income' && new Date(t.date).getFullYear() === currentYear).reduce((s, t) => s + t.amount, 0);
+  const totalNet = transactions.filter(t => t.type === 'income' && new Date(t.date).getFullYear() === currentYear).reduce((s, t) => s + (t.net_amount || t.amount), 0);
 
   return (
     <div className="p-6 space-y-6">

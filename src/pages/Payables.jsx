@@ -81,20 +81,24 @@ export default function Payables() {
     return p.status;
   };
 
+  const currentYear = new Date().getFullYear();
   const filtered = filterMonth
     ? payables.filter(p => {
         if (filterBy === 'due_date') {
           if (!p.due_date) return false;
           const d = new Date(p.due_date + 'T12:00:00');
-          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+          return d.getFullYear() === currentYear && d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
         } else {
           // competencia (created_date)
           if (!p.created_date) return false;
           const d = new Date(p.created_date);
-          return d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
+          return d.getFullYear() === currentYear && d >= startOfMonth(filterMonth) && d <= endOfMonth(filterMonth);
         }
       })
-    : payables;
+    : payables.filter(p => {
+        if (!p.due_date) return false;
+        return new Date(p.due_date + 'T12:00:00').getFullYear() === currentYear;
+      });
 
   const totalPending = filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
 

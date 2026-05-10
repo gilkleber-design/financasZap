@@ -44,19 +44,20 @@ export default function Dashboard() {
     queryFn: () => base44.entities.IncomeSource.list(),
   });
 
-  // Receitas: apenas transações recebidas no mês corrente
-  const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
+  // Receitas: apenas transações recebidas no mês corrente (ano corrente)
+  const currentYear = new Date().getFullYear();
+  const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
   const totalIncomeGross = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
 
-  // Despesas: com vencimento no mês corrente
-  const monthExpenseTx = transactions.filter(t => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd);
+  // Despesas: com vencimento no mês corrente (ano corrente)
+  const monthExpenseTx = transactions.filter(t => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
   const totalExpense = monthExpenseTx.reduce((s, t) => s + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
-  // A pagar: vencimento <= hoje
-  const pendingPayables = payables.filter(p => p.status === 'pending' && p.due_date <= todayStr);
-  const pendingReceivables = receivables.filter(r => r.status === 'pending');
+  // A pagar: vencimento <= hoje (ano corrente)
+  const pendingPayables = payables.filter(p => p.status === 'pending' && p.due_date <= todayStr && new Date(p.due_date).getFullYear() === currentYear);
+  const pendingReceivables = receivables.filter(r => r.status === 'pending' && new Date(r.due_date).getFullYear() === currentYear);
 
   const expenseByCategory = monthTx
     .filter(t => t.type === 'expense')

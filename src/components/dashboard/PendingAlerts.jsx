@@ -1,20 +1,30 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { format, isPast, isToday } from 'date-fns';
+import { format, isPast, isToday, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
 import ConfirmReceivableModal from './ConfirmReceivableModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-export default function PendingAlerts({ payables, receivables, onRefresh }) {
+export default function PendingAlerts({ payables, receivables, mode, onRefresh }) {
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
 
-  const allAlerts = [
-    ...payables.filter(p => p.status === 'pending').map(p => ({ ...p, alertType: 'payable' })),
-    ...receivables.filter(r => r.status === 'pending').map(r => ({ ...r, alertType: 'receivable' })),
-  ].sort((a, b) => new Date(a.due_date) - new Date(b.due_date)).slice(0, 8);
+  // mode='receitas': só contas a receber pendentes
+  // mode='despesas': só despesas vencidas ou vencendo em até 7 dias
+  const allAlerts = mode === 'receitas'
+    ? receivables
+        .filter(r => r.status === 'pending')
+        .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+        .slice(0, 10)
+        .map(r => ({ ...r, alertType: 'receivable' }))
+    : payables
+        .filter(p => p.status === 'pending' && p.due_date && new Date(p.due_date) <= addDays(new Date(), 7))
+        .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+        .slice(0, 10)
+        .map(p => ({ ...p, alertType: 'payable' }));
+
+  const title = mode === 'receitas' ? 'Contas a Receber' : 'Vencimentos Próximos';
 
   return (
     <>
@@ -22,22 +32,25 @@ export default function PendingAlerts({ payables, receivables, onRefresh }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
-            Alertas Pendentes
+            {title}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {allAlerts.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum pendente 🎉</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {mode === 'receitas' ? 'Nenhuma conta a receber pendente 🎉' : 'Nenhum vencimento próximo 🎉'}
+            </p>
           )}
           {allAlerts.map(item => {
             const overdue = item.due_date && isPast(new Date(item.due_date)) && !isToday(new Date(item.due_date));
             const isReceivable = item.alertType === 'receivable';
             return (
-              <div key={item.id} className={`p-3 rounded-lg border text-sm flex items-center justify-between gap-3 ${
-                isReceivable
-                  ? overdue ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50/40'
-                  : overdue ? 'border-red-200 bg-red-50' : 'border-border bg-muted/30'
-              }`}>
+              <div
+                key={item.id}
+                className={`p-3 rounded-lg border text-sm flex items-center justify-between gap-3 ${
+                  overdue ? 'border-red-200 bg-red-50' : 'border-border bg-muted/30'
+                }`}
+              >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate text-sm">{item.description}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -53,14 +66,13 @@ export default function PendingAlerts({ payables, receivables, onRefresh }) {
                     {isReceivable ? '+' : '-'}{fmt(item.net_amount || item.amount)}
                   </p>
                   {isReceivable && (
-                    <Button
-                      size="sm"
+                    <button
                       onClick={() => setConfirmingReceivable(item)}
-                      className="h-7 text-xs px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="text-emerald-500 hover:text-emerald-700 transition-colors"
+                      title="Marcar como recebido"
                     >
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      Receber
-                    </Button>
+                      <CheckCircle2 className="w-5 h-5" />
+                    </button>
                   )}
                 </div>
               </div>

@@ -124,7 +124,7 @@ export default function ReceivablesView({ receivables, incomeSources }) {
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className="text-xs font-bold text-emerald-600">{fmt(r.net_amount || r.amount)}</span>
-                        {r.net_amount && r.amount && r.net_amount < r.amount && (
+                        {r.net_amount > 0 && r.amount > 0 && r.net_amount < r.amount && (
                           <p className="text-[10px] text-muted-foreground/60">{fmt(r.amount)} bruto</p>
                         )}
                       </div>

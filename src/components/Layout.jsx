@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { path: '/lancamentos', label: 'Lançamentos', icon: Wallet },
   { path: '/contas-pagar', label: 'A Pagar', icon: ArrowDownCircle },
   { path: '/contas-receber', label: 'A Receber', icon: ArrowUpCircle },
+  { path: '/recorrencias', label: 'Recorrências', icon: Repeat },
   { path: '/relatorios', label: 'Relatórios', icon: TrendingUp },
   { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
   { path: '/configuracoes', label: 'Configurações', icon: Settings },

@@ -1,0 +1,47 @@
+{
+  "name": "Recurrence",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Nome da despesa recorrente (ex: Aluguel, Condom\u00ednio)"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Valor base mensal"
+    },
+    "due_day": {
+      "type": "number",
+      "description": "Dia do m\u00eas em que vence (1-31)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "alimentacao",
+        "transporte",
+        "moradia",
+        "saude",
+        "educacao",
+        "lazer",
+        "vestuario",
+        "servicos",
+        "impostos",
+        "outros"
+      ]
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Se a recorr\u00eancia est\u00e1 ativa"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "description",
+    "amount",
+    "due_day",
+    "category"
+  ]
+}

@@ -15,6 +15,7 @@ import WhatsAppInput from '@/pages/WhatsAppInput';
 import Settings from '@/pages/Settings';
 import Hospitals from '@/pages/Hospitals';
 import CalendarPage from '@/pages/CalendarPage';
+import Recurrences from '@/pages/Recurrences';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -48,6 +49,7 @@ const AuthenticatedApp = () => {
         <Route path="/configuracoes" element={<Settings />} />
         <Route path="/hospitais" element={<Hospitals />} />
         <Route path="/calendario" element={<CalendarPage />} />
+        <Route path="/recorrencias" element={<Recurrences />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

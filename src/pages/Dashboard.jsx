@@ -119,7 +119,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <CategoryChart data={categoryData} />
-            <RecentTransactions transactions={transactions.slice(0, 8)} />
+            <RecentTransactions transactions={transactions.filter(t => t.type === 'expense').slice(0, 8)} />
           </div>
           <div>
             <PendingAlerts

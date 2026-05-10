@@ -84,8 +84,22 @@ export default function Recurrences() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Recurrence.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries(['recurrences']); toast.success('Recorrência removida'); },
+    mutationFn: async (recurrence) => {
+      // Deleta todos os payables associados
+      const payables = await base44.entities.Payable.list('-due_date', 500);
+      const toDelete = payables.filter(p => p.description === recurrence.description);
+      for (const p of toDelete) await base44.entities.Payable.delete(p.id);
+      // Deleta a recorrência
+      await base44.entities.Recurrence.delete(recurrence.id);
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries(['recurrences']);
+      queryClient.invalidateQueries(['payables']);
+      toast.success('Recorrência removida');
+    },
+    onError: (error) => {
+      toast.error('Erro ao remover recorrência: ' + error.message);
+    },
   });
 
   const toggleMutation = useMutation({
@@ -114,14 +128,7 @@ export default function Recurrences() {
   });
 
   const handleDelete = async () => {
-    // Deleta todos os payables associados
-    const payables = await base44.entities.Payable.list('-due_date', 500);
-    const toDelete = payables.filter(p => p.description === deletingRecurrence.description);
-    for (const p of toDelete) await base44.entities.Payable.delete(p.id);
-    
-    // Deleta a recorrência
-    await deleteMutation.mutateAsync(deletingRecurrence.id);
-    await queryClient.invalidateQueries(['payables']);
+    await deleteMutation.mutateAsync(deletingRecurrence);
     setDeletingRecurrence(null);
   };
 
@@ -297,8 +304,9 @@ export default function Recurrences() {
                 className="flex-1"
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
+                loading={deleteMutation.isPending}
               >
-                Remover
+                {deleteMutation.isPending ? 'Removendo...' : 'Remover'}
               </Button>
             </div>
           </AlertDialogContent>

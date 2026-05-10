@@ -77,7 +77,10 @@ export default function Payables() {
 
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
-    if (p.due_date && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date))) return 'overdue';
+    if (p.due_date) {
+      const d = new Date(p.due_date + 'T12:00:00');
+      if (!isNaN(d.getTime()) && isPast(d) && !isToday(d)) return 'overdue';
+    }
     return p.status;
   };
 
@@ -125,7 +128,7 @@ export default function Payables() {
             className="min-w-[120px] text-sm capitalize"
             disabled
           >
-            {format(filterMonth, 'MMMM yyyy', { locale: ptBR })}
+            {filterMonth ? format(filterMonth, 'MMMM yyyy', { locale: ptBR }) : 'Ano todo'}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setFilterMonth(addMonths(filterMonth, 1))}>
             <ChevronRight className="w-4 h-4" />

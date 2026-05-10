@@ -6,7 +6,7 @@ import { CheckCircle2, AlertCircle, AlertTriangle, TrendingUp } from 'lucide-rea
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 const DARF_LIMIT = 50000;
 
-export default function ReceivablesView({ receivables, incomeSources }) {
+export default function ReceivablesView({ receivables, incomeSources, transactions = [] }) {
   const now = new Date();
   const todayStr = format(now, 'yyyy-MM-dd');
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
@@ -39,6 +39,14 @@ export default function ReceivablesView({ receivables, incomeSources }) {
     const darf = receivedMonth * 0.10;
     return { src, receivedMonth, projected, darf };
   }).filter(row => row.receivedMonth > 0 || row.projected > 0);
+
+  // Card PF: salário + bolsa internato recebidos no mês
+  const pfTransactions = transactions.filter(
+    t => t.type === 'income' &&
+    t.date >= monthStart && t.date <= monthEnd &&
+    (t.category === 'salario_clt' || t.description?.toLowerCase().includes('bolsa internato') || t.description?.toLowerCase().includes('bolsa'))
+  );
+  const pfTotal = pfTransactions.reduce((s, t) => s + (t.net_amount || t.amount || 0), 0);
 
   // Lista atrasados ordenada
   const overdueList = [...overdue].sort((a, b) => {
@@ -129,6 +137,30 @@ export default function ReceivablesView({ receivables, incomeSources }) {
                     </div>
                   );
                 })}
+                {/* Card PF */}
+                {pfTotal > 0 && (
+                  <div className="px-4 py-3 space-y-2 bg-slate-50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-foreground">PF (Salário + Bolsa)</span>
+                      <span className="text-xs text-muted-foreground">Santander</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg p-2 bg-emerald-50">
+                        <p className="font-medium mb-0.5 text-emerald-700">Recebido</p>
+                        <p className="font-bold text-sm text-emerald-700">{fmt(pfTotal)}</p>
+                      </div>
+                      <div className="rounded-lg p-2 bg-slate-100">
+                        <p className="font-medium mb-0.5 text-slate-500">Projetado</p>
+                        <p className="font-bold text-sm text-slate-400">—</p>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground pl-0.5">
+                      {pfTransactions.map(t => (
+                        <span key={t.id} className="mr-3">{t.description}: {fmt(t.net_amount || t.amount)}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

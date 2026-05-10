@@ -142,7 +142,7 @@ export default function Dashboard() {
       )}
 
       {activeView === 'receitas' && (
-        <ReceivablesView receivables={receivables} incomeSources={incomeSources} />
+        <ReceivablesView receivables={receivables} incomeSources={incomeSources} transactions={transactions} />
       )}
     </div>
   );

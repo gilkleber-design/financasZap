@@ -128,6 +128,7 @@ export default function Receivables() {
     });
 
   const totalPending = filtered.filter(r => r.status === 'pending').reduce((s, r) => s + (r.net_amount || r.amount), 0);
+  const totalFiltered = filtered.reduce((s, r) => s + (r.net_amount || r.amount), 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -135,7 +136,11 @@ export default function Receivables() {
         <div>
           <h1 className="text-2xl font-sora font-bold">Contas a Receber</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {filtered.filter(r => r.status === 'pending').length} pendentes · {fmt(totalPending)} a receber
+            {filterStatus === 'open'
+              ? `${filtered.length} pendentes · ${fmt(totalPending)} a receber`
+              : filterStatus === 'received'
+              ? `${filtered.length} recebidos · ${fmt(totalFiltered)} recebido`
+              : `${filtered.length} item(s) · ${fmt(totalFiltered)} total`}
           </p>
         </div>
         <Button onClick={() => setShowForm(true)}>

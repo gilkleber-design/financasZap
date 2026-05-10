@@ -158,9 +158,9 @@ export default function Payables() {
                       {p.recurrent && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">Recorrente</Badge>}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-muted-foreground">
-                        Venc: {p.due_date ? format(new Date(p.due_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
-                      </span>
+                       <span className="text-xs text-muted-foreground">
+                         Venc: {p.due_date && !isNaN(new Date(p.due_date + 'T12:00:00').getTime()) ? format(new Date(p.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+                       </span>
                       {p.category && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{CATEGORY_LABELS[p.category] || p.category}</Badge>}
                     </div>
                   </div>

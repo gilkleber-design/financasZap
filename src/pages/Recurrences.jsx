@@ -31,19 +31,30 @@ const CATEGORY_COLORS = {
   outros: 'bg-slate-100 text-slate-700',
 };
 
-// Gera 12 Payables futuros a partir do mês atual para uma recorrência
+// Gera 13 Payables futuros a partir do mês atual para uma recorrência
 async function generatePayables(recurrence) {
   const now = new Date();
   const payables = [];
+  
+  // Importa a função apenas quando necessária
+  const { getFifthBusinessDay } = await import('@/lib/businessDayCalculator');
 
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 13; i++) {
     const targetMonth = addMonths(startOfMonth(now), i);
     const year = targetMonth.getFullYear();
     const month = targetMonth.getMonth();
-    // Ajusta o dia ao último dia do mês se necessário
-    const maxDay = new Date(year, month + 1, 0).getDate();
-    const day = Math.min(recurrence.due_day, maxDay);
-    const dueDate = format(new Date(year, month, day, 12, 0, 0), 'yyyy-MM-dd');
+    
+    let dueDate;
+    
+    if (recurrence.fifth_business_day) {
+      // Calcula o 5º dia útil
+      dueDate = getFifthBusinessDay(new Date(year, month, 1));
+    } else {
+      // Usa o dia da recorrência
+      const maxDay = new Date(year, month + 1, 0).getDate();
+      const day = Math.min(recurrence.due_day, maxDay);
+      dueDate = format(new Date(year, month, day, 12, 0, 0), 'yyyy-MM-dd');
+    }
 
     payables.push({
       description: recurrence.description,
@@ -52,6 +63,7 @@ async function generatePayables(recurrence) {
       category: recurrence.category,
       status: 'pending',
       recurrent: true,
+      fifth_business_day: recurrence.fifth_business_day,
       notes: `Gerado automaticamente — Recorrência: ${recurrence.description}`,
     });
   }

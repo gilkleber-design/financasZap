@@ -29,7 +29,7 @@ export function getFifthBusinessDay(dateInMonth) {
   // Formata como yyyy-MM-dd
   const year_ = currentDate.getFullYear();
   const month_ = String(currentDate.getMonth() + 1).padStart(2, '0');
-  const day = String(currentDate.getDate()).padStart(2, '0');
+  const day_ = String(currentDate.getDate()).padStart(2, '0');
   
-  return `${year_}-${month_}-${day}`;
+  return `${year_}-${month_}-${day_}`;
 }

@@ -51,17 +51,22 @@ export default function Payables() {
   const deletePayablesMutation = useMutation({
     mutationFn: async (payable) => {
       const allPayables = await base44.entities.Payable.list('-due_date', 500);
-      const toDelete = allPayables.filter(p => p.description === payable.description);
+      const toDelete = allPayables.filter(p => p.description === payable.description && p.due_date);
 
       if (deleteMode === 'this') {
-        const next = toDelete.sort((a, b) => new Date(a.due_date) - new Date(b.due_date))[0];
+        const next = toDelete.sort((a, b) => {
+          const dA = new Date(a.due_date + 'T12:00:00');
+          const dB = new Date(b.due_date + 'T12:00:00');
+          return dA - dB;
+        })[0];
         if (next) await base44.entities.Payable.delete(next.id);
       } else if (deleteMode === 'all') {
         for (const p of toDelete) await base44.entities.Payable.delete(p.id);
       } else if (deleteMode === 'forward') {
         const now = new Date();
         for (const p of toDelete) {
-          if (new Date(p.due_date) >= now) await base44.entities.Payable.delete(p.id);
+          const d = new Date(p.due_date + 'T12:00:00');
+          if (!isNaN(d.getTime()) && d >= now) await base44.entities.Payable.delete(p.id);
         }
       }
     },

@@ -4,13 +4,14 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
 import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import PayableFormModal from '@/components/payables/PayableFormModal';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
+import EditPayableModal from '@/components/payables/EditPayableModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -30,6 +31,7 @@ const CATEGORY_LABELS = {
 export default function Payables() {
   const [showForm, setShowForm] = useState(false);
   const [confirmingPayable, setConfirmingPayable] = useState(null);
+  const [editingPayable, setEditingPayable] = useState(null);
   const [filterMonth, setFilterMonth] = useState(null);
   const [filterBy, setFilterBy] = useState('due_date');
   const [deletingPayable, setDeletingPayable] = useState(null);
@@ -187,6 +189,9 @@ export default function Payables() {
                       {STATUS_LABELS[status]}
                     </span>
                   </div>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-500 hover:text-slate-700" onClick={() => setEditingPayable(p)}>
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </Button>
                   {status !== 'paid' && (
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingPayable(p)}>
                       <CheckCircle2 className="w-4 h-4" />
@@ -210,6 +215,14 @@ export default function Payables() {
         <ConfirmPayableModal
           payable={confirmingPayable}
           onClose={() => { setConfirmingPayable(null); queryClient.invalidateQueries(); }}
+        />
+      )}
+
+      {editingPayable && (
+        <EditPayableModal
+          payable={editingPayable}
+          onClose={() => setEditingPayable(null)}
+          onSaved={() => { setEditingPayable(null); queryClient.invalidateQueries(); }}
         />
       )}
 

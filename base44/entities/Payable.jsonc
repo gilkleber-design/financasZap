@@ -44,6 +44,11 @@
       "default": false,
       "description": "Se \u00e9 recorrente (mensal)"
     },
+    "fifth_business_day": {
+      "type": "boolean",
+      "default": false,
+      "description": "Se o vencimento deve ser o 5\u00ba dia \u00fatil do m\u00eas"
+    },
     "transaction_id": {
       "type": "string",
       "description": "ID do lan\u00e7amento que conciliou"

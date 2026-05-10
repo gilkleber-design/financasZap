@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,8 +12,8 @@ export default function PendingAlerts({ payables, receivables, onRefresh }) {
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
 
   const allAlerts = [
-    ...payables.map(p => ({ ...p, alertType: 'payable', label: 'A Pagar' })),
-    ...receivables.map(r => ({ ...r, alertType: 'receivable', label: 'A Receber' })),
+    ...payables.filter(p => p.status === 'pending').map(p => ({ ...p, alertType: 'payable' })),
+    ...receivables.filter(r => r.status === 'pending').map(r => ({ ...r, alertType: 'receivable' })),
   ].sort((a, b) => new Date(a.due_date) - new Date(b.due_date)).slice(0, 8);
 
   return (
@@ -34,35 +33,35 @@ export default function PendingAlerts({ payables, receivables, onRefresh }) {
             const overdue = item.due_date && isPast(new Date(item.due_date)) && !isToday(new Date(item.due_date));
             const isReceivable = item.alertType === 'receivable';
             return (
-              <div key={item.id} className={`p-3 rounded-lg border text-sm ${overdue ? 'border-red-200 bg-red-50' : 'border-border bg-muted/30'}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{item.description}</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Clock className="w-3 h-3 text-muted-foreground" />
-                      <span className={`text-xs ${overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
-                        {item.due_date ? format(new Date(item.due_date), 'dd/MM', { locale: ptBR }) : '—'}
-                        {overdue && ' · Vencido'}
-                      </span>
-                    </div>
+              <div key={item.id} className={`p-3 rounded-lg border text-sm flex items-center justify-between gap-3 ${
+                isReceivable
+                  ? overdue ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50/40'
+                  : overdue ? 'border-red-200 bg-red-50' : 'border-border bg-muted/30'
+              }`}>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate text-sm">{item.description}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Clock className="w-3 h-3 text-muted-foreground" />
+                    <span className={`text-xs ${overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                      {item.due_date ? format(new Date(item.due_date), 'dd/MM', { locale: ptBR }) : '—'}
+                      {overdue && ' · Vencido'}
+                    </span>
                   </div>
-                  <div className="text-right flex flex-col items-end gap-1">
-                    <p className={`font-semibold text-xs ${isReceivable ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {isReceivable ? '+' : '-'}{fmt(item.net_amount || item.amount)}
-                    </p>
-                    <Badge variant="outline" className="text-xs">{item.label}</Badge>
-                    {isReceivable && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 text-xs px-2 text-emerald-600 border-emerald-300 hover:bg-emerald-50 mt-0.5"
-                        onClick={() => setConfirmingReceivable(item)}
-                      >
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Recebido
-                      </Button>
-                    )}
-                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <p className={`font-semibold text-sm ${isReceivable ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {isReceivable ? '+' : '-'}{fmt(item.net_amount || item.amount)}
+                  </p>
+                  {isReceivable && (
+                    <Button
+                      size="sm"
+                      onClick={() => setConfirmingReceivable(item)}
+                      className="h-7 text-xs px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Receber
+                    </Button>
+                  )}
                 </div>
               </div>
             );

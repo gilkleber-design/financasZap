@@ -125,13 +125,7 @@ export default function ReceivablesView({ receivables, incomeSources }) {
                           )}
                         </div>
                       </div>
-                      {/* DARF */}
-                      {receivedMonth > 0 && (
-                        <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-1.5 flex items-center justify-between">
-                          <span className="text-xs text-violet-700 font-medium">⚡ DARF estimado (10%)</span>
-                          <span className="text-xs font-bold text-violet-800">{fmt(darf)}</span>
-                        </div>
-                      )}
+
                     </div>
                   );
                 })}

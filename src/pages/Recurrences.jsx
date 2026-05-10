@@ -59,7 +59,7 @@ async function generatePayables(recurrence) {
     payables.push({
       description: recurrence.description,
       amount: recurrence.amount,
-      due_date: dueDate,
+      due_date: dueDate + 'T12:00:00',
       category: recurrence.category,
       status: 'pending',
       recurrent: true,

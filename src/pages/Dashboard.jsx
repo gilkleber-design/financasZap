@@ -13,13 +13,17 @@ import PendingAlerts from '@/components/dashboard/PendingAlerts';
 import ReceivablesView from '@/components/dashboard/ReceivablesView';
 import PayablesView from '@/components/dashboard/PayablesView';
 
-const now = new Date();
-const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
-const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
+// computed dynamically inside component
 
 export default function Dashboard() {
   const [activeView, setActiveView] = useState('despesas'); // 'despesas' | 'receitas'
   const queryClient = useQueryClient();
+
+  const now = new Date();
+  const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
+  const todayStr = format(now, 'yyyy-MM-dd');
+
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.list('-date', 200),
@@ -40,13 +44,18 @@ export default function Dashboard() {
     queryFn: () => base44.entities.IncomeSource.list(),
   });
 
+  // Receitas: apenas transações recebidas no mês corrente
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
   const totalIncomeGross = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+  // Despesas: com vencimento no mês corrente
+  const monthExpenseTx = transactions.filter(t => t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd);
+  const totalExpense = monthExpenseTx.reduce((s, t) => s + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
-  const pendingPayables = payables.filter(p => p.status === 'pending');
+  // A pagar: vencimento <= hoje
+  const pendingPayables = payables.filter(p => p.status === 'pending' && p.due_date <= todayStr);
   const pendingReceivables = receivables.filter(r => r.status === 'pending');
 
   const expenseByCategory = monthTx

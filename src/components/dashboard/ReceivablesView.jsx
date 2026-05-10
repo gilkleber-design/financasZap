@@ -1,124 +1,168 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format, isPast, isToday, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, AlertTriangle, TrendingUp } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#f97316'];
+const DARF_LIMIT = 50000;
 
 export default function ReceivablesView({ receivables, incomeSources }) {
   const now = new Date();
-  const bySource = receivables.reduce((acc, r) => {
-    const src = incomeSources.find(s => s.id === r.income_source_id);
-    const label = src?.name || 'Outros';
-    acc[label] = (acc[label] || 0) + (r.net_amount || r.amount || 0);
-    return acc;
-  }, {});
+  const todayStr = format(now, 'yyyy-MM-dd');
+  const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
 
-  const chartData = Object.entries(bySource).map(([name, value]) => ({ name, value }));
+  // Recebido no mês corrente
+  const receivedThisMonth = receivables.filter(
+    r => r.status === 'received' && r.due_date >= monthStart && r.due_date <= monthEnd
+  );
 
-  const received = receivables.filter(r => r.status === 'received');
-  const pending = receivables.filter(r => r.status !== 'received');
-  const overdue = pending.filter(r => r.due_date && isPast(new Date(r.due_date + 'T12:00:00')) && !isToday(new Date(r.due_date + 'T12:00:00')));
+  // Atrasado: não pago e vencimento <= hoje
+  const overdue = receivables.filter(
+    r => r.status !== 'received' && r.due_date && r.due_date <= todayStr
+  );
 
-  const totalReceived = received.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
-  const totalPending = pending.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
+  const totalReceived = receivedThisMonth.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
+  const totalOverdue = overdue.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
 
-  // Lista: pendentes com vencimento <= hoje, ordenada por sigla (descrição antes do '—') e depois por competência
-  const dueList = pending
-    .filter(r => r.due_date && new Date(r.due_date + 'T12:00:00') <= now)
-    .sort((a, b) => {
-      const siglaA = (a.description.split('—')[0] || '').trim().toLowerCase();
-      const siglaB = (b.description.split('—')[0] || '').trim().toLowerCase();
-      if (siglaA !== siglaB) return siglaA.localeCompare(siglaB, 'pt-BR');
-      const cA = a.competencia || a.due_date || '';
-      const cB = b.competencia || b.due_date || '';
-      return cA.localeCompare(cB);
-    });
+  // Tabela por PJ: recebido no mês + projetado (pending/overdue)
+  const pjSources = incomeSources.filter(s => s.type === 'pj');
+
+  const pjTableData = pjSources.map(src => {
+    const srcReceivables = receivables.filter(r => r.income_source_id === src.id);
+    const receivedMonth = srcReceivables
+      .filter(r => r.status === 'received' && r.due_date >= monthStart && r.due_date <= monthEnd)
+      .reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
+    const projected = srcReceivables
+      .filter(r => r.status !== 'received')
+      .reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
+    const darf = receivedMonth * 0.10;
+    return { src, receivedMonth, projected, darf };
+  }).filter(row => row.receivedMonth > 0 || row.projected > 0);
+
+  // Lista atrasados ordenada
+  const overdueList = [...overdue].sort((a, b) => {
+    const siglaA = (a.description.split('—')[0] || '').trim().toLowerCase();
+    const siglaB = (b.description.split('—')[0] || '').trim().toLowerCase();
+    if (siglaA !== siglaB) return siglaA.localeCompare(siglaB, 'pt-BR');
+    return (a.due_date || '').localeCompare(b.due_date || '');
+  });
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* Totalizadores */}
-      <div className="grid grid-cols-3 gap-2 md:gap-4">
+      {/* Totalizadores: 2 cards */}
+      <div className="grid grid-cols-2 gap-2 md:gap-4">
         <Card className="border-0 shadow-sm bg-emerald-50">
           <CardContent className="p-2.5 md:p-4">
             <div className="flex items-center gap-1 mb-1">
               <CheckCircle2 className="w-3 h-3 md:w-4 md:h-4 text-emerald-500 flex-shrink-0" />
-              <span className="text-[10px] md:text-xs font-medium text-emerald-700 leading-tight">Recebido</span>
+              <span className="text-[10px] md:text-xs font-medium text-emerald-700 leading-tight">Recebido no Mês</span>
             </div>
             <p className="text-sm md:text-xl font-bold text-emerald-700">{fmt(totalReceived)}</p>
-            <p className="text-[10px] md:text-xs text-emerald-600 mt-0.5">{received.length} item(s)</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm bg-blue-50">
-          <CardContent className="p-2.5 md:p-4">
-            <div className="flex items-center gap-1 mb-1">
-              <Clock className="w-3 h-3 md:w-4 md:h-4 text-blue-500 flex-shrink-0" />
-              <span className="text-[10px] md:text-xs font-medium text-blue-700 leading-tight">Aguardando</span>
-            </div>
-            <p className="text-sm md:text-xl font-bold text-blue-700">{fmt(totalPending)}</p>
-            <p className="text-[10px] md:text-xs text-blue-600 mt-0.5">{pending.length} item(s)</p>
+            <p className="text-[10px] md:text-xs text-emerald-600 mt-0.5">{receivedThisMonth.length} item(s)</p>
           </CardContent>
         </Card>
         <Card className={`border-0 shadow-sm ${overdue.length > 0 ? 'bg-red-50' : 'bg-muted/30'}`}>
           <CardContent className="p-2.5 md:p-4">
             <div className="flex items-center gap-1 mb-1">
               <AlertCircle className={`w-3 h-3 md:w-4 md:h-4 flex-shrink-0 ${overdue.length > 0 ? 'text-red-500' : 'text-muted-foreground'}`} />
-              <span className={`text-[10px] md:text-xs font-medium leading-tight ${overdue.length > 0 ? 'text-red-700' : 'text-muted-foreground'}`}>Atrasado</span>
+              <span className={`text-[10px] md:text-xs font-medium leading-tight ${overdue.length > 0 ? 'text-red-700' : 'text-muted-foreground'}`}>
+                Atrasado
+              </span>
             </div>
             <p className={`text-sm md:text-xl font-bold ${overdue.length > 0 ? 'text-red-700' : 'text-muted-foreground'}`}>
-              {fmt(overdue.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0))}
+              {fmt(totalOverdue)}
             </p>
-            <p className={`text-[10px] md:text-xs mt-0.5 ${overdue.length > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>{overdue.length} item(s)</p>
+            <p className={`text-[10px] md:text-xs mt-0.5 ${overdue.length > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+              {overdue.length} item(s)
+            </p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        {/* Gráfico por fonte */}
+        {/* Tabela por PJ */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Receitas por Fonte</CardTitle>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Receitas por PJ no Mês
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            {chartData.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Nenhuma receita encontrada</p>
+          <CardContent className="p-0">
+            {pjTableData.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6 px-4">Nenhuma receita PJ no mês</p>
             ) : (
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} label={false}>
-                    {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => fmt(v)} />
-                  <Legend formatter={(v) => <span className="text-xs">{v}</span>} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="divide-y divide-border">
+                {pjTableData.map(({ src, receivedMonth, projected, darf }) => {
+                  const receivedAlert = receivedMonth >= DARF_LIMIT;
+                  const projectedAlert = projected >= DARF_LIMIT;
+                  return (
+                    <div key={src.id} className="px-4 py-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-foreground">{src.name}</span>
+                        {src.bank && <span className="text-xs text-muted-foreground">{src.bank}</span>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {/* Recebido */}
+                        <div className={`rounded-lg p-2 ${receivedAlert ? 'bg-red-50 border border-red-200' : 'bg-emerald-50'}`}>
+                          <p className={`font-medium mb-0.5 ${receivedAlert ? 'text-red-700' : 'text-emerald-700'}`}>Recebido</p>
+                          <p className={`font-bold text-sm ${receivedAlert ? 'text-red-700' : 'text-emerald-700'}`}>{fmt(receivedMonth)}</p>
+                          {receivedAlert && (
+                            <p className="text-red-600 flex items-center gap-1 mt-1">
+                              <AlertTriangle className="w-3 h-3" /> Acima de R$50k
+                            </p>
+                          )}
+                        </div>
+                        {/* Projetado */}
+                        <div className={`rounded-lg p-2 ${projectedAlert ? 'bg-amber-50 border border-amber-200' : 'bg-blue-50'}`}>
+                          <p className={`font-medium mb-0.5 ${projectedAlert ? 'text-amber-700' : 'text-blue-700'}`}>Projetado</p>
+                          <p className={`font-bold text-sm ${projectedAlert ? 'text-amber-700' : 'text-blue-700'}`}>{fmt(projected)}</p>
+                          {projectedAlert && (
+                            <p className="text-amber-600 flex items-center gap-1 mt-1">
+                              <AlertTriangle className="w-3 h-3" /> Acima de R$50k
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {/* DARF */}
+                      {receivedMonth > 0 && (
+                        <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-1.5 flex items-center justify-between">
+                          <span className="text-xs text-violet-700 font-medium">⚡ DARF estimado (10%)</span>
+                          <span className="text-xs font-bold text-violet-800">{fmt(darf)}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Contas a Receber — vencidas ou vencendo hoje */}
+        {/* Contas a Receber — Atrasadas */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Contas a Receber</CardTitle>
+            <CardTitle className="text-sm font-semibold">Atrasados — A Receber</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-border max-h-[260px] overflow-y-auto">
-              {dueList.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">Nenhuma conta vencida ou vencendo hoje 🎉</p>
+            <div className="divide-y divide-border max-h-[320px] overflow-y-auto">
+              {overdueList.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Nenhuma conta atrasada 🎉</p>
               ) : (
-                dueList.map(r => {
-                  const isOverdue = isPast(new Date(r.due_date + 'T12:00:00')) && !isToday(new Date(r.due_date + 'T12:00:00'));
+                overdueList.map(r => {
+                  const isExactlyToday = r.due_date === todayStr;
                   return (
                     <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className={`w-1.5 h-8 rounded-full flex-shrink-0 ${isOverdue ? 'bg-red-400' : 'bg-amber-400'}`} />
+                      <div className={`w-1.5 h-8 rounded-full flex-shrink-0 ${isExactlyToday ? 'bg-amber-400' : 'bg-red-400'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{r.description}</p>
                         <p className="text-xs text-muted-foreground">
                           {r.due_date ? format(new Date(r.due_date + 'T12:00:00'), 'dd/MM/yyyy') : '—'}
-                          {isOverdue && <span className="text-red-500 ml-1">· Vencido</span>}
-                          {isToday(new Date(r.due_date + 'T12:00:00')) && <span className="text-amber-600 ml-1">· Hoje</span>}
+                          {isExactlyToday
+                            ? <span className="text-amber-600 ml-1">· Hoje</span>
+                            : <span className="text-red-500 ml-1">· Vencido</span>
+                          }
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0">

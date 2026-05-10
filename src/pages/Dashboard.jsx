@@ -67,7 +67,7 @@ export default function Dashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
         <SummaryCard
           title="Receitas do Mês"
           value={totalIncome}
@@ -96,7 +96,7 @@ export default function Dashboard() {
       </div>
 
       {/* View toggle */}
-      <div className="flex items-center gap-2 border-b border-border pb-3">
+      <div className="flex items-center gap-2 border-b border-border pb-2 md:pb-3">
         <Button
           variant={activeView === 'despesas' ? 'secondary' : 'ghost'}
           size="sm"

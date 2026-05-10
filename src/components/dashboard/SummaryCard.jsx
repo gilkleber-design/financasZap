@@ -14,12 +14,12 @@ export default function SummaryCard({ title, value, grossValue, icon: Icon, colo
 
   return (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-5">
+      <CardContent className="p-3 md:p-5">
         <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] md:text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">{title}</p>
             <p className={cn(
-              "text-xl font-sora font-bold mt-1",
+              "text-base md:text-xl font-sora font-bold mt-1 truncate",
               color === 'success' ? 'text-emerald-600' :
               color === 'destructive' ? 'text-red-500' :
               color === 'warning' ? 'text-amber-600' : 'text-foreground'
@@ -27,11 +27,11 @@ export default function SummaryCard({ title, value, grossValue, icon: Icon, colo
               {fmt(value)}
             </p>
             {showGross && (
-              <p className="text-xs text-muted-foreground/60 mt-0.5">{fmt(grossValue)} bruto</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground/60 mt-0.5 truncate">{fmt(grossValue)} bruto</p>
             )}
           </div>
-          <div className={cn('p-2 rounded-lg', colorMap[color] || colorMap.primary)}>
-            <Icon className="w-4 h-4" />
+          <div className={cn('p-1.5 md:p-2 rounded-lg flex-shrink-0 ml-1', colorMap[color] || colorMap.primary)}>
+            <Icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
           </div>
         </div>
       </CardContent>

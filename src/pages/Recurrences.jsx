@@ -53,7 +53,7 @@ async function generatePayables(recurrence) {
       // Usa o dia da recorrência
       const maxDay = new Date(year, month + 1, 0).getDate();
       const day = Math.min(recurrence.due_day, maxDay);
-      dueDate = format(new Date(year, month, day, 12, 0, 0), 'yyyy-MM-dd');
+      dueDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     }
 
     payables.push({

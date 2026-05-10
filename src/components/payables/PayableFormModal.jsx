@@ -36,7 +36,12 @@ export default function PayableFormModal({ onClose, onSaved }) {
   const handleSave = async () => {
     if (!form.description || !form.amount || !form.due_date) return toast.error('Preencha os campos obrigatórios');
     setSaving(true);
-    await base44.entities.Payable.create({ ...form, amount: parseFloat(form.amount), status: 'pending' });
+    await base44.entities.Payable.create({ 
+      ...form, 
+      due_date: form.due_date + 'T12:00:00',
+      amount: parseFloat(form.amount), 
+      status: 'pending' 
+    });
     setSaving(false);
     toast.success('Conta a pagar criada!');
     onSaved();

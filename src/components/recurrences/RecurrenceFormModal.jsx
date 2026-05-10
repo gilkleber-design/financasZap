@@ -22,13 +22,13 @@ const FALLBACK_CATEGORIES = [
   { value: 'outros', label: 'Outros' },
 ];
 
-export default function RecurrenceFormModal({ onClose, onSaved }) {
+export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
   const [form, setForm] = useState({
-    description: '',
-    amount: '',
-    due_day: '',
-    category: '',
-    notes: '',
+    description: initial?.description || '',
+    amount: initial?.amount || '',
+    due_day: initial?.due_day || '',
+    category: initial?.category || '',
+    notes: initial?.notes || '',
   });
   const [saving, setSaving] = useState(false);
   const [categorySuggestion, setCategorySuggestion] = useState(null);
@@ -70,23 +70,37 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
     if (day < 1 || day > 31) return toast.error('Dia de vencimento inválido (1-31)');
 
     setSaving(true);
-    const recurrence = await base44.entities.Recurrence.create({
-      description: form.description,
-      amount: parseFloat(form.amount),
-      due_day: day,
-      category: form.category,
-      notes: form.notes || undefined,
-      active: true,
-    });
-    setSaving(false);
-    onSaved(recurrence);
+    if (initial) {
+      // Editar
+      const updated = await base44.entities.Recurrence.update(initial.id, {
+        description: form.description,
+        amount: parseFloat(form.amount),
+        due_day: day,
+        category: form.category,
+        notes: form.notes || undefined,
+      });
+      setSaving(false);
+      onSaved(updated);
+    } else {
+      // Criar novo
+      const recurrence = await base44.entities.Recurrence.create({
+        description: form.description,
+        amount: parseFloat(form.amount),
+        due_day: day,
+        category: form.category,
+        notes: form.notes || undefined,
+        active: true,
+      });
+      setSaving(false);
+      onSaved(recurrence);
+    }
   };
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Nova Despesa Recorrente</DialogTitle>
+          <DialogTitle>{initial ? 'Editar Despesa Recorrente' : 'Nova Despesa Recorrente'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           {suggestingCategory && (
@@ -187,10 +201,10 @@ export default function RecurrenceFormModal({ onClose, onSaved }) {
         </div>
 
         <div className="flex gap-2 pt-2">
-          <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving} className="flex-1">
-            {saving ? 'Salvando...' : 'Criar e Gerar Lançamentos'}
-          </Button>
+        <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
+        <Button onClick={handleSave} disabled={saving} className="flex-1">
+          {saving ? 'Salvando...' : initial ? 'Atualizar' : 'Criar e Gerar Lançamentos'}
+        </Button>
         </div>
       </DialogContent>
 

@@ -35,26 +35,16 @@ const CATEGORY_COLORS = {
 async function generatePayables(recurrence) {
   const now = new Date();
   const payables = [];
-  
-  // Importa a função apenas quando necessária
-  const { getFifthBusinessDay } = await import('@/lib/businessDayCalculator');
 
   for (let i = 0; i < 13; i++) {
     const targetMonth = addMonths(startOfMonth(now), i);
     const year = targetMonth.getFullYear();
     const month = targetMonth.getMonth();
     
-    let dueDate;
-    
-    if (recurrence.fifth_business_day) {
-      // Calcula o 5º dia útil
-      dueDate = getFifthBusinessDay(new Date(year, month, 1));
-    } else {
-      // Usa o dia da recorrência
-      const maxDay = new Date(year, month + 1, 0).getDate();
-      const day = Math.min(recurrence.due_day, maxDay);
-      dueDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    }
+    // Usa o dia da recorrência
+    const maxDay = new Date(year, month + 1, 0).getDate();
+    const day = Math.min(recurrence.due_day, maxDay);
+    const dueDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     payables.push({
       description: recurrence.description,
@@ -63,7 +53,6 @@ async function generatePayables(recurrence) {
       category: recurrence.category,
       status: 'pending',
       recurrent: true,
-      fifth_business_day: recurrence.fifth_business_day,
       notes: `Gerado automaticamente — Recorrência: ${recurrence.description}`,
     });
   }

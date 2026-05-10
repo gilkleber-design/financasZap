@@ -6,9 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { getFifthBusinessDay } from '@/lib/businessDayCalculator';
 
 const CATEGORIES = [
   { value: 'alimentacao', label: 'Alimentação' }, { value: 'transporte', label: 'Transporte' },
@@ -19,19 +17,10 @@ const CATEGORIES = [
 ];
 
 export default function PayableFormModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ description: '', amount: '', due_date: '', category: '', recurrent: false, fifth_business_day: false, notes: '' });
+  const [form, setForm] = useState({ description: '', amount: '', due_date: '', category: '', recurrent: false, notes: '' });
   const [saving, setSaving] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const handleFifthBusinessDayToggle = (checked) => {
-    set('fifth_business_day', checked);
-    if (checked) {
-      const dateToUse = form.due_date || new Date().toISOString().split('T')[0];
-      const fifthDay = getFifthBusinessDay(dateToUse);
-      set('due_date', fifthDay);
-    }
-  };
 
   const handleSave = async () => {
     if (!form.description || !form.amount || !form.due_date) return toast.error('Preencha os campos obrigatórios');
@@ -76,19 +65,6 @@ export default function PayableFormModal({ onClose, onSaved }) {
           <div className="flex items-center justify-between">
             <Label>Recorrente (mensal)?</Label>
             <Switch checked={form.recurrent} onCheckedChange={v => set('recurrent', v)} />
-          </div>
-          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-3">
-            <Checkbox
-              checked={form.fifth_business_day}
-              onCheckedChange={handleFifthBusinessDayToggle}
-              id="fifth-business-day"
-            />
-            <label
-              htmlFor="fifth-business-day"
-              className="text-sm font-medium text-blue-900 cursor-pointer flex-1"
-            >
-              Vencimento no 5º dia útil
-            </label>
           </div>
           </div>
         <div className="flex gap-2 pt-2">

@@ -30,7 +30,6 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
     due_day: initial?.due_day || '',
     category: initial?.category || '',
     notes: initial?.notes || '',
-    fifth_business_day: initial?.fifth_business_day || false,
   });
   const [saving, setSaving] = useState(false);
   const [categorySuggestion, setCategorySuggestion] = useState(null);
@@ -79,7 +78,6 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
         amount: parseFloat(form.amount),
         due_day: day,
         category: form.category,
-        fifth_business_day: form.fifth_business_day,
         notes: form.notes || undefined,
       });
       setSaving(false);
@@ -91,7 +89,6 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
         amount: parseFloat(form.amount),
         due_day: day,
         category: form.category,
-        fifth_business_day: form.fifth_business_day,
         notes: form.notes || undefined,
         active: true,
       });
@@ -197,20 +194,6 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
               className="mt-1"
               placeholder="Opcional"
             />
-          </div>
-
-          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-3">
-            <Checkbox
-              checked={form.fifth_business_day}
-              onCheckedChange={v => set('fifth_business_day', v)}
-              id="fifth-business-day-recurrence"
-            />
-            <label
-              htmlFor="fifth-business-day-recurrence"
-              className="text-sm font-medium text-blue-900 cursor-pointer flex-1"
-            >
-              Vencimento no 5º dia útil
-            </label>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">

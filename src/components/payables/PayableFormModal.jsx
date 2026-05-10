@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { useCategories } from '@/hooks/useCategories';
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { value: 'alimentacao', label: 'Alimentação' }, { value: 'transporte', label: 'Transporte' },
   { value: 'moradia', label: 'Moradia' }, { value: 'saude', label: 'Saúde' },
   { value: 'educacao', label: 'Educação' }, { value: 'lazer', label: 'Lazer' },
@@ -19,6 +20,8 @@ const CATEGORIES = [
 export default function PayableFormModal({ onClose, onSaved }) {
   const [form, setForm] = useState({ description: '', amount: '', due_date: '', category: '', recurrent: false, notes: '' });
   const [saving, setSaving] = useState(false);
+  const { flatForSelect } = useCategories();
+  const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -59,7 +62,7 @@ export default function PayableFormModal({ onClose, onSaved }) {
             <Label>Categoria</Label>
             <Select value={form.category} onValueChange={v => set('category', v)}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+              <SelectContent>{categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="flex items-center justify-between">

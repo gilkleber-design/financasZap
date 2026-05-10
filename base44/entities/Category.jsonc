@@ -1,0 +1,34 @@
+{
+  "name": "Category",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome da categoria"
+    },
+    "slug": {
+      "type": "string",
+      "description": "Identificador \u00fanico (ex: alimentacao, moradia)"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "ID da categoria pai (para subcategorias). Vazio = categoria raiz."
+    },
+    "color": {
+      "type": "string",
+      "description": "Cor em hex (ex: #6366f1)"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Nome do \u00edcone lucide (ex: utensils, home)"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "slug"
+  ]
+}

@@ -161,7 +161,7 @@ export default function Receivables() {
         <Button
           variant={filterStatus === 'received' ? 'secondary' : 'outline'}
           size="sm"
-          onClick={() => setFilterStatus('received')}
+          onClick={() => { setFilterStatus('received'); setFilterBy('competencia'); }}
           className="text-xs"
         >
           Recebidas
@@ -201,7 +201,7 @@ export default function Receivables() {
             </Button>
           )}
         </div>
-        {filterMonth && (
+        {filterMonth && filterStatus !== 'received' && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Filtrar por:</span>
             <Button

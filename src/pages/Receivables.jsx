@@ -18,7 +18,7 @@ export default function Receivables() {
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filterStatus, setFilterStatus] = useState('open'); // 'open' | 'overdue' | 'received'
-  const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' | 'competencia'
+  const [filterBy, setFilterBy] = useState('due_date'); // 'due_date' | 'competencia' | 'payment_date'
   const queryClient = useQueryClient();
 
   const { data: receivables = [] } = useQuery({
@@ -104,13 +104,19 @@ export default function Receivables() {
       if (status !== 'received') return false;
     }
 
-    // Para recebidas: filtrar pela data real do recebimento
+    // Para recebidas: filtrar por data de pagamento ou competência
     if (filterStatus === 'received' || status === 'received') {
-      const payDate = r._isPfTransaction
-        ? r.due_date
-        : (receivedDateMap[r.id] || r.due_date);
-      if (!payDate) return false;
-      const d = new Date(payDate + (payDate.includes('T') ? '' : 'T12:00:00'));
+      let dateField;
+      if (filterBy === 'competencia') {
+        dateField = r.competencia || r.due_date;
+      } else {
+        // payment_date (padrão para recebidas)
+        dateField = r._isPfTransaction
+          ? r.due_date
+          : (receivedDateMap[r.id] || r.due_date);
+      }
+      if (!dateField) return false;
+      const d = new Date(dateField + (dateField.includes('T') ? '' : 'T12:00:00'));
       return d >= mStart && d <= mEnd;
     }
 
@@ -156,13 +162,13 @@ export default function Receivables() {
 
       {/* Filtro de status */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Button variant={filterStatus === 'open' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('open')} className="text-xs">
+        <Button variant={filterStatus === 'open' ? 'secondary' : 'outline'} size="sm" onClick={() => { setFilterStatus('open'); setFilterBy('due_date'); }} className="text-xs">
           Em Aberto
         </Button>
-        <Button variant={filterStatus === 'overdue' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('overdue')} className="text-xs">
+        <Button variant={filterStatus === 'overdue' ? 'secondary' : 'outline'} size="sm" onClick={() => { setFilterStatus('overdue'); setFilterBy('due_date'); }} className="text-xs">
           Vencidas
         </Button>
-        <Button variant={filterStatus === 'received' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus('received')} className="text-xs">
+        <Button variant={filterStatus === 'received' ? 'secondary' : 'outline'} size="sm" onClick={() => { setFilterStatus('received'); setFilterBy('payment_date'); }} className="text-xs">
           Recebidas
         </Button>
       </div>
@@ -180,17 +186,28 @@ export default function Receivables() {
             <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
-        {filterStatus !== 'received' && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Filtrar por:</span>
-            <Button variant={filterBy === 'due_date' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('due_date')} className="text-xs">
-              Vencimento
-            </Button>
-            <Button variant={filterBy === 'competencia' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('competencia')} className="text-xs">
-              Competência
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Filtrar por:</span>
+          {filterStatus === 'received' ? (
+            <>
+              <Button variant={filterBy !== 'competencia' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('payment_date')} className="text-xs">
+                Data de Pagamento
+              </Button>
+              <Button variant={filterBy === 'competencia' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('competencia')} className="text-xs">
+                Competência
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant={filterBy === 'due_date' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('due_date')} className="text-xs">
+                Vencimento
+              </Button>
+              <Button variant={filterBy === 'competencia' ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy('competencia')} className="text-xs">
+                Competência
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <Card className="border-0 shadow-sm">

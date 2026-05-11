@@ -39,7 +39,7 @@ export default function CategoryRuleManager() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ keyword: '', category: '', priority: 0 });
+  const [form, setForm] = useState({ keyword: '', category: '', description: '', priority: 0 });
 
   const { data: rules = [] } = useQuery({
     queryKey: ['category_rules'],
@@ -51,7 +51,7 @@ export default function CategoryRuleManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['category_rules'] });
       setShowForm(false);
-      setForm({ keyword: '', category: '', priority: 0 });
+      setForm({ keyword: '', category: '', description: '', priority: 0 });
       toast.success('Regra criada!');
     },
   });
@@ -61,7 +61,7 @@ export default function CategoryRuleManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['category_rules'] });
       setEditingId(null);
-      setForm({ keyword: '', category: '', priority: 0 });
+      setForm({ keyword: '', category: '', description: '', priority: 0 });
       toast.success('Regra atualizada!');
     },
   });
@@ -75,8 +75,8 @@ export default function CategoryRuleManager() {
   });
 
   const handleSave = () => {
-    if (!form.keyword || !form.category) {
-      toast.error('Preencha palavra-chave e categoria');
+    if (!form.keyword) {
+      toast.error('Informe a palavra-chave');
       return;
     }
     if (editingId) {
@@ -91,7 +91,7 @@ export default function CategoryRuleManager() {
 
   const startEdit = (rule) => {
     setEditingId(rule.id);
-    setForm({ keyword: rule.keyword, category: rule.category, priority: rule.priority || 0 });
+    setForm({ keyword: rule.keyword, category: rule.category, description: rule.description || '', priority: rule.priority || 0 });
     setShowForm(true);
   };
 
@@ -127,13 +127,24 @@ export default function CategoryRuleManager() {
                 placeholder="0"
               />
             </div>
-            <div className="col-span-3">
+            <div className="col-span-2">
+              <Label className="text-xs">Descrição Normalizada (opcional)</Label>
+              <Input
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="mt-1 text-sm"
+                placeholder="Ex: Uber, Shell, Combustível"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Se preenchido, substitui a descrição original da transação</p>
+            </div>
+            <div className="col-span-1">
               <Label className="text-xs">Categoria</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                 <SelectTrigger className="mt-1 text-sm">
-                  <SelectValue placeholder="Selecionar" />
+                  <SelectValue placeholder="Nenhuma" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={null}>Nenhuma (apenas limpa)</SelectItem>
                   {CATEGORIES.map((c) => (
                     <SelectItem key={c.value} value={c.value}>
                       {c.label}
@@ -150,7 +161,7 @@ export default function CategoryRuleManager() {
               onClick={() => {
                 setShowForm(false);
                 setEditingId(null);
-                setForm({ keyword: '', category: '', priority: 0 });
+                setForm({ keyword: '', category: '', description: '', priority: 0 });
               }}
               className="flex-1"
             >
@@ -178,9 +189,14 @@ export default function CategoryRuleManager() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <code className="text-sm font-mono bg-slate-100 px-2 py-1 rounded text-slate-700">{rule.keyword}</code>
-                <Badge className={`text-xs border-0 ${CATEGORY_COLORS[rule.category] || CATEGORY_COLORS.outros}`}>
-                  {getCategoryLabel(rule.category)}
-                </Badge>
+                {rule.description && (
+                  <span className="text-sm font-medium text-slate-700">→ {rule.description}</span>
+                )}
+                {rule.category && (
+                  <Badge className={`text-xs border-0 ${CATEGORY_COLORS[rule.category] || CATEGORY_COLORS.outros}`}>
+                    {getCategoryLabel(rule.category)}
+                  </Badge>
+                )}
                 {rule.priority > 0 && (
                   <Badge variant="outline" className="text-xs">
                     ⭐ {rule.priority}

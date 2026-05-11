@@ -113,14 +113,6 @@ export default function Transactions() {
                     {tx.tax_rate > 0 && <Badge className="text-xs py-0 h-4 px-1.5 bg-amber-100 text-amber-700 border-0">IR {tx.tax_rate}%</Badge>}
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className={`text-sm font-semibold ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {tx.type === 'income' ? '+' : '-'}{fmt(tx.net_amount || tx.amount)}
-                  </p>
-                  {tx.tax_amount > 0 && (
-                    <p className="text-xs text-muted-foreground">IR: {fmt(tx.tax_amount)}</p>
-                  )}
-                </div>
                 <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-primary flex-shrink-0"
                   onClick={() => setEditingTx(tx)}>
                   <Pencil className="w-3.5 h-3.5" />
@@ -129,6 +121,14 @@ export default function Transactions() {
                   onClick={() => deleteMutation.mutate(tx.id)}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
+                <div className="text-right flex-shrink-0 min-w-[90px]">
+                  <p className={`text-sm font-semibold ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {tx.type === 'income' ? '+' : '-'}{fmt(tx.net_amount || tx.amount)}
+                  </p>
+                  {tx.tax_amount > 0 && (
+                    <p className="text-xs text-muted-foreground">IR: {fmt(tx.tax_amount)}</p>
+                  )}
+                </div>
               </div>
             ))}
           </div>

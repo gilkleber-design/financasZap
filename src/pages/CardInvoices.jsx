@@ -4,11 +4,12 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw, Pencil } from 'lucide-react';
 import { format, startOfMonth, addMonths, subMonths, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
+import EditInvoiceItemsModal from '@/components/cardInvoices/EditInvoiceItemsModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -28,6 +29,7 @@ const STATUS_ITEM_COLORS = {
 export default function CardInvoices() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [payingPayable, setPayingPayable] = useState(null);
+  const [editingInvoiceItems, setEditingInvoiceItems] = useState(null); // array de items
   const queryClient = useQueryClient();
 
   const { data: cards = [] } = useQuery({
@@ -224,6 +226,17 @@ export default function CardInvoices() {
 
                 {/* Ações */}
                 <div className="flex gap-2">
+                  {items.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setEditingInvoiceItems(items)}
+                    >
+                      <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                      Editar Itens
+                    </Button>
+                  )}
                   {!invoicePayable && items.length > 0 && (
                     <Button
                       variant="outline"
@@ -260,6 +273,14 @@ export default function CardInvoices() {
             setPayingPayable(null);
             queryClient.invalidateQueries();
           }}
+        />
+      )}
+
+      {editingInvoiceItems && (
+        <EditInvoiceItemsModal
+          items={editingInvoiceItems}
+          onClose={() => setEditingInvoiceItems(null)}
+          onSaved={() => { queryClient.invalidateQueries(); setEditingInvoiceItems(null); }}
         />
       )}
     </div>

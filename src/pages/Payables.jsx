@@ -135,7 +135,18 @@ export default function Payables() {
               const status = getStatus(p);
               return (
                 <div key={p.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors">
-                  <div className={`w-2 h-10 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-400' : status === 'overdue' ? 'bg-red-400' : 'bg-amber-400'}`} />
+                  <div className="relative group/bullet flex-shrink-0">
+                    <div className={`w-2 h-10 rounded-full ${status === 'paid' ? 'bg-emerald-400 cursor-pointer' : status === 'overdue' ? 'bg-red-400' : 'bg-amber-400'}`} />
+                    {status === 'paid' && (
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 hidden group-hover/bullet:block">
+                        <div className="bg-popover border border-border rounded-lg shadow-lg p-3 text-xs min-w-[180px] space-y-1">
+                          <p className="font-semibold text-emerald-600">✓ Pago</p>
+                          {p.amount && <p className="text-muted-foreground">Valor: <span className="font-medium text-foreground">{fmt(p.amount)}</span></p>}
+                          {p.transaction_id && <p className="text-muted-foreground text-[10px]">Lançamento vinculado</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{p.description}</p>

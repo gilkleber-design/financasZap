@@ -65,6 +65,7 @@ export default function Recurrences() {
   const [showForm, setShowForm] = useState(false);
   const [editingRecurrence, setEditingRecurrence] = useState(null);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
+  const [regeneratingRecurrence, setRegeneratingRecurrence] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: recurrences = [], isLoading } = useQuery({
@@ -103,7 +104,8 @@ export default function Recurrences() {
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries(['payables']);
-      toast.success(`${count} lançamentos futuros gerados!`);
+      toast.success(`${count} lançamentos futuros gerados com sucesso!`);
+      setRegeneratingRecurrence(null);
     },
   });
 
@@ -208,7 +210,7 @@ export default function Recurrences() {
                   <Button
                     variant="ghost" size="icon" className="w-8 h-8 text-blue-500 hover:text-blue-700"
                     title="Regerar próximos 12 meses"
-                    onClick={() => regenerateMutation.mutate(r)}
+                    onClick={() => setRegeneratingRecurrence(r)}
                     disabled={regenerateMutation.isPending}
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
@@ -275,6 +277,29 @@ export default function Recurrences() {
           onClose={() => { setShowForm(false); setEditingRecurrence(null); }}
           onSaved={handleCreated}
         />
+      )}
+
+      {regeneratingRecurrence && (
+        <AlertDialog open onOpenChange={() => setRegeneratingRecurrence(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Regerar parcelas?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso vai gerar 13 novos lançamentos futuros para "{regeneratingRecurrence.description}" em Contas a Pagar. Parcelas já existentes não serão removidas.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-2">
+              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
+              <Button
+                className="flex-1"
+                onClick={() => regenerateMutation.mutate(regeneratingRecurrence)}
+                disabled={regenerateMutation.isPending}
+              >
+                {regenerateMutation.isPending ? 'Gerando...' : 'Gerar Parcelas'}
+              </Button>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {deletingRecurrence && (

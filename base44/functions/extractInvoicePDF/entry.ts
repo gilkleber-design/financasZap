@@ -122,15 +122,27 @@ REGRAS DE EXCLUSÃO — NÃO incluir:
 - Limite de crédito / limite disponível
 - Valores negativos (estornos)
 
-IMPORTANTE: Você DEVE extrair a data real do início de cada linha (padrão DD/MM, ex: 26/12, 04/12).
-Se a linha começa com DD/MM, essa é a data real da compra.
-INFIRA o ano com base no ref_month: se ref_month é "2026-05", use ano 2025 para datas > 05/31 (compras do mês anterior) e 2026 para datas <= 05/31.
+REGRA CRÍTICA DE DATAS E PARCELAS:
 
-CAMPOS:
-- description: Texto EXATO da descrição, sem data
+1. INÍCIO DA LINHA (DD/MM) = DATA REAL DA COMPRA
+   - Exemplo: Linha começa com "09/12 ADAPTAORG 150,00" → data = 09/12 (ano inferido)
+   
+2. FIM DA DESCRIÇÃO (XX/YY) = PARCELA
+   - Exemplo: "ADAPTAORG 09/12" no fim da descrição → parcela 09 de 12
+   - Isso NÃO é uma data, é um identificador de parcelamento
+   - Extrair como: installment_number=9, installment_total=12
+
+3. INFERÊNCIA DE ANO:
+   - Se ref_month="2026-05" e data extraída > 05 → ano 2025 (compra mês anterior)
+   - Se ref_month="2026-05" e data extraída <= 05 → ano 2026 (compra mês atual)
+
+CAMPOS DO JSON:
+- description: Texto EXATO da descrição (SEM data no início, SEM parcela no fim)
 - amount: Número decimal (sempre positivo)
 - date: Data da COMPRA em YYYY-MM-DD (extraída do início da linha, com ano inferido)
-- category: Use regras de CategoryRule (ver banco de dados) ou padrões abaixo como fallback
+- installment_number: Número da parcela (se houver XX/YY no fim da descrição)
+- installment_total: Total de parcelas (se houver XX/YY no fim da descrição)
+- category: Use regras de CategoryRule ou padrões abaixo como fallback
 
 CATEGORIAS PADRÃO (fallback):
   * "transporte": UBER, 99, CABIFY, POSTO, SHELL, IPIRANGA, PETROBRAS, COMBUSTIVEL, LATAM, GOL, AZUL, PASSAGEM
@@ -166,10 +178,13 @@ Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items":
       },
     });
 
-    // Passo 3: pós-processamento
+    // Passo 3: pós-processamento com garantia de parcelamento
     const items = (result?.items || []).map(item => {
       let desc = sanitizeDescription(item.description);
-      const inst = extractInstallment(desc);
+      const inst = item.installment_number && item.installment_total ? 
+        { number: item.installment_number, total: item.installment_total } : 
+        extractInstallment(desc);
+      
       if (inst) {
         desc = removeInstallmentPattern(desc, inst);
       }

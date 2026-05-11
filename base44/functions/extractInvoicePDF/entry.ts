@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     if (!file_url || !ref_month) return Response.json({ error: 'file_url e ref_month são obrigatórios' }, { status: 400 });
 
     // Passo 1: transcrição literal e completa do PDF
-    const textResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+    const textResultResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt: `Você é um leitor de PDFs. Sua única função é transcrever FIELMENTE e COMPLETAMENTE o PDF de fatura de cartão de crédito abaixo.
 
 REGRAS ABSOLUTAS:
@@ -95,6 +95,7 @@ Transcreva o PDF completo abaixo:`,
       file_urls: [file_url],
       model: 'claude_sonnet_4_6',
     });
+    const textResult = typeof textResultResponse === 'string' ? textResultResponse : String(textResultResponse);
 
     // Passo 2: extração estruturada a partir do texto
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({

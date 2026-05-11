@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
-import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
+import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths, isSameMonth, isSameYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -34,6 +34,7 @@ export default function Payables() {
   const [editingPayable, setEditingPayable] = useState(null);
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [deleteMode, setDeleteMode] = useState(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const queryClient = useQueryClient();
 
   const { data: payables = [] } = useQuery({
@@ -90,7 +91,8 @@ export default function Payables() {
   const filtered = payables.filter(p => {
     if (!p.due_date) return false;
     const d = new Date(p.due_date);
-    return !isNaN(d.getTime());
+    if (isNaN(d.getTime())) return false;
+    return isSameMonth(d, currentMonth) && isSameYear(d, currentMonth);
   });
 
   const totalPending = filtered.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
@@ -106,6 +108,18 @@ export default function Payables() {
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="w-4 h-4 mr-2" /> Nova Conta
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <span className="text-sm font-medium min-w-[140px] text-center capitalize">
+          {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+        </span>
+        <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+          <ChevronRight className="w-4 h-4" />
         </Button>
       </div>
 

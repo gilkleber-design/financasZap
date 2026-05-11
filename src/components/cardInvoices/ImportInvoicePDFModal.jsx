@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -62,44 +62,78 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
   };
 
   const handleImport = async () => {
+    const { addMonths } = await import('date-fns');
     const selected = items.filter(it => it.selected);
     if (selected.length === 0) return toast.error('Selecione ao menos um item');
     setSaving(true);
 
     const genGroupId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-    // Agrupa parcelados pelo grupo de parcela (mesma descrição base)
+    // Agrupa por (descrição + installment_total) para gerar todas as parcelas futuras
     const groupMap = {};
-    const payables = selected.map(it => {
+    const payables = [];
+
+    selected.forEach(it => {
       const hasInst = it.installment_number && it.installment_total;
-      let installment_group_id = undefined;
-      if (hasInst) {
-        if (!groupMap[it.description]) groupMap[it.description] = genGroupId();
-        installment_group_id = groupMap[it.description];
+      const groupKey = hasInst ? `${it.description}|${it.installment_total}` : it.description;
+      
+      if (!groupMap[groupKey]) {
+        groupMap[groupKey] = {
+          groupId: genGroupId(),
+          processed: false,
+        };
       }
 
-      return {
-        description: it.description,
-        amount: it.amount,
-        due_date: (it.date || refMonth + '-01') + 'T12:00:00',
-        competencia: refMonth + '-01',
-        category: it.category || 'outros',
-        status: 'provisioned',
-        origin_id: card.id,
-        origin_type: 'card',
-        payment_modality: 'card_invoice',
-        recurrent: false,
-        ...(hasInst ? {
-          installment_number: it.installment_number,
-          installment_count: it.installment_total,
-          installment_total_amount: it.amount * it.installment_total,
-          installment_group_id,
-        } : {}),
-      };
+      // Se tem parcelamento e ainda não processou este grupo, gera TODAS as parcelas futuras
+      if (hasInst && !groupMap[groupKey].processed) {
+        const startNum = it.installment_number;
+        const totalCount = it.installment_total;
+        const baseDate = new Date(it.date + 'T12:00:00');
+        const monthlyAmount = it.amount;
+        const totalAmount = monthlyAmount * totalCount;
+
+        // Gera as parcelas: da atual até a última
+        for (let i = 0; i <= (totalCount - startNum); i++) {
+          const futureDate = addMonths(baseDate, i);
+          const futureDateStr = futureDate.toISOString().split('T')[0];
+
+          payables.push({
+            description: it.description,
+            amount: monthlyAmount,
+            due_date: futureDateStr + 'T12:00:00',
+            competencia: futureDateStr.substring(0, 7) + '-01',
+            category: it.category || 'outros',
+            status: 'provisioned',
+            origin_id: card.id,
+            origin_type: 'card',
+            payment_modality: 'card_invoice',
+            recurrent: false,
+            installment_number: startNum + i,
+            installment_count: totalCount,
+            installment_total_amount: totalAmount,
+            installment_group_id: groupMap[groupKey].groupId,
+          });
+        }
+        groupMap[groupKey].processed = true;
+      } else if (!hasInst) {
+        // Sem parcelamento, apenas um lançamento
+        payables.push({
+          description: it.description,
+          amount: it.amount,
+          due_date: (it.date || refMonth + '-01') + 'T12:00:00',
+          competencia: refMonth + '-01',
+          category: it.category || 'outros',
+          status: 'provisioned',
+          origin_id: card.id,
+          origin_type: 'card',
+          payment_modality: 'card_invoice',
+          recurrent: false,
+        });
+      }
     });
 
     await base44.entities.Payable.bulkCreate(payables);
-    toast.success(`${payables.length} lançamentos importados!`);
+    toast.success(`${payables.length} lançamentos importados (incluindo parcelas futuras)!`);
     setSaving(false);
     setStep('done');
     onImported();
@@ -107,6 +141,29 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
   const selectedCount = items.filter(it => it.selected).length;
   const selectedTotal = items.filter(it => it.selected).reduce((s, it) => s + (it.amount || 0), 0);
+  
+  // Calcula quantos payables serão gerados (com parcelas futuras)
+  const futurePayablesCount = useMemo(() => {
+    const groupMap = {};
+    let total = 0;
+    items.filter(it => it.selected).forEach(it => {
+      const hasInst = it.installment_number && it.installment_total;
+      const groupKey = hasInst ? `${it.description}|${it.installment_total}` : it.description;
+      
+      if (!groupMap[groupKey]) {
+        groupMap[groupKey] = { processed: false };
+      }
+      
+      if (hasInst && !groupMap[groupKey].processed) {
+        total += (it.installment_total - it.installment_number + 1);
+        groupMap[groupKey].processed = true;
+      } else if (!hasInst && !groupMap[groupKey].processed) {
+        total += 1;
+        groupMap[groupKey].processed = true;
+      }
+    });
+    return total;
+  }, [items]);
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -221,11 +278,16 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
               <p className="text-sm font-semibold">
                 {selectedCount} selecionados · <span className="text-red-500">{fmt(selectedTotal)}</span>
               </p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                <Button onClick={handleImport} disabled={saving || selectedCount === 0}>
-                  {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando...</> : `Importar ${selectedCount} itens`}
-                </Button>
+              <div className="flex gap-2 flex-col w-full">
+                <p className="text-xs text-muted-foreground text-center">
+                  {selectedCount} itens selecionados → {futurePayablesCount} lançamentos (com parcelas futuras)
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
+                  <Button onClick={handleImport} disabled={saving || selectedCount === 0} className="flex-1">
+                    {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando...</> : `Importar ${futurePayablesCount} lançamentos`}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

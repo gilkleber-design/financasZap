@@ -7,12 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
+import { useCategories } from '@/hooks/useCategories';
 import { addMonths, format, startOfMonth } from 'date-fns';
 import { CreditCard, Landmark, Repeat, Layers, Receipt } from 'lucide-react';
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { value: 'alimentacao', label: 'Alimentação' }, { value: 'transporte', label: 'Transporte' },
   { value: 'moradia', label: 'Moradia' }, { value: 'saude', label: 'Saúde' },
   { value: 'educacao', label: 'Educação' }, { value: 'lazer', label: 'Lazer' },
@@ -66,6 +67,8 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const { origins } = usePaymentOrigins();
+  const { flatForSelect } = useCategories();
+  const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -316,7 +319,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
             <Label>Categoria</Label>
             <Select value={form.category} onValueChange={v => set('category', v)}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+              <SelectContent>{categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
 

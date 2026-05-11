@@ -87,7 +87,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         
         const startNum = it.installment_number;
         const totalCount = it.installment_total;
-        const baseDate = new Date(it.date + 'T12:00:00');
+        const baseDate = new Date(refMonth + '-01T12:00:00');
         const monthlyAmount = it.amount;
         const totalAmount = monthlyAmount * totalCount;
 

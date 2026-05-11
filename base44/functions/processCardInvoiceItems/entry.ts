@@ -11,10 +11,34 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'items, card_id, ref_month, invoice_total são obrigatórios' }, { status: 400 });
     }
 
-    // Mapa de categorização semântica
+    // Limpeza de sufixos geográficos
+    const cleanDescription = (desc) => {
+      if (!desc) return desc;
+      // Remove sufixos de cidades e regiões
+      let cleaned = desc
+        .replace(/\s+(SALVADOR|SAO PAULO|VITORIA|OSASCO|BARUERI|GOIANIA|RAFAEL|MILAGRES|CURITIBA|ANA GE|MARACAS|AMELIA|LAURO|SALVADOR\s*BRA|.*BRA)$/i, '')
+        .replace(/SALVADORBRA|OSASCOBRA|PAULOBRA|VITORIABRA|BARUERIBRA|etc$/gi, '')
+        .trim();
+      return cleaned;
+    };
+
+    // Extração de parcelas (padrão XX/YY)
+    const extractInstallment = (desc) => {
+      const match = desc.match(/\((\d{1,2})\/(\d{2})\)|(\d{1,2})\/(\d{2})(?:\s|$)/);
+      if (match) {
+        const num = parseInt(match[1] || match[3]);
+        const total = parseInt(match[2] || match[4]);
+        if (num <= total && total > 1 && total <= 72) {
+          return { number: num, total };
+        }
+      }
+      return null;
+    };
+
+    // Mapa de categorização refinada
     const categoryMap = {
       impostos: ['ENCARGOS', 'MULTA', 'JUROS', 'IOF', 'ANUIDADE', 'ADAPTAORG'],
-      transporte: ['UBER', 'AUTO POSTO', 'SHELL', 'ESTACIONAMENTO', 'POSTO', 'LATAM', 'GOL', 'AZUL'],
+      transporte: ['UBER', 'POSTO', 'AUTO POSTO', 'SHELL', 'ESTACIONAMENTO', 'LATAM', 'GOL', 'AZUL'],
       alimentacao: ['ATAKADAO', 'HIPERIDEAL', 'KIPAO', 'TRIGO', 'PARIS', 'MANAA', 'AM COMERCIO', 'CARREFOUR', 'IFOOD', 'RAPPI', 'RESTAURANTE', 'LANCHONETE', 'PADARIA', 'MC DONALDS', 'CHURRASCARIA', 'SVM COMERCIO', 'ORGANICO', 'LE BISCUIT', 'FORNARI', 'CSC VENDING', 'IFD'],
       saude: ['DROGARIA', 'PAGUE MENOS', 'HOSPCOMGOIANIA', 'FLUIR PATAMARES', 'FARMACIA', 'ULTRAFARMA', 'HOSPITAL', 'CLINICA', 'LABORATORIO', 'MENSALIDADE', 'PLANO'],
       servicos: ['GOOGLE', 'APPLE', 'CAPCUT', 'NETFLIX', 'SPOTIFY', 'AMAZON', 'YOUTUBE', 'DISNEY', 'HBO', 'PAGPRIM', 'EBN'],
@@ -30,17 +54,20 @@ Deno.serve(async (req) => {
       return 'outros';
     };
 
-    // Detectar duplicidades (mesmo nome + valor idêntico ou 1 centavo de diferença)
+    // Processar itens: limpeza, deduplicação, extração de parcelas
     const deduped = [];
     const seen = new Set();
 
     items.forEach(item => {
-      const key = `${item.description}_${Math.round(item.amount * 100)}`;
+      const cleaned = cleanDescription(item.description);
+      const inst = extractInstallment(cleaned);
+      const installmentSuffix = inst ? `_${inst.number}/${inst.total}` : '';
+      const key = `${cleaned}_${Math.round(item.amount * 100)}${installmentSuffix}`;
       
       if (seen.has(key)) {
         // Encontrou duplicado — mesclar
         const existing = deduped.find(d => 
-          d.description === item.description && 
+          cleanDescription(d.description) === cleaned && 
           Math.abs((d.amount || 0) - (item.amount || 0)) <= 0.01
         );
         if (existing) {
@@ -50,36 +77,55 @@ Deno.serve(async (req) => {
       } else {
         seen.add(key);
         deduped.push({
-          ...item,
-          category: getCategory(item.description),
-          status: 'provisioned',
+          description: cleaned,
+          amount: item.amount,
+          date: item.date,
+          category: getCategory(cleaned),
+          installment: inst,
+          notes: undefined,
         });
       }
     });
 
-    // Criar Payables provisionados
-    const payables = deduped.map(item => ({
-      description: item.description,
-      amount: item.amount,
-      due_date: item.date ? new Date(item.date).toISOString().split('T')[0] + 'T12:00:00' : ref_month + '-01T12:00:00',
-      competencia: item.date ? new Date(item.date).toISOString().split('T')[0] : ref_month + '-01',
-      category: item.category || 'outros',
-      status: 'provisioned',
-      origin_id: card_id,
-      origin_type: 'card',
-      payment_modality: 'card_invoice',
-      recurrent: false,
-      notes: item.notes || undefined,
-    }));
+    // Criar Payables provisionados com parcelamento
+    const payables = deduped.map(item => {
+      const base = {
+        description: item.description,
+        amount: item.amount,
+        due_date: item.date ? new Date(item.date).toISOString().split('T')[0] + 'T12:00:00' : ref_month + '-01T12:00:00',
+        competencia: item.date ? new Date(item.date).toISOString().split('T')[0] : ref_month + '-01',
+        category: item.category || 'outros',
+        status: 'provisioned',
+        origin_id: card_id,
+        origin_type: 'card',
+        payment_modality: 'card_invoice',
+        recurrent: false,
+        notes: item.notes || undefined,
+      };
+
+      // Se tem parcelamento, adicionar campos
+      if (item.installment) {
+        base.installment_number = item.installment.number;
+        base.installment_count = item.installment.total;
+        base.installment_total_amount = item.amount * item.installment.total;
+        base.installment_group_id = `${item.description}_${item.installment.total}`;
+      }
+
+      return base;
+    });
 
     await base44.entities.Payable.bulkCreate(payables);
 
-    // Criar Fatura consolidada em Contas a Pagar
+    // Criar Fatura consolidada no dia do vencimento
     const cardData = await base44.entities.Card.get(card_id);
+    const dueDay = cardData.due_day || 12;
+    const [year, month] = ref_month.split('-');
+    const dueDate = `${year}-${month}-${String(dueDay).padStart(2, '0')}`;
+
     const invoicePayable = await base44.entities.Payable.create({
       description: `Fatura ${cardData.name} - ${new Date(ref_month + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
       amount: invoice_total,
-      due_date: ref_month + '-15T12:00:00',
+      due_date: dueDate + 'T12:00:00',
       competencia: ref_month + '-01',
       category: 'transferencia_liquidacao',
       status: 'pending',
@@ -90,7 +136,7 @@ Deno.serve(async (req) => {
       recurrent: false,
     });
 
-    // Agrupar por categoria para retornar resumo
+    // Resumo por categoria
     const summary = {};
     deduped.forEach(item => {
       if (!summary[item.category]) summary[item.category] = 0;
@@ -102,6 +148,7 @@ Deno.serve(async (req) => {
       payables_created: payables.length,
       invoice_payable_id: invoicePayable.id,
       total_amount: invoice_total,
+      due_date: dueDate,
       summary,
     });
   } catch (error) {

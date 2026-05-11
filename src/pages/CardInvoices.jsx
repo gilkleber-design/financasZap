@@ -184,8 +184,8 @@ export default function CardInvoices() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                          <Badge className={`text-xs border-0 py-0 h-4 px-1.5 ${STATUS_ITEM_COLORS[p.status] || STATUS_ITEM_COLORS.pending}`}>
-                            {p.status === 'provisioned' ? 'Provisionado' : p.status === 'paid' ? 'Pago' : p.status}
+                          <Badge className={`text-xs border-0 py-0 h-4 px-1.5 ${p.status === 'paid' ? STATUS_ITEM_COLORS.paid : STATUS_ITEM_COLORS.provisioned}`}>
+                            {p.status === 'paid' ? 'Pago' : 'Provisionado'}
                           </Badge>
                           <span className="text-sm font-medium text-red-500">{fmt(p.amount)}</span>
                         </div>

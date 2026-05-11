@@ -308,10 +308,13 @@ export default function Payables() {
 
   const filtered = payables.filter(p => {
     if (!byTab(p)) return false;
+    // itens consolidados de fatura (is_card_invoice_payable) são gerenciados em Faturas de Cartão
+    if (p.is_card_invoice_payable) return false;
     const status = getStatus(p);
-    if (filterStatus === 'open' && (status === 'paid' || (status === 'provisioned' && p.origin_type === 'card'))) return false;
+    if (filterStatus === 'open' && (status === 'paid' || status === 'provisioned')) return false;
     if (filterStatus === 'overdue' && status !== 'overdue') return false;
     if (filterStatus === 'paid' && status !== 'paid') return false;
+    if (filterStatus === 'provisioned' && status !== 'provisioned') return false;
 
     if (filterStatus === 'paid' || status === 'paid') {
       const payDate = paidDateMap[p.id] || p.due_date;
@@ -344,6 +347,7 @@ export default function Payables() {
           <p className="text-muted-foreground text-sm mt-1">
             {filterStatus === 'open' ? `${pendingCount} pendentes · ${overdueCount} vencidas · ${fmt(totalFiltered)}` :
              filterStatus === 'overdue' ? `${filtered.length} vencidas · ${fmt(totalFiltered)}` :
+             filterStatus === 'provisioned' ? `${filtered.length} provisionados no cartão · ${fmt(totalFiltered)}` :
              `${filtered.length} pagas · ${fmt(totalFiltered)}`}
           </p>
         </div>
@@ -375,9 +379,9 @@ export default function Payables() {
         <>
           {/* Filtros de status */}
           <div className="flex items-center gap-2 flex-wrap">
-            {['open', 'overdue', 'paid'].map(s => (
+            {['open', 'overdue', 'paid', 'provisioned'].map(s => (
               <Button key={s} variant={filterStatus === s ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus(s)} className="text-xs">
-                {s === 'open' ? 'Em Aberto' : s === 'overdue' ? 'Vencidas' : 'Pagas'}
+                {s === 'open' ? 'Em Aberto' : s === 'overdue' ? 'Vencidas' : s === 'paid' ? 'Pagas' : 'Cartão'}
               </Button>
             ))}
           </div>

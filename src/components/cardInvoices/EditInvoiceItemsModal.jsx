@@ -8,7 +8,8 @@ import { Pencil, Trash2, Check, X } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-export default function EditInvoiceItemsModal({ items, onClose, onSaved }) {
+export default function EditInvoiceItemsModal({ items: initialItems, onClose, onSaved }) {
+  const [items, setItems] = useState(initialItems);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [deletingId, setDeletingId] = useState(null);
@@ -27,11 +28,9 @@ export default function EditInvoiceItemsModal({ items, onClose, onSaved }) {
   const saveEdit = async (item) => {
     if (!editForm.description || !editForm.amount) return toast.error('Preencha os campos');
     setSaving(true);
-    await base44.entities.Payable.update(item.id, {
-      description: editForm.description,
-      amount: parseFloat(editForm.amount),
-      status: item.status === 'paid' ? 'paid' : 'provisioned',
-    });
+    const updated = { ...item, description: editForm.description, amount: parseFloat(editForm.amount), status: item.status === 'paid' ? 'paid' : 'provisioned' };
+    await base44.entities.Payable.update(item.id, { description: updated.description, amount: updated.amount, status: updated.status });
+    setItems(prev => prev.map(i => i.id === item.id ? updated : i));
     toast.success('Item atualizado');
     setSaving(false);
     setEditingId(null);
@@ -41,6 +40,7 @@ export default function EditInvoiceItemsModal({ items, onClose, onSaved }) {
   const deleteItem = async (item) => {
     setSaving(true);
     await base44.entities.Payable.delete(item.id);
+    setItems(prev => prev.filter(i => i.id !== item.id));
     toast.success('Item removido');
     setSaving(false);
     setDeletingId(null);

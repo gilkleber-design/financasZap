@@ -98,7 +98,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
           const futureDateStr = futureDate.toISOString().split('T')[0];
 
           payables.push({
-            description: it.description,
+            description: `${it.description} (parcela ${num}/${totalCount})`,
             amount: monthlyAmount,
             due_date: futureDateStr + 'T12:00:00',
             competencia: futureDateStr.substring(0, 7) + '-01',

@@ -4,36 +4,10 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit2, X, Check } from 'lucide-react';
+import { CategorySelect, CATEGORY_COLORS } from '@/components/ui/category-select';
+import { Plus, Trash2, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
-
-const CATEGORIES = [
-  { value: 'alimentacao', label: 'Alimentação' },
-  { value: 'transporte', label: 'Transporte' },
-  { value: 'moradia', label: 'Moradia' },
-  { value: 'saude', label: 'Saúde' },
-  { value: 'educacao', label: 'Educação' },
-  { value: 'lazer', label: 'Lazer' },
-  { value: 'vestuario', label: 'Vestuário' },
-  { value: 'servicos', label: 'Serviços' },
-  { value: 'impostos', label: 'Impostos' },
-  { value: 'outros', label: 'Outros' },
-];
-
-const CATEGORY_COLORS = {
-  alimentacao: 'bg-orange-100 text-orange-700',
-  transporte: 'bg-yellow-100 text-yellow-700',
-  moradia: 'bg-blue-100 text-blue-700',
-  saude: 'bg-red-100 text-red-700',
-  educacao: 'bg-green-100 text-green-700',
-  lazer: 'bg-pink-100 text-pink-700',
-  vestuario: 'bg-purple-100 text-purple-700',
-  servicos: 'bg-indigo-100 text-indigo-700',
-  impostos: 'bg-gray-100 text-gray-700',
-  outros: 'bg-slate-100 text-slate-700',
-};
 
 export default function CategoryRuleManager() {
   const queryClient = useQueryClient();
@@ -95,8 +69,13 @@ export default function CategoryRuleManager() {
     setShowForm(true);
   };
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => base44.entities.Category.list('-created_date', 100),
+  });
+
   const sortedRules = [...rules].sort((a, b) => (b.priority || 0) - (a.priority || 0));
-  const getCategoryLabel = (cat) => CATEGORIES.find(c => c.value === cat)?.label || cat;
+  const getCategoryLabel = (cat) => categories.find(c => c.slug === cat)?.name || cat;
 
   return (
     <div className="space-y-3">
@@ -139,19 +118,12 @@ export default function CategoryRuleManager() {
             </div>
             <div className="col-span-1">
               <Label className="text-xs">Categoria</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger className="mt-1 text-sm">
-                  <SelectValue placeholder="Nenhuma" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={null}>Nenhuma (apenas limpa)</SelectItem>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CategorySelect
+                value={form.category}
+                onChange={(v) => setForm({ ...form, category: v })}
+                placeholder="Nenhuma"
+                className="mt-1 text-sm"
+              />
             </div>
           </div>
           <div className="flex gap-2">

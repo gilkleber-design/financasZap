@@ -79,34 +79,11 @@ Deno.serve(async (req) => {
     const { file_url, ref_month } = await req.json();
     if (!file_url || !ref_month) return Response.json({ error: 'file_url e ref_month são obrigatórios' }, { status: 400 });
 
-    // Passo 1: transcrição literal e completa do PDF
-    const textResultResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Você é um leitor de PDFs. Sua única função é transcrever FIELMENTE e COMPLETAMENTE o PDF de fatura de cartão de crédito abaixo.
-
-REGRAS ABSOLUTAS:
-- Transcreva CADA linha do PDF, sem omitir nenhuma
-- Preserve exatamente os textos, incluindo padrões como "03/12", "(03/12)", "05/12" — estes são números de parcelas
-- Inclua TODAS as linhas: compras, IOF, taxas, encargos, mensalidades, assinaturas, Uber, qualquer coisa com valor
-- NÃO filtre, NÃO interprete, NÃO resuma — apenas transcreva linha a linha
-- Se uma linha tem descrição e valor, transcreva os dois juntos
-- Preserve datas no início das linhas (ex: "25/08", "03/08")
-
-Transcreva o PDF completo abaixo:`,
-      file_urls: [file_url],
-      model: 'claude_sonnet_4_6',
-    });
-    const textResult = typeof textResultResponse === 'string' ? textResultResponse : String(textResultResponse);
-
-    // Passo 2: extração estruturada a partir do texto
+    // Passo único: transcrição + extração em uma única chamada LLM
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt: `Você é um extrator de dados financeiros especializado em faturas de cartão de crédito brasileiro.
 
-TEXTO TRANSCRITO DA FATURA:
----
-${textResult}
----
-
-MISSÃO: Extrair ABSOLUTAMENTE TODOS os lançamentos com valor positivo.
+MISSÃO: Ler o PDF da fatura abaixo e extrair ABSOLUTAMENTE TODOS os lançamentos com valor positivo.
 
 REGRAS CRÍTICAS DE INCLUSÃO — inclua TUDO que tiver valor:
 - Compras normais (Mercado, Restaurante, etc.)
@@ -143,7 +120,7 @@ CAMPOS DO JSON:
 - date: Data da COMPRA em YYYY-MM-DD (extraída do início da linha, com ano inferido)
 - installment_number: Número da parcela (se houver XX/YY no fim da descrição)
 - installment_total: Total de parcelas (se houver XX/YY no fim da descrição)
-- category: Use regras de CategoryRule ou padrões abaixo como fallback
+- category: Use padrões abaixo como fallback
 
 CATEGORIAS PADRÃO (fallback):
   * "transporte": UBER, 99, CABIFY, POSTO, SHELL, IPIRANGA, PETROBRAS, COMBUSTIVEL, LATAM, GOL, AZUL, PASSAGEM
@@ -158,6 +135,7 @@ CATEGORIAS PADRÃO (fallback):
   * "outros": SOMENTE se não se encaixar em nenhuma categoria acima
 
 Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items": []}.`,
+      file_urls: [file_url],
       response_json_schema: {
         type: 'object',
         properties: {
@@ -170,6 +148,8 @@ Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items":
                 amount: { type: 'number' },
                 date: { type: 'string' },
                 category: { type: 'string' },
+                installment_number: { type: 'number' },
+                installment_total: { type: 'number' },
               },
               required: ['description', 'amount', 'date', 'category'],
             },

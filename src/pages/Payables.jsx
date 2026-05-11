@@ -16,12 +16,13 @@ import RecurrenceFormModal from '@/components/recurrences/RecurrenceFormModal';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-const STATUS_LABELS = { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido', scheduled: 'Agendado' };
+const STATUS_LABELS = { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido', scheduled: 'Agendado', provisioned: 'Provisionado' };
 const STATUS_COLORS = {
   pending: 'bg-amber-100 text-amber-700',
   paid: 'bg-emerald-100 text-emerald-700',
   overdue: 'bg-red-100 text-red-700',
   scheduled: 'bg-blue-100 text-blue-700',
+  provisioned: 'bg-blue-100 text-blue-700',
 };
 const CATEGORY_LABELS = {
   alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
@@ -285,6 +286,7 @@ export default function Payables() {
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
     if (p.status === 'scheduled') return 'scheduled';
+    if (p.status === 'provisioned') return 'provisioned'; // item de cartão aguardando fatura — nunca vence individualmente
     if (p.due_date && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date))) return 'overdue';
     return p.status || 'pending';
   };
@@ -306,7 +308,7 @@ export default function Payables() {
   const filtered = payables.filter(p => {
     if (!byTab(p)) return false;
     const status = getStatus(p);
-    if (filterStatus === 'open' && status === 'paid') return false;
+    if (filterStatus === 'open' && (status === 'paid' || status === 'provisioned')) return false;
     if (filterStatus === 'overdue' && status !== 'overdue') return false;
     if (filterStatus === 'paid' && status !== 'paid') return false;
 

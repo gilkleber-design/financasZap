@@ -30,6 +30,7 @@ export default function EditInvoiceItemsModal({ items, onClose, onSaved }) {
     await base44.entities.Payable.update(item.id, {
       description: editForm.description,
       amount: parseFloat(editForm.amount),
+      status: item.status === 'paid' ? 'paid' : 'provisioned',
     });
     toast.success('Item atualizado');
     setSaving(false);

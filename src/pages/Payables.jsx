@@ -286,7 +286,7 @@ export default function Payables() {
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
     if (p.status === 'scheduled') return 'scheduled';
-    if (p.status === 'provisioned') return 'provisioned'; // item de cartão aguardando fatura — nunca vence individualmente
+    if (p.status === 'provisioned' && p.origin_type === 'card') return 'provisioned'; // item de cartão aguardando fatura — nunca vence individualmente
     if (p.due_date && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date))) return 'overdue';
     return p.status || 'pending';
   };
@@ -308,7 +308,7 @@ export default function Payables() {
   const filtered = payables.filter(p => {
     if (!byTab(p)) return false;
     const status = getStatus(p);
-    if (filterStatus === 'open' && (status === 'paid' || status === 'provisioned')) return false;
+    if (filterStatus === 'open' && (status === 'paid' || (status === 'provisioned' && p.origin_type === 'card'))) return false;
     if (filterStatus === 'overdue' && status !== 'overdue') return false;
     if (filterStatus === 'paid' && status !== 'paid') return false;
 

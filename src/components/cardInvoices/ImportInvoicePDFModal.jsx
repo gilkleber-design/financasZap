@@ -69,32 +69,31 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
     const genGroupId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-    // Agrupa por (descrição + installment_total) para gerar todas as parcelas futuras
-    const groupMap = {};
+    // Agrupa por (descrição + installment_total) — processa QUALQUER parcela do grupo uma única vez
+    const processedGroups = new Set();
     const payables = [];
+    const groupIds = {}; // Mapeia groupKey -> groupId
 
     selected.forEach(it => {
       const hasInst = it.installment_number && it.installment_total;
-      const groupKey = hasInst ? `${it.description}|${it.installment_total}` : it.description;
+      const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
       
-      if (!groupMap[groupKey]) {
-        groupMap[groupKey] = {
-          groupId: genGroupId(),
-          processed: false,
-        };
-      }
-
-      // Se tem parcelamento e ainda não processou este grupo, gera TODAS as parcelas futuras
-      if (hasInst && !groupMap[groupKey].processed) {
-        const startNum = it.installment_number;
+      // Se é parcelado e ainda não processou esse grupo
+      if (hasInst && !processedGroups.has(groupKey)) {
+        // Cria ID único para este grupo
+        if (!groupIds[groupKey]) {
+          groupIds[groupKey] = genGroupId();
+        }
+        
         const totalCount = it.installment_total;
         const baseDate = new Date(it.date + 'T12:00:00');
         const monthlyAmount = it.amount;
         const totalAmount = monthlyAmount * totalCount;
 
-        // Gera as parcelas: da atual até a última
-        for (let i = 0; i <= (totalCount - startNum); i++) {
-          const futureDate = addMonths(baseDate, i);
+        // Gera TODAS as parcelas (1 até totalCount)
+        for (let num = 1; num <= totalCount; num++) {
+          const daysOffset = num - 1;
+          const futureDate = addMonths(baseDate, daysOffset);
           const futureDateStr = futureDate.toISOString().split('T')[0];
 
           payables.push({
@@ -108,13 +107,13 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
             origin_type: 'card',
             payment_modality: 'card_invoice',
             recurrent: false,
-            installment_number: startNum + i,
+            installment_number: num,
             installment_count: totalCount,
             installment_total_amount: totalAmount,
-            installment_group_id: groupMap[groupKey].groupId,
+            installment_group_id: groupIds[groupKey],
           });
         }
-        groupMap[groupKey].processed = true;
+        processedGroups.add(groupKey);
       } else if (!hasInst) {
         // Sem parcelamento, apenas um lançamento
         payables.push({
@@ -144,22 +143,18 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
   
   // Calcula quantos payables serão gerados (com parcelas futuras)
   const futurePayablesCount = useMemo(() => {
-    const groupMap = {};
+    const processedGroups = new Set();
     let total = 0;
     items.filter(it => it.selected).forEach(it => {
       const hasInst = it.installment_number && it.installment_total;
-      const groupKey = hasInst ? `${it.description}|${it.installment_total}` : it.description;
+      const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
       
-      if (!groupMap[groupKey]) {
-        groupMap[groupKey] = { processed: false };
-      }
-      
-      if (hasInst && !groupMap[groupKey].processed) {
-        total += (it.installment_total - it.installment_number + 1);
-        groupMap[groupKey].processed = true;
-      } else if (!hasInst && !groupMap[groupKey].processed) {
+      if (hasInst && !processedGroups.has(groupKey)) {
+        // Gera TODAS as parcelas (1 até total)
+        total += it.installment_total;
+        processedGroups.add(groupKey);
+      } else if (!hasInst) {
         total += 1;
-        groupMap[groupKey].processed = true;
       }
     });
     return total;

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Plus, Trash2, Building2, MessageSquare, ExternalLink, CreditCard, Landmark, Tag } from 'lucide-react';
 import CategoryManager from '@/components/settings/CategoryManager';
+import CategoryRuleManager from '@/components/settings/CategoryRuleManager';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -347,12 +348,25 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {/* Regras de Categorização */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Tag className="w-4 h-4 text-primary" />
+            Regras de Categorização
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CategoryRuleManager />
+        </CardContent>
+      </Card>
+
       {/* Categorias */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Tag className="w-4 h-4 text-primary" />
-            Categorias
+            Categorias Personalizadas
           </CardTitle>
         </CardHeader>
         <CardContent>

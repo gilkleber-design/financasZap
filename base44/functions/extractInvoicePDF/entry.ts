@@ -4,7 +4,6 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 function sanitizeDescription(desc) {
   if (!desc) return desc;
 
-  // Remove sufixos geográficos colados no final (ex: SALVADORBRA, SAO PAULOBRA, CURITIBABR)
   const geoSuffixes = [
     /\s*SAO PAULO\s*BRA?$/i,
     /\s*SALVADOR\s*BRA?$/i,
@@ -17,10 +16,8 @@ function sanitizeDescription(desc) {
     /\s*RECIFE\s*BRA?$/i,
     /\s*MANAUS\s*BRA?$/i,
     /\s*PORTO ALEGRE\s*BRA?$/i,
-    // Padrão genérico: palavra colada + BRA ou BR no final
     /[A-Z]{3,}BRA$/,
     /[A-Z]{3,}BR$/,
-    // Sufixo de país sozinho
     /\s+BRA$/i,
     /\s+BR$/i,
   ];
@@ -29,28 +26,48 @@ function sanitizeDescription(desc) {
   for (const re of geoSuffixes) {
     cleaned = cleaned.replace(re, '').trim();
   }
-
   return cleaned;
 }
 
-// Extrai parcela da descrição: padrão XX/YY (ex: 01/04, 02/10)
+// Extrai parcela apenas quando o padrão NÃO é uma data (DD/MM ou MM/YYYY)
+// Parcela: ex "03/12", "05/12" onde está entre parênteses ou após espaço no meio da string
+// Datas de vencimento/compra: geralmente no início da linha ou formato DD/MM/YYYY
 function extractInstallment(description) {
-  // Padrão principal: números separados por barra (ex: 01/04, 2/10, 02/12)
-  const match = description.match(/\b(\d{1,2})\/(\d{1,2})\b/);
-  if (match) {
-    const num = parseInt(match[1]);
-    const total = parseInt(match[2]);
-    // Validação: parcela atual deve ser <= total e total > 1
-    if (num <= total && total > 1) {
-      return { number: num, total };
-    }
+  // Parcela está geralmente entre parênteses ou no final: (03/12), " 03/12"
+  // Evitar confundir com datas do tipo "25/08" que são datas de compra no início
+  
+  // Padrão 1: entre parênteses — quase certamente parcela
+  const parenMatch = description.match(/\((\d{1,2})\/(\d{1,2})\)/);
+  if (parenMatch) {
+    const num = parseInt(parenMatch[1]);
+    const total = parseInt(parenMatch[2]);
+    if (num <= total && total > 1) return { number: num, total };
   }
+
+  // Padrão 2: no final da string após espaço — provável parcela
+  // Mas só se o número da parcela for plausível (num < total e total <= 72)
+  const endMatch = description.match(/\s(\d{1,2})\/(\d{2})\s*$/);
+  if (endMatch) {
+    const num = parseInt(endMatch[1]);
+    const total = parseInt(endMatch[2]);
+    if (num <= total && total > 1 && total <= 72) return { number: num, total };
+  }
+
   return null;
 }
 
-// Remove o padrão de parcela da descrição após extração
-function removeInstallmentPattern(description) {
-  return description.replace(/\s*\b\d{1,2}\/\d{1,2}\b\s*/g, ' ').trim();
+// Remove o padrão de parcela da descrição (entre parênteses ou no final)
+function removeInstallmentPattern(description, inst) {
+  // Remove padrão entre parênteses
+  let result = description.replace(/\s*\(\d{1,2}\/\d{1,2}\)\s*/g, ' ');
+  // Remove padrão no final (somente se for igual ao que extraímos)
+  if (inst) {
+    const endPat = new RegExp(`\\s${inst.number}/${String(inst.total).padStart(2,'0')}\\s*$`);
+    result = result.replace(endPat, '');
+    const endPat2 = new RegExp(`\\s0?${inst.number}/${String(inst.total).padStart(2,'0')}\\s*$`);
+    result = result.replace(endPat2, '');
+  }
+  return result.trim();
 }
 
 Deno.serve(async (req) => {
@@ -62,48 +79,71 @@ Deno.serve(async (req) => {
     const { file_url, ref_month } = await req.json();
     if (!file_url || !ref_month) return Response.json({ error: 'file_url e ref_month são obrigatórios' }, { status: 400 });
 
-    // Passo 1: transcreve o texto bruto do PDF
+    // Passo 1: transcrição literal e completa do PDF
     const textResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Leia este PDF de fatura de cartão de crédito brasileiro e transcreva LITERALMENTE todo o texto visível, especialmente todas as linhas com datas, descrições de compras e valores. Não interprete, apenas transcreva linha por linha. Preserve exatamente os textos das descrições, incluindo padrões como XX/YY que indicam parcelas.`,
+      prompt: `Você é um leitor de PDFs. Sua única função é transcrever FIELMENTE e COMPLETAMENTE o PDF de fatura de cartão de crédito abaixo.
+
+REGRAS ABSOLUTAS:
+- Transcreva CADA linha do PDF, sem omitir nenhuma
+- Preserve exatamente os textos, incluindo padrões como "03/12", "(03/12)", "05/12" — estes são números de parcelas
+- Inclua TODAS as linhas: compras, IOF, taxas, encargos, mensalidades, assinaturas, Uber, qualquer coisa com valor
+- NÃO filtre, NÃO interprete, NÃO resuma — apenas transcreva linha a linha
+- Se uma linha tem descrição e valor, transcreva os dois juntos
+- Preserve datas no início das linhas (ex: "25/08", "03/08")
+
+Transcreva o PDF completo abaixo:`,
       file_urls: [file_url],
       model: 'claude_sonnet_4_6',
     });
 
-    // Passo 2: estrutura os dados a partir do texto
+    // Passo 2: extração estruturada a partir do texto
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt: `Você é um assistente financeiro especializado em faturas de cartão de crédito brasileiro.
+      prompt: `Você é um extrator de dados financeiros especializado em faturas de cartão de crédito brasileiro.
 
-Analise o texto abaixo e extraia os lançamentos conforme as regras.
-
-TEXTO DA FATURA:
+TEXTO TRANSCRITO DA FATURA:
+---
 ${textResult}
+---
 
-REGRAS DE EXTRAÇÃO:
-- Extraia TODOS os lançamentos de compras
-- Preserve o texto original da descrição, incluindo padrões como "01/04", "02/10" (indicam parcelas)
-- Inclua também linhas de IOF, taxas internacionais e encargos de transações (categorie como "impostos")
-- NÃO inclua: total da fatura, subtotais, pagamentos anteriores de fatura, limite disponível
-- NÃO inclua estornos ou valores negativos
-- Converta valores "129,90" para 129.90
+MISSÃO: Extrair ABSOLUTAMENTE TODOS os lançamentos com valor positivo.
 
-CAMPOS:
-- description: texto original da linha de lançamento (preservar padrão XX/YY se existir)
-- amount: valor positivo em reais (número)
-- date: YYYY-MM-DD (se só dia/mês, use ${ref_month} como ano de referência)
-- category: classifique com base nestas regras rígidas:
-  * POSTO, AUTO POSTO, SHELL, IPIRANGA, PETROBRAS, COMBUSTIVEL → "transporte"
-  * GOOGLE, APPLE, CAPCUT, NETFLIX, SPOTIFY, AMAZON PRIME, YOUTUBE, DISNEY, PARAMOUNT, HBO → "servicos"
-  * FARMACIA, DROGARIA, PAGUE MENOS, ULTRAFARMA, HAPVIDA, UNIMED, HOSPITAL, CLINICA, HOSPCOM, LABORATORIO, OPTIMUS SAUDE → "saude"
-  * MERCADO, SUPERMERCADO, CARREFOUR, EXTRA, ATACADAO, ASSAI, IFOOD, RAPPI, UBER EATS, DELIVERY → "alimentacao"
-  * UBER, 99, CABIFY, METRO, ONIBUS, PASSAGEM, LATAM, GOL, AZUL, EMBARQUE → "transporte"
-  * ESCOLA, UNIVERSIDADE, CURSO, UDEMY, ALURA, FACULDADE → "educacao"
-  * IOF, TAXA, IMPOSTO, ENCARGO, MULTA → "impostos"
-  * HOTEL, AIRBNB, CINEMA, TEATRO, SHOW, INGRESSO, BOOKING → "lazer"
-  * ROUPA, CALCADO, ZARA, RENNER, RIACHUELO, HERING → "vestuario"
-  * ALUGUEL, CONDOMINIO, ENERGIA, AGUA, GAS, INTERNET, TELEFONE → "moradia"
-  * Use "outros" apenas quando NENHUMA regra acima se aplicar
+REGRAS CRÍTICAS DE INCLUSÃO — inclua TUDO que tiver valor:
+- Compras normais (Mercado, Restaurante, etc.)
+- Uber, 99, transporte por app — SEMPRE incluir, mesmo que "Uber *TRIP" ou "Uber HELP.US"
+- IOF, taxas internacionais, encargos — SEMPRE incluir como "impostos"
+- Mensalidades, assinaturas, planos (mesmo que descrição seja incompleta como "Mensalidade - Plano do")
+- Apps e serviços (Adapta, CapCut, Google, etc.) — SEMPRE incluir
+- Compras parceladas — incluir cada parcela que aparece na fatura como item separado
+- Qualquer linha que tenha um valor em reais (R$, vírgula decimal)
 
-Retorne JSON com array "items".`,
+REGRAS DE EXCLUSÃO — NÃO incluir:
+- Total da fatura / valor total a pagar
+- Saldo anterior / pagamento anterior de fatura
+- Limite de crédito / limite disponível
+- Valores negativos (estornos)
+
+CAMPO description: copie o texto EXATO da descrição, incluindo padrões de parcela como "(03/12)" ou "03/12" no final
+CAMPO amount: valor em número decimal (ex: 10249.61), sempre positivo — converta vírgulas para pontos
+CAMPO date: data da compra em YYYY-MM-DD. Se aparecer só dia/mês (ex: "25/08"), use ${ref_month.substring(0,4)} como ano
+CAMPO category — use EXATAMENTE uma destas strings, seguindo as regras:
+  * "transporte": UBER, 99, CABIFY, POSTO, SHELL, IPIRANGA, PETROBRAS, COMBUSTIVEL, LATAM, GOL, AZUL, PASSAGEM
+  * "servicos": GOOGLE, APPLE, CAPCUT, NETFLIX, SPOTIFY, AMAZON, YOUTUBE, DISNEY, PARAMOUNT, HBO, ADAPTA, assinaturas de software/app
+  * "saude": FARMACIA, DROGARIA, PAGUE MENOS, ULTRAFARMA, HAPVIDA, UNIMED, HOSPITAL, CLINICA, HOSPCOM, LABORATORIO, PLANO DE SAUDE, MENSALIDADE PLANO
+  * "alimentacao": MERCADO, SUPERMERCADO, CARREFOUR, IFOOD, RAPPI, UBER EATS, RESTAURANTE, LANCHONETE, PADARIA
+  * "educacao": ESCOLA, UNIVERSIDADE, CURSO, UDEMY, ALURA, FACULDADE
+  * "impostos": IOF, TAXA, IMPOSTO, ENCARGO, MULTA, qualquer linha de imposto/taxa
+  * "lazer": HOTEL, AIRBNB, CINEMA, TEATRO, SHOW, INGRESSO, BOOKING
+  * "vestuario": ROUPA, CALCADO, ZARA, RENNER, RIACHUELO
+  * "moradia": ALUGUEL, CONDOMINIO, ENERGIA, AGUA, GAS, INTERNET, TELEFONE
+  * "outros": SOMENTE se não se encaixar em nenhuma categoria acima
+
+ATENÇÃO ESPECIAL:
+- "Mensalidade - Plano do" → categoria "saude"  
+- "Adapta Org" → categoria "servicos"
+- "Uber *TRIP" ou "Uber HELP.US" → categoria "transporte"
+- IOF de transação internacional → categoria "impostos"
+
+Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items": []}.`,
       response_json_schema: {
         type: 'object',
         properties: {
@@ -125,15 +165,12 @@ Retorne JSON com array "items".`,
       },
     });
 
-    // Passo 3: pós-processamento no servidor
+    // Passo 3: pós-processamento
     const items = (result?.items || []).map(item => {
-      // Sanitiza descrição (remove sufixos geográficos)
       let desc = sanitizeDescription(item.description);
-
-      // Extrai parcela do padrão XX/YY
       const inst = extractInstallment(desc);
       if (inst) {
-        desc = removeInstallmentPattern(desc);
+        desc = removeInstallmentPattern(desc, inst);
       }
 
       return {

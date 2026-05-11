@@ -85,14 +85,15 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
           groupIds[groupKey] = genGroupId();
         }
         
+        const startNum = it.installment_number;
         const totalCount = it.installment_total;
         const baseDate = new Date(it.date + 'T12:00:00');
         const monthlyAmount = it.amount;
         const totalAmount = monthlyAmount * totalCount;
 
-        // Gera TODAS as parcelas (1 até totalCount)
-        for (let num = 1; num <= totalCount; num++) {
-          const daysOffset = num - 1;
+        // Gera apenas as parcelas futuras (de X até Y)
+        for (let num = startNum; num <= totalCount; num++) {
+          const daysOffset = num - startNum;
           const futureDate = addMonths(baseDate, daysOffset);
           const futureDateStr = futureDate.toISOString().split('T')[0];
 
@@ -150,8 +151,8 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
       
       if (hasInst && !processedGroups.has(groupKey)) {
-        // Gera TODAS as parcelas (1 até total)
-        total += it.installment_total;
+        // Gera apenas as parcelas futuras (de X até Y)
+        total += (it.installment_total - it.installment_number + 1);
         processedGroups.add(groupKey);
       } else if (!hasInst) {
         total += 1;

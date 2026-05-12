@@ -95,9 +95,9 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const handleSave = async () => {
     try {
       if (!form.description || !form.amount) return toast.error('Preencha descrição e valor');
+      if (allCategories.length === 0) return toast.error('Categorias carregando... tente novamente');
 
       setSaving(true);
-      console.log('handleSave iniciado', { expenseType, form, allCategories });
 
       if (expenseType === 'fixa') {
        if (!form.due_day) { setSaving(false); return toast.error('Informe o dia de vencimento'); }
@@ -181,12 +181,18 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
      }
 
     setSaving(false);
-    console.log('salvou com sucesso');
     onSaved();
     } catch (err) {
      console.error('Erro ao salvar:', err);
-     toast.error('Erro ao salvar: ' + err.message);
      setSaving(false);
+     const msg = err?.message || 'Erro desconhecido ao salvar';
+     if (msg.includes('405') || msg.includes('404') || msg.includes('400')) {
+       toast.error('Erro no servidor. Tente novamente.');
+     } else if (msg.includes('JSON')) {
+       toast.error('Erro na resposta do servidor.');
+     } else {
+       toast.error('Erro ao salvar: ' + msg);
+     }
     }
     };
 

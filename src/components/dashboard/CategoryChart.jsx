@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16'];
 
@@ -19,8 +19,6 @@ const CATEGORY_LABELS = {
 };
 
 export default function CategoryChart({ data }) {
-  const labeled = data.map(d => ({ ...d, name: CATEGORY_LABELS[d.name] || d.name }));
-
   const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
   if (!data.length) {
@@ -34,17 +32,24 @@ export default function CategoryChart({ data }) {
     );
   }
 
+  // Ordena decrescente e limita aos 7 maiores
+  const sorted = data
+    .map(d => ({ ...d, name: CATEGORY_LABELS[d.name] || d.name }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 7);
+
   return (
     <Card className="border-0 shadow-sm">
       <CardHeader><CardTitle className="text-base">Despesas por Categoria</CardTitle></CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={240}>
-          <PieChart>
-            <Pie data={labeled} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
-              {labeled.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-            </Pie>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={sorted} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis type="number" />
+            <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12 }} />
             <Tooltip formatter={(v) => fmt(v)} />
-          </PieChart>
+            <Bar dataKey="value" fill="hsl(var(--chart-1))" radius={[0, 8, 8, 0]} />
+          </BarChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>

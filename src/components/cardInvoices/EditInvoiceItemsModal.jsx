@@ -32,6 +32,8 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [deletingId, setDeletingId] = useState(null);
+  const [deletingItem, setDeletingItem] = useState(null); // item sendo deletado
+  const [deleteMode, setDeleteMode] = useState(null); // 'single' | 'all' | 'from_here'
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -85,6 +87,16 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
     onSaved();
   };
 
+  const requestDelete = (item) => {
+    if (item.installment_group_id) {
+      setDeletingItem(item);
+      setDeletingId(null);
+    } else {
+      setDeletingId(item.id);
+      setDeletingItem(null);
+    }
+  };
+
   const deleteItem = async (item) => {
     setSaving(true);
     await base44.entities.Payable.delete(item.id);
@@ -92,6 +104,32 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
     toast.success('Item removido');
     setSaving(false);
     setDeletingId(null);
+    onSaved();
+  };
+
+  const deleteInstallments = async (mode) => {
+    if (!deletingItem) return;
+    setSaving(true);
+
+    // Busca todas as parcelas do grupo
+    const groupItems = await base44.entities.Payable.filter({ installment_group_id: deletingItem.installment_group_id }, 'due_date', 500);
+
+    let toDelete;
+    if (mode === 'all') {
+      toDelete = groupItems;
+    } else if (mode === 'from_here') {
+      toDelete = groupItems.filter(i => (i.installment_number || 0) >= (deletingItem.installment_number || 0));
+    } else {
+      toDelete = [deletingItem];
+    }
+
+    await Promise.all(toDelete.map(i => base44.entities.Payable.delete(i.id)));
+    const deletedIds = new Set(toDelete.map(i => i.id));
+    setItems(prev => prev.filter(i => !deletedIds.has(i.id)));
+    toast.success(`${toDelete.length} lançamento(s) removido(s)`);
+    setSaving(false);
+    setDeletingItem(null);
+    setDeleteMode(null);
     onSaved();
   };
 
@@ -212,7 +250,7 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
                   <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-primary flex-shrink-0" onClick={() => startEdit(item)}>
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500 flex-shrink-0" onClick={() => setDeletingId(item.id)}>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500 flex-shrink-0" onClick={() => requestDelete(item)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
@@ -220,6 +258,33 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
             </div>
           ))}
         </div>
+
+        {/* Modal de exclusão de parcelas */}
+        {deletingItem && (
+          <div className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-medium text-red-800">
+              Excluir <strong>{deletingItem.description}</strong>
+              {deletingItem.installment_number && deletingItem.installment_count && (
+                <span className="font-normal text-red-600"> (parcela {deletingItem.installment_number}/{deletingItem.installment_count})</span>
+              )}
+            </p>
+            <p className="text-xs text-red-600">Esta compra é parcelada. O que deseja excluir?</p>
+            <div className="flex flex-col gap-2">
+              <Button size="sm" variant="destructive" className="text-xs justify-start" onClick={() => deleteInstallments('single')} disabled={saving}>
+                Apenas esta parcela
+              </Button>
+              <Button size="sm" variant="destructive" className="text-xs justify-start" onClick={() => deleteInstallments('from_here')} disabled={saving}>
+                Esta e as próximas parcelas
+              </Button>
+              <Button size="sm" variant="destructive" className="text-xs justify-start" onClick={() => deleteInstallments('all')} disabled={saving}>
+                Todas as parcelas desta compra
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => { setDeletingItem(null); setDeleteMode(null); }}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="pt-2 border-t border-border flex justify-between items-center">
           <p className="text-sm font-semibold">

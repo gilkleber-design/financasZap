@@ -236,9 +236,24 @@ export default function CardInvoices() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                          <Badge className={`text-xs border-0 py-0 h-4 px-1.5 ${p.status === 'paid' ? STATUS_ITEM_COLORS.paid : STATUS_ITEM_COLORS.provisioned}`}>
-                            {p.status === 'paid' ? 'Pago' : 'Provisionado'}
-                          </Badge>
+                          {p.status === 'paid' && (
+                            <Badge className={`text-xs border-0 py-0 h-4 px-1.5 ${STATUS_ITEM_COLORS.paid}`}>Pago</Badge>
+                          )}
+                          {p.category && (
+                            <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
+                              {p.category === 'alimentacao' ? 'Alimentação' :
+                               p.category === 'transporte' ? 'Transporte' :
+                               p.category === 'moradia' ? 'Moradia' :
+                               p.category === 'saude' ? 'Saúde' :
+                               p.category === 'educacao' ? 'Educação' :
+                               p.category === 'lazer' ? 'Lazer' :
+                               p.category === 'vestuario' ? 'Vestuário' :
+                               p.category === 'servicos' ? 'Serviços' :
+                               p.category === 'impostos' ? 'Impostos' :
+                               p.category === 'transferencia_liquidacao' ? 'Transferência' :
+                               'Outros'}
+                            </Badge>
+                          )}
                           <span className="text-sm font-medium text-red-500">{fmt(p.amount)}</span>
                         </div>
                       </div>

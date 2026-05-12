@@ -100,30 +100,30 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
       console.log('handleSave iniciado', { expenseType, form, allCategories });
 
       if (expenseType === 'fixa') {
-      if (!form.due_day) { setSaving(false); return toast.error('Informe o dia de vencimento'); }
-      // Cria Recorrência
-       const rec = await base44.entities.Recurrence.create({
-         description: form.description,
-         amount: parseFloat(form.amount),
-         due_day: parseInt(form.due_day),
-         category: form.category || 'outros',
-         active: true,
-         origin_id: form.origin_id || undefined,
-         origin_type: form.origin_type || undefined,
-         payment_modality: form.payment_modality,
-         notes: form.notes || undefined,
-       });
-       // Gera 13 meses de Payables vinculados
-       await generateRecurrencePayables({
-         description: form.description,
-         amount: parseFloat(form.amount),
-         due_day: parseInt(form.due_day),
-         category: form.category || 'outros',
-         category_id: form.category ? getCategoryId(form.category) : undefined,
-         origin_id: form.origin_id || undefined,
-         origin_type: form.origin_type || undefined,
-         payment_modality: form.payment_modality,
-       }, rec.id);
+       if (!form.due_day) { setSaving(false); return toast.error('Informe o dia de vencimento'); }
+       // Cria Recorrência
+        const rec = await base44.entities.Recurrence.create({
+          description: form.description,
+          amount: parseFloat(form.amount),
+          due_day: parseInt(form.due_day),
+          category: form.category || 'outros',
+          active: true,
+          origin_id: form.origin_id || undefined,
+          origin_type: form.origin_type || undefined,
+          payment_modality: form.payment_modality,
+          notes: form.notes || undefined,
+        });
+        // Gera 13 meses de Payables vinculados
+        await generateRecurrencePayables({
+          description: form.description,
+          amount: parseFloat(form.amount),
+          due_day: parseInt(form.due_day),
+          category: form.category || 'outros',
+          category_id: undefined,
+          origin_id: form.origin_id || undefined,
+          origin_type: form.origin_type || undefined,
+          payment_modality: form.payment_modality,
+        }, rec.id);
       toast.success('Despesa fixa criada! 13 meses gerados.');
 
     } else if (expenseType === 'parcelada') {
@@ -144,7 +144,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           due_date: ds + 'T12:00:00',
           competencia: ds,
           category: form.category || undefined,
-          category_id: form.category ? getCategoryId(form.category) : undefined,
+          category_id: undefined,
           status: isCard ? 'provisioned' : 'pending',
           recurrent: false,
           origin_id: form.origin_id || undefined,
@@ -169,7 +169,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
          due_date: form.due_date + 'T12:00:00',
          competencia: form.due_date,
          category: form.category || undefined,
-         category_id: form.category ? getCategoryId(form.category) : undefined,
+         category_id: undefined,
          status: isCard ? 'provisioned' : form.payment_modality === 'automatic_debit' ? 'scheduled' : 'pending',
          recurrent: false,
          origin_id: form.origin_id || undefined,
@@ -241,11 +241,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               <SelectTrigger tabIndex={2} className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={null}>Nenhuma</SelectItem>
-                {categories.map(c => (
-                  <SelectItem key={c.value} value={c.value}>
-                    {c.isChild ? `  → ${c.label}` : c.label}
-                  </SelectItem>
-                ))}
+                {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

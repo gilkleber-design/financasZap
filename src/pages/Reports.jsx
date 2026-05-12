@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import AuditReportAccordion from '@/components/reports/AuditReportAccordion';
+import PayableDetailDrawer from '@/components/reports/PayableDetailDrawer';
 
 const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16'];
 
@@ -17,10 +21,23 @@ const CATEGORY_LABELS = {
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export default function Reports() {
+  const [selectedPayable, setSelectedPayable] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.list('-date', 500),
   });
+
+  const { data: payables = [] } = useQuery({
+    queryKey: ['payables'],
+    queryFn: () => base44.entities.Payable.list('-due_date', 1000),
+  });
+
+  const handlePayableClick = (payable) => {
+    setSelectedPayable(payable);
+    setDrawerOpen(true);
+  };
 
   // Last 6 months data (current year only)
   const currentYear = new Date().getFullYear();
@@ -77,6 +94,14 @@ export default function Reports() {
         <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
         <p className="text-muted-foreground text-sm mt-1">Visão financeira completa</p>
       </div>
+
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="audit">Auditoria</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6 mt-6">
 
       {/* Fluxo de Caixa */}
       <Card className="border-0 shadow-sm">
@@ -166,6 +191,14 @@ export default function Reports() {
           </CardContent>
         </Card>
       </div>
+        </TabsContent>
+
+        <TabsContent value="audit" className="mt-6">
+          <AuditReportAccordion payables={payables} onRowClick={handlePayableClick} />
+        </TabsContent>
+      </Tabs>
+
+      <PayableDetailDrawer open={drawerOpen} onOpenChange={setDrawerOpen} payable={selectedPayable} />
     </div>
   );
 }

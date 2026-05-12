@@ -13,7 +13,7 @@ export default function SummaryCard({ title, value, grossValue, icon: Icon, colo
   const showGross = grossValue && grossValue > value;
 
   return (
-    <Card className="border border-white/20 bg-white/10 backdrop-blur-lg shadow-lg hover:bg-white/15 transition-all">
+    <Card className="border-0 shadow-sm">
       <CardContent className="p-3 md:p-5">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">

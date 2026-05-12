@@ -70,7 +70,7 @@ export default function Dashboard() {
   const categoryData = Object.entries(expenseByCategory).map(([name, value]) => ({ name, value }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/20 via-background to-accent/20 p-6 space-y-6">
+    <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-sora font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-1">{format(now, "MMMM 'de' yyyy", { locale: ptBR })}</p>

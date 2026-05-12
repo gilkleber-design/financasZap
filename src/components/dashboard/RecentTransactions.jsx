@@ -16,7 +16,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 
 export default function RecentTransactions({ transactions }) {
   return (
-    <Card className="border border-white/20 bg-white/10 backdrop-blur-lg shadow-lg">
+    <Card className="border-0 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-base">Lançamentos Recentes</CardTitle>
         <Link to="/lancamentos" className="text-xs text-primary flex items-center gap-1 hover:underline">

@@ -24,7 +24,7 @@ export default function CategoryChart({ data }) {
 
   if (!data.length) {
     return (
-      <Card className="border border-white/20 bg-white/10 backdrop-blur-lg shadow-lg">
+      <Card className="border-0 shadow-sm">
         <CardHeader><CardTitle className="text-base">Despesas por Categoria</CardTitle></CardHeader>
         <CardContent className="h-48 flex items-center justify-center text-muted-foreground text-sm">
           Nenhuma despesa neste mês
@@ -41,7 +41,7 @@ export default function CategoryChart({ data }) {
     .map(d => ({ ...d, name: capitalize(d.name.replace(/_/g, ' ')) }));
 
   return (
-    <Card className="border border-white/20 bg-white/10 backdrop-blur-lg shadow-lg">
+    <Card className="border-0 shadow-sm">
       <CardHeader><CardTitle className="text-base">Despesas por Categoria</CardTitle></CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={280}>

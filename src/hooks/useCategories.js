@@ -26,11 +26,16 @@ export function useCategories() {
     return 'bg-slate-100 text-slate-700';
   };
 
-  // Flat list com APENAS as categorias do banco (raízes + subcategorias)
-  const flatForSelect = categories
-    .filter(c => c.active !== false)
-    .map(c => ({ value: c.slug, label: c.parent_id ? `  → ${c.name}` : c.name }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  // Flat list com APENAS as categorias do banco: raízes primeiro, depois subcategorias
+  const flatForSelect = [];
+  const rootsActive = roots.filter(c => c.active !== false);
+  rootsActive.forEach(root => {
+    flatForSelect.push({ value: root.slug, label: root.name });
+    const childrenActive = getChildren(root.id).filter(c => c.active !== false);
+    childrenActive.forEach(child => {
+      flatForSelect.push({ value: child.slug, label: `  → ${child.name}` });
+    });
+  });
 
   return {
     categories,

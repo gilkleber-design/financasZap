@@ -96,6 +96,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
     if (!form.description || !form.amount) return toast.error('Preencha descrição e valor');
 
     setSaving(true);
+    console.log('handleSave iniciado', { expenseType, form });
 
     if (expenseType === 'fixa') {
       if (!form.due_day) { setSaving(false); return toast.error('Informe o dia de vencimento'); }
@@ -179,8 +180,9 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
      }
 
     setSaving(false);
+    console.log('salvou com sucesso');
     onSaved();
-  };
+    };
 
   const installmentsToGenerate = expenseType === 'parcelada' && form.installment_count && form.installment_number
     ? parseInt(form.installment_count) - parseInt(form.installment_number) + 1

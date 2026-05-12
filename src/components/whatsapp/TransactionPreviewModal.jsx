@@ -35,7 +35,7 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
   const suggestionFiredRef = useRef(false);
 
   const { flatForSelect } = useCategories();
-  const expenseCategories = flatForSelect;
+  const expenseCategories = flatForSelect ?? [];
 
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
 

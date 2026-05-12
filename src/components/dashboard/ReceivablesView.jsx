@@ -12,9 +12,10 @@ export default function ReceivablesView({ receivables, incomeSources, transactio
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
 
-  // Recebido no mês corrente
-  const receivedThisMonth = receivables.filter(
-    r => r.status === 'received' && r.due_date >= monthStart && r.due_date <= monthEnd
+  // Recebido no mês: Transactions de receita PJ com date no mês corrente
+  const receivedThisMonth = transactions.filter(
+    t => t.type === 'income' && t.category === 'receita_pj' &&
+    t.date >= monthStart && t.date <= monthEnd
   );
 
   // Atrasado: não pago e vencimento <= hoje
@@ -22,7 +23,7 @@ export default function ReceivablesView({ receivables, incomeSources, transactio
     r => r.status !== 'received' && r.due_date && r.due_date <= todayStr
   );
 
-  const totalReceived = receivedThisMonth.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
+  const totalReceived = receivedThisMonth.reduce((t, tx) => t + (tx.net_amount || tx.amount || 0), 0);
   const totalOverdue = overdue.reduce((s, r) => s + (r.net_amount || r.amount || 0), 0);
 
   // Tabela por PJ: recebido no mês + projetado (pending/overdue)
@@ -64,7 +65,7 @@ export default function ReceivablesView({ receivables, incomeSources, transactio
           <CardContent className="p-2.5 md:p-4">
             <div className="flex items-center gap-1 mb-1">
               <CheckCircle2 className="w-3 h-3 md:w-4 md:h-4 text-emerald-500 flex-shrink-0" />
-              <span className="text-[10px] md:text-xs font-medium text-emerald-700 leading-tight">Recebido no Mês</span>
+              <span className="text-[10px] md:text-xs font-medium text-emerald-700 leading-tight">Plantões recebidos no mês</span>
             </div>
             <p className="text-sm md:text-xl font-bold text-emerald-700">{fmt(totalReceived)}</p>
             <p className="text-[10px] md:text-xs text-emerald-600 mt-0.5">{receivedThisMonth.length} item(s)</p>

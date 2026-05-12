@@ -317,9 +317,12 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           {/* Categoria */}
           <div>
             <Label>Categoria</Label>
-            <Select value={form.category} onValueChange={v => set('category', v)}>
+            <Select value={form.category || ''} onValueChange={v => set('category', v)}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>{categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                <SelectItem value={null}>Nenhuma</SelectItem>
+                {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
 

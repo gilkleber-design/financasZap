@@ -157,7 +157,7 @@ Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items":
           },
           invoice_total: { type: 'number' },
         },
-        required: ['items', 'invoice_total'],
+        required: ['items'],
       },
     });
 

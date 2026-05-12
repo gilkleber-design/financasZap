@@ -121,6 +121,7 @@ CAMPOS DO JSON:
 - installment_number: Número da parcela (se houver XX/YY no fim da descrição)
 - installment_total: Total de parcelas (se houver XX/YY no fim da descrição)
 - category: Use padrões abaixo como fallback
+- invoice_total: Valor TOTAL da fatura (extraído uma única vez do documento, ex: "TOTAL A PAGAR: R$ 5.432,10")
 
 CATEGORIAS PADRÃO (fallback):
   * "transporte": UBER, 99, CABIFY, POSTO, SHELL, IPIRANGA, PETROBRAS, COMBUSTIVEL, LATAM, GOL, AZUL, PASSAGEM
@@ -154,8 +155,9 @@ Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items":
               required: ['description', 'amount', 'date', 'category'],
             },
           },
+          invoice_total: { type: 'number' },
         },
-        required: ['items'],
+        required: ['items', 'invoice_total'],
       },
     });
 
@@ -180,7 +182,21 @@ Retorne JSON com array "items". Se não encontrar nenhum item, retorne {"items":
       };
     }).filter(item => item.amount > 0);
 
-    return Response.json({ items });
+    // Checksum: valida consistência entre soma dos itens e total da fatura
+    const totalExtracted = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+    const invoiceTotal = result?.invoice_total || totalExtracted;
+    const diff = Math.abs(invoiceTotal - totalExtracted);
+    const isConsistent = diff < 0.05;
+
+    return Response.json({
+      items,
+      integrity_check: {
+        is_consistent: isConsistent,
+        total_extracted: totalExtracted,
+        invoice_total: invoiceTotal,
+        diff: diff,
+      },
+    });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

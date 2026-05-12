@@ -18,10 +18,18 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
   const [saving, setSaving] = useState(false);
   const [editingIdx, setEditingIdx] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [progress, setProgress] = useState(0);
+  const [integrityCheck, setIntegrityCheck] = useState(null);
 
   const handleFile = async (file) => {
     if (!file || file.type !== 'application/pdf') return toast.error('Selecione um arquivo PDF');
     setStep('processing');
+    setProgress(0);
+    
+    // Simulação de progresso linear até 90%
+    const progressInterval = setInterval(() => {
+      setProgress(prev => Math.min(prev + 18, 90));
+    }, 500);
 
     // Upload do PDF
     const { file_url } = await base44.integrations.Core.UploadFile({ file });
@@ -33,6 +41,10 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     });
 
     const result = response.data;
+    
+    // Força progresso para 100% e para a simulação
+    clearInterval(progressInterval);
+    setProgress(100);
 
     const extracted = (result?.items || []).map((item, i) => ({
       ...item,
@@ -41,6 +53,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     }));
 
     setItems(extracted);
+    setIntegrityCheck(result?.integrity_check || null);
     setStep('review');
   };
 
@@ -195,12 +208,28 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
             <p className="text-sm font-medium">Analisando PDF com IA...</p>
             <p className="text-xs text-muted-foreground">Isso pode levar alguns segundos</p>
+            <div className="w-full max-w-xs h-2 bg-muted rounded-full overflow-hidden mt-2">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{progress}%</p>
           </div>
         )}
 
         {/* STEP: review */}
         {step === 'review' && (
           <div className="space-y-4">
+            {integrityCheck && !integrityCheck.is_consistent && (
+              <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800">
+                  <p className="font-semibold">⚠️ Atenção: Divergência Detectada</p>
+                  <p className="text-xs mt-1">A soma dos itens ({fmt(integrityCheck.total_extracted)}) difere do total da fatura ({fmt(integrityCheck.invoice_total)}). Diferença: {fmt(integrityCheck.diff)}. Verifique se algum item foi ignorado.</p>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">{items.length} lançamentos encontrados</p>
               <div className="flex gap-2">

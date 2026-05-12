@@ -20,6 +20,7 @@ const CATEGORY_LABELS = {
 
 export default function CategoryChart({ data }) {
   const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+  const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
   if (!data.length) {
     return (
@@ -37,7 +38,7 @@ export default function CategoryChart({ data }) {
     .map(d => ({ ...d, name: CATEGORY_LABELS[d.name] || d.name }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 7)
-    .map(d => ({ ...d, name: d.name.replace(/_/g, ' ') }));
+    .map(d => ({ ...d, name: capitalize(d.name.replace(/_/g, ' ')) }));
 
   return (
     <Card className="border-0 shadow-sm">

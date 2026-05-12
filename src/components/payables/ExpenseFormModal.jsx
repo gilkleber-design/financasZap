@@ -9,6 +9,11 @@ import { toast } from 'sonner';
 import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
 import { useCategories } from '@/hooks/useCategories';
 import { addMonths, format, startOfMonth } from 'date-fns';
+
+const getTodayString = () => {
+  const now = new Date();
+  return format(now, 'yyyy-MM-dd');
+};
 import { CreditCard, Landmark, Repeat, Layers, Receipt } from 'lucide-react';
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -59,7 +64,7 @@ async function generateRecurrencePayables(recurrence, recurrenceId) {
 export default function ExpenseFormModal({ onClose, onSaved }) {
   const [expenseType, setExpenseType] = useState('avulsa');
   const [form, setForm] = useState({
-    description: '', amount: '', due_date: '', category: '', notes: '',
+    description: '', amount: '', due_date: getTodayString(), category: '', notes: '',
     origin_id: '', origin_type: '', payment_modality: 'manual',
     // Parcelada
     installment_total_amount: '', installment_count: '', installment_number: '1',
@@ -94,10 +99,20 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
 
   const handleSave = async () => {
     try {
-      if (!form.description || !form.amount) return toast.error('Preencha descrição e valor');
+      // Validação robusta
+      const validationErrors = [];
+      if (!form.description?.trim()) validationErrors.push('descrição');
+      if (!form.amount || parseFloat(form.amount) <= 0) validationErrors.push('valor válido');
+      if (!form.due_date) validationErrors.push('data de vencimento');
+
+      if (validationErrors.length > 0) {
+        return toast.error(`Preencha: ${validationErrors.join(', ')}`);
+      }
+
       if (allCategories.length === 0) return toast.error('Categorias carregando... tente novamente');
 
       setSaving(true);
+      console.log('Payload de envio:', { expenseType, form, selectedOrigin: selectedOrigin?.label });
 
       if (expenseType === 'fixa') {
        if (!form.due_day) { setSaving(false); return toast.error('Informe o dia de vencimento'); }

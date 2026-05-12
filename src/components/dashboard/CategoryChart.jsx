@@ -45,7 +45,7 @@ export default function CategoryChart({ data }) {
       <CardHeader><CardTitle className="text-base">Despesas por Categoria</CardTitle></CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={sorted} layout="vertical" margin={{ top: 5, right: 30, left: 120, bottom: 5 }} className="py-1">
+          <BarChart data={sorted} layout="vertical" margin={{ top: 5, right: 30, left: 120, bottom: 5 }} className="">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis type="number" hide />
             <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 12 }} />

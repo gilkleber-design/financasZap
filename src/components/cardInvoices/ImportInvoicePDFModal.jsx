@@ -75,7 +75,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     const groupIds = {}; // Mapeia groupKey -> groupId
 
     selected.forEach(it => {
-      const hasInst = it.installment_number && it.installment_total;
+      const hasInst = it.installment_number && it.installment_total && it.installment_total > 1;
       const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
       
       // Se é parcelado e ainda não processou esse grupo
@@ -147,7 +147,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     const processedGroups = new Set();
     let total = 0;
     items.filter(it => it.selected).forEach(it => {
-      const hasInst = it.installment_number && it.installment_total;
+      const hasInst = it.installment_number && it.installment_total && it.installment_total > 1;
       const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
       
       if (hasInst && !processedGroups.has(groupKey)) {
@@ -249,7 +249,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                         <p className="text-sm truncate">{it.description}</p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-muted-foreground">{it.date}</span>
-                          {it.installment_number && it.installment_total && (
+                          {it.installment_number && it.installment_total && it.installment_total > 1 && (
                             <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
                               {it.installment_number}/{it.installment_total}
                             </Badge>

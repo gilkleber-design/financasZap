@@ -39,7 +39,12 @@
         "impostos",
         "transferencia_liquidacao",
         "outros"
-      ]
+      ],
+      "description": "LEGADO: Categoria por enum. Use category_id para novas categorias."
+    },
+    "category_id": {
+      "type": "string",
+      "description": "ID da categoria (refer\u00eancia a Category entity)"
     },
     "status": {
       "type": "string",

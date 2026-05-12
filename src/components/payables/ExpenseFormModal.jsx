@@ -10,6 +10,7 @@ import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
 import { useCategories } from '@/hooks/useCategories';
 import { addMonths, format, startOfMonth } from 'date-fns';
 import { CreditCard, Landmark, Repeat, Layers, Receipt } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -44,6 +45,7 @@ async function generateRecurrencePayables(recurrence, recurrenceId) {
       due_date: dueDate + 'T12:00:00',
       competencia: dueDate,
       category: recurrence.category,
+      category_id: recurrence.category_id || undefined,
       status: recurrence.payment_modality === 'automatic_debit' ? 'scheduled' : 'pending',
       recurrent: true,
       recurrence_id: recurrenceId,
@@ -67,7 +69,14 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const { origins } = usePaymentOrigins();
-  const { flatForSelect } = useCategories();
+  const { flatForSelect, categories: allCategories } = useCategories();
+  const { data: categoryById = {} } = useQuery({
+    queryKey: ['categoryById'],
+    queryFn: async () => {
+      const cats = await base44.entities.Category.list();
+      return Object.fromEntries(cats.map(c => [c.slug, c.id]));
+    },
+  });
   const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -93,27 +102,28 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
     if (expenseType === 'fixa') {
       if (!form.due_day) { setSaving(false); return toast.error('Informe o dia de vencimento'); }
       // Cria Recorrência
-      const rec = await base44.entities.Recurrence.create({
-        description: form.description,
-        amount: parseFloat(form.amount),
-        due_day: parseInt(form.due_day),
-        category: form.category || 'outros',
-        active: true,
-        origin_id: form.origin_id || undefined,
-        origin_type: form.origin_type || undefined,
-        payment_modality: form.payment_modality,
-        notes: form.notes || undefined,
-      });
-      // Gera 13 meses de Payables vinculados
-      await generateRecurrencePayables({
-        description: form.description,
-        amount: parseFloat(form.amount),
-        due_day: parseInt(form.due_day),
-        category: form.category || 'outros',
-        origin_id: form.origin_id || undefined,
-        origin_type: form.origin_type || undefined,
-        payment_modality: form.payment_modality,
-      }, rec.id);
+       const rec = await base44.entities.Recurrence.create({
+         description: form.description,
+         amount: parseFloat(form.amount),
+         due_day: parseInt(form.due_day),
+         category: form.category || 'outros',
+         active: true,
+         origin_id: form.origin_id || undefined,
+         origin_type: form.origin_type || undefined,
+         payment_modality: form.payment_modality,
+         notes: form.notes || undefined,
+       });
+       // Gera 13 meses de Payables vinculados
+       await generateRecurrencePayables({
+         description: form.description,
+         amount: parseFloat(form.amount),
+         due_day: parseInt(form.due_day),
+         category: form.category || 'outros',
+         category_id: form.category ? categoryById[form.category] : undefined,
+         origin_id: form.origin_id || undefined,
+         origin_type: form.origin_type || undefined,
+         payment_modality: form.payment_modality,
+       }, rec.id);
       toast.success('Despesa fixa criada! 13 meses gerados.');
 
     } else if (expenseType === 'parcelada') {
@@ -134,6 +144,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           due_date: ds + 'T12:00:00',
           competencia: ds,
           category: form.category || undefined,
+          category_id: form.category ? categoryById[form.category] : undefined,
           status: isCard ? 'provisioned' : 'pending',
           recurrent: false,
           origin_id: form.origin_id || undefined,
@@ -150,23 +161,24 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
       toast.success(`${payables.length} parcelas criadas!`);
 
     } else {
-      // Avulsa
-      if (!form.due_date) { setSaving(false); return toast.error('Informe o vencimento'); }
-      await base44.entities.Payable.create({
-        description: form.description,
-        amount: parseFloat(form.amount),
-        due_date: form.due_date + 'T12:00:00',
-        competencia: form.due_date,
-        category: form.category || undefined,
-        status: isCard ? 'provisioned' : form.payment_modality === 'automatic_debit' ? 'scheduled' : 'pending',
-        recurrent: false,
-        origin_id: form.origin_id || undefined,
-        origin_type: form.origin_type || undefined,
-        payment_modality: form.payment_modality,
-        notes: form.notes || undefined,
-      });
-      toast.success('Despesa criada!');
-    }
+       // Avulsa
+       if (!form.due_date) { setSaving(false); return toast.error('Informe o vencimento'); }
+       await base44.entities.Payable.create({
+         description: form.description,
+         amount: parseFloat(form.amount),
+         due_date: form.due_date + 'T12:00:00',
+         competencia: form.due_date,
+         category: form.category || undefined,
+         category_id: form.category ? categoryById[form.category] : undefined,
+         status: isCard ? 'provisioned' : form.payment_modality === 'automatic_debit' ? 'scheduled' : 'pending',
+         recurrent: false,
+         origin_id: form.origin_id || undefined,
+         origin_type: form.origin_type || undefined,
+         payment_modality: form.payment_modality,
+         notes: form.notes || undefined,
+       });
+       toast.success('Despesa criada!');
+     }
 
     setSaving(false);
     onSaved();

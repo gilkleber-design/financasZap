@@ -289,47 +289,21 @@ export default function Hospitals() {
           return (
             <Card key={h.id} className="border-0 shadow-sm">
               <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Building2 className="w-5 h-5 text-primary" />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap flex-1">
+                    <p className="font-semibold">{h.sigla}</p>
+                    {pj && <Badge className="text-xs py-0 h-4 px-1.5 bg-amber-100 text-amber-700 border-0">{pj.name}</Badge>}
+                    <Badge className={`text-xs py-0 h-4 px-1.5 border-0 ${isProducao ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {isProducao ? 'Produção' : 'Plantão'}
+                    </Badge>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-sm">{h.name}</p>
-                      <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{h.sigla}</Badge>
-                      {pj && <Badge className="text-xs py-0 h-4 px-1.5 bg-amber-100 text-amber-700 border-0">{pj.name}</Badge>}
-                      <Badge className={`text-xs py-0 h-4 px-1.5 border-0 ${isProducao ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {isProducao ? 'Produção' : 'Plantão'}
-                      </Badge>
-                      {!isProducao && h.has_productivity && (
-                        <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-green-100 text-green-700">PDT{h.productivity_separate_date ? ' separada' : ''}</Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-                      {!isProducao ? (
-                        <>
-                          <span>SD: {fmt(h.valor_sd_semana)} / {fmt(h.valor_sd_fds)} FDS</span>
-                          <span>·</span>
-                          <span>SN: {fmt(h.valor_sn_semana)} / {fmt(h.valor_sn_fds)} FDS</span>
-                        </>
-                      ) : (
-                        <span>Valor por evento (informado no plantão)</span>
-                      )}
-                      {h.payment_day && <span>· Pgto dia {h.payment_day}/{h.payment_months_offset > 1 ? `+${h.payment_months_offset}m` : 'mês seg.'}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <Button
                       variant="ghost" size="icon" className="w-8 h-8"
-                      onClick={() => { if (isEditing) { setEditingId(null); } else { startEdit(h); setExpanded(null); } }}
+                      onClick={() => { if (isEditing) { setEditingId(null); } else { startEdit(h); } }}
                     >
                       {isEditing ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
                     </Button>
-                    {!isProducao && (
-                      <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setExpanded(isExp ? null : h.id)}>
-                        {isExp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </Button>
-                    )}
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteMutation.mutate(h.id)}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
@@ -346,17 +320,6 @@ export default function Hospitals() {
                       onCancel={() => setEditingId(null)}
                       saving={updateMutation.isPending}
                     />
-                  </div>
-                )}
-
-                {!isEditing && isExp && !isProducao && (
-                  <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">SD Seg–Sex</span><span className="font-medium">{fmt(h.valor_sd_semana)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">SN Seg–Sex</span><span className="font-medium">{fmt(h.valor_sn_semana)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">SD FDS</span><span className="font-medium">{fmt(h.valor_sd_fds)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">SN FDS</span><span className="font-medium">{fmt(h.valor_sn_fds)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Sobreaviso</span><span className="font-medium">{fmt(h.valor_sobreaviso)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Pagamento esperado</span><span className="font-medium">Dia {h.payment_day || 1} · {h.payment_months_offset || 1} mês(es) depois</span></div>
                   </div>
                 )}
               </CardContent>

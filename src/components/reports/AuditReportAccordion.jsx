@@ -36,19 +36,18 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
   const [openCategories, setOpenCategories] = useState([]);
 
   // Agrupamento multinível: Categoria Raiz > Subcategorias > Transações
-  const organizedData = useMemo(() => {
-    const catMap = {};
-    const parentMap = {}; // parent_id -> categoria raiz
-    
-    categories.forEach(c => {
-      catMap[c.id] = c;
-      if (c.parent_id) {
-        parentMap[c.id] = c.parent_id;
-      }
-    });
+   const organizedData = useMemo(() => {
+     const catMap = {};
 
-    // Agrupar por categoria raiz
-    const byRoot = {};
+     categories.forEach(c => {
+       catMap[c.id] = c;
+     });
+
+     // Filtrar apenas categorias raiz (sem parent_id)
+     const rootCategories = categories.filter(c => !c.parent_id);
+
+     // Agrupar por categoria raiz
+     const byRoot = {};
     
     payables.forEach(item => {
       let rootKey;
@@ -71,29 +70,32 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
       byRoot[rootKey].push(item);
     });
 
-    // Processar cada categoria raiz
-    return Object.entries(byRoot)
-      .map(([rootKey, items]) => {
-        // Agrupar items por subcategoria (category_id)
-        const bySubcat = {};
-        const enumItems = [];
-        
-        items.forEach(item => {
-          if (item.category_id) {
-            const catData = catMap[item.category_id];
-            if (catData?.parent_id === rootKey) {
-              // É subcategoria desta raiz
-              if (!bySubcat[item.category_id]) bySubcat[item.category_id] = [];
-              bySubcat[item.category_id].push(item);
-            } else {
-              // É item enum ou outra raiz, não de subcategoria
-              enumItems.push(item);
-            }
-          } else {
-            // É item direto sem category_id
-            enumItems.push(item);
-          }
-        });
+    // Processar apenas categorias raiz
+     return rootCategories
+       .map((rootCat) => {
+         const rootKey = rootCat.id;
+         const items = byRoot[rootKey] || [];
+
+         // Agrupar items por subcategoria (category_id)
+         const bySubcat = {};
+         const enumItems = [];
+
+         items.forEach(item => {
+           if (item.category_id) {
+             const catData = catMap[item.category_id];
+             if (catData?.parent_id === rootKey) {
+               // É subcategoria desta raiz
+               if (!bySubcat[item.category_id]) bySubcat[item.category_id] = [];
+               bySubcat[item.category_id].push(item);
+             } else if (!catData?.parent_id) {
+               // É categoria raiz sem pai, trata como enum
+               enumItems.push(item);
+             }
+           } else {
+             // É item direto sem category_id
+             enumItems.push(item);
+           }
+         });
 
         // Criar subcategorias
         const subcategories = Object.entries(bySubcat)
@@ -119,21 +121,21 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
         });
 
         // Label da raiz
-        const label = catMap[rootKey]?.name || CATEGORY_LABELS[rootKey] || rootKey;
+         const label = rootCat.name || CATEGORY_LABELS[rootKey] || rootKey;
 
-        const totalEnum = matchedEnumItems.reduce((s, i) => s + (i.amount || 0), 0);
-        const totalSubcats = subcategories.reduce((s, sc) => s + sc.total, 0);
+         const totalEnum = matchedEnumItems.reduce((s, i) => s + (i.amount || 0), 0);
+         const totalSubcats = subcategories.reduce((s, sc) => s + sc.total, 0);
 
-        return {
-          id: rootKey,
-          label,
-          items: matchedEnumItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
-          total: totalEnum + totalSubcats,
-          subcategories,
-        };
-      })
-      .filter(cat => cat.items.length > 0 || cat.subcategories.length > 0)
-      .sort((a, b) => b.total - a.total);
+         return {
+           id: rootKey,
+           label,
+           items: matchedEnumItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
+           total: totalEnum + totalSubcats,
+           subcategories,
+         };
+        })
+        .filter(cat => cat.items.length > 0 || cat.subcategories.length > 0)
+        .sort((a, b) => b.total - a.total);
   }, [payables, searchTerm, categories]);
 
   // Auto-abrir categorias quando há busca
@@ -296,9 +298,9 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
 
                         {/* Subcategorias */}
                         {catData.subcategories?.length > 0 && (
-                          <div className="space-y-2 pl-4">
+                          <div className="space-y-2 pl-4 border-l-2 border-slate-300">
                             {catData.subcategories.map((subcat) => (
-                              <div key={subcat.id} className="border-l-2 border-slate-200 pl-4 py-2">
+                              <div key={subcat.id} className="border-l-4 border-primary/30 pl-4 py-3 bg-slate-50 rounded-sm">
                                 <div className="flex items-center justify-between mb-2">
                                   <p className="text-sm font-semibold text-slate-700">{subcat.label}</p>
                                   <Badge variant="secondary" className="text-xs">{fmt(subcat.total)}</Badge>

@@ -60,14 +60,33 @@ export default function CardInvoices() {
   const mEnd = endOfMonth(currentMonth);
   const refMonthStr = format(mStart, 'yyyy-MM');
 
-  // Itens individuais do cartão no mês (pela competência)
+  // Itens individuais do cartão no mês
   const getCardItems = (cardId) => {
+    const card = creditCards.find(c => c.id === cardId);
+    const closingDay = card?.closing_day || 1;
+    const [refYear, refMon] = refMonthStr.split('-').map(Number);
+    const currentClosing = new Date(refYear, refMon - 1, closingDay);
+    const prevClosing = new Date(refYear, refMon - 2, closingDay);
+
     return payables.filter(p => {
       if (p.origin_id !== cardId || p.origin_type !== 'card') return false;
       if (p.is_card_invoice_payable) return false;
-      const comp = p.competencia || p.due_date;
-      if (!comp) return false;
-      return comp.startsWith(refMonthStr);
+
+      // Itens provisioned (PDF): usa competencia começando com refMonthStr
+      if (p.status === 'provisioned') {
+        const comp = p.competencia || p.due_date;
+        return comp && comp.startsWith(refMonthStr);
+      }
+
+      // Itens pending de recorrência de cartão: usa janela de fechamento
+      if ((p.status === 'pending' || p.status === 'scheduled') && p.payment_modality === 'card_invoice') {
+        const dueDateStr = (p.due_date || '').replace('T12:00:00', '').slice(0, 10);
+        if (!dueDateStr) return false;
+        const dueDate = new Date(dueDateStr + 'T12:00:00');
+        return dueDate > prevClosing && dueDate <= currentClosing;
+      }
+
+      return false;
     });
   };
 

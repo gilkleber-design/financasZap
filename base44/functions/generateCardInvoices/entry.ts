@@ -54,20 +54,41 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Busca itens provisionados neste cartão que ainda não têm card_invoice_id
+      // Busca todos os itens deste cartão que ainda não foram vinculados a uma fatura
+      // Aceita: provisioned (importados do PDF) ou pending com payment_modality card_invoice (recorrências de cartão)
       const allPayables = await base44.asServiceRole.entities.Payable.filter({
         origin_id: card.id,
         origin_type: 'card',
-        status: 'provisioned',
       }, '-due_date', 500);
 
-      // Filtra itens do mês de competência da fatura
+      // Janela de fechamento: itens com due_date dentro do período desta fatura
+      // A fatura de refMonth fecha no closingDay do próprio mês
+      // Itens que vencem entre o dia após o fechamento anterior e o fechamento atual pertencem a esta fatura
+      const [refYear, refMon] = refMonthStr.split('-').map(Number);
+      const currentClosing = new Date(refYear, refMon - 1, closingDay);
+      const prevClosing = new Date(refYear, refMon - 2, closingDay); // fechamento anterior
+
       const invoiceItems = allPayables.filter(p => {
         if (p.is_card_invoice_payable) return false;
         if (p.card_invoice_id) return false; // já vinculado a outra fatura
-        const comp = p.competencia || p.due_date;
-        if (!comp) return false;
-        return comp.startsWith(refMonthStr);
+
+        // Aceita provisioned (de PDF) ou pending/scheduled com payment_modality card_invoice (recorrências)
+        const validStatus = p.status === 'provisioned' || 
+          ((p.status === 'pending' || p.status === 'scheduled') && p.payment_modality === 'card_invoice');
+        if (!validStatus) return false;
+
+        // Para itens provisioned (PDF): usa competencia/due_date começando com refMonthStr (comportamento original)
+        if (p.status === 'provisioned') {
+          const comp = p.competencia || p.due_date;
+          if (!comp) return false;
+          return comp.startsWith(refMonthStr);
+        }
+
+        // Para itens pending de recorrência: usa due_date dentro da janela de fechamento
+        const dueDateStr = (p.due_date || '').replace('T12:00:00', '').slice(0, 10);
+        if (!dueDateStr) return false;
+        const dueDate = new Date(dueDateStr + 'T12:00:00');
+        return dueDate > prevClosing && dueDate <= currentClosing;
       });
 
       if (invoiceItems.length === 0) {

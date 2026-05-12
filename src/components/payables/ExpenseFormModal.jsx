@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -93,12 +93,13 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const isAccount = selectedOrigin?.type === 'account';
 
   const handleSave = async () => {
-    if (!form.description || !form.amount) return toast.error('Preencha descrição e valor');
+    try {
+      if (!form.description || !form.amount) return toast.error('Preencha descrição e valor');
 
-    setSaving(true);
-    console.log('handleSave iniciado', { expenseType, form });
+      setSaving(true);
+      console.log('handleSave iniciado', { expenseType, form, allCategories });
 
-    if (expenseType === 'fixa') {
+      if (expenseType === 'fixa') {
       if (!form.due_day) { setSaving(false); return toast.error('Informe o dia de vencimento'); }
       // Cria Recorrência
        const rec = await base44.entities.Recurrence.create({
@@ -182,6 +183,11 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
     setSaving(false);
     console.log('salvou com sucesso');
     onSaved();
+    } catch (err) {
+     console.error('Erro ao salvar:', err);
+     toast.error('Erro ao salvar: ' + err.message);
+     setSaving(false);
+    }
     };
 
   const installmentsToGenerate = expenseType === 'parcelada' && form.installment_count && form.installment_number
@@ -194,7 +200,10 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Nova Despesa</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Nova Despesa</DialogTitle>
+          <DialogDescription>Preencha os detalhes da despesa</DialogDescription>
+        </DialogHeader>
         <div className="space-y-4 py-2">
 
           {/* Tipo de despesa */}

@@ -27,15 +27,15 @@ export function useCategories() {
   };
 
   // Flat list com APENAS as categorias do banco: raízes primeiro, depois subcategorias
-  const flatForSelect = [];
-  const rootsActive = roots.filter(c => c.active !== false);
-  rootsActive.forEach(root => {
-    flatForSelect.push({ value: root.slug, label: root.name });
-    const childrenActive = getChildren(root.id).filter(c => c.active !== false);
-    childrenActive.forEach(child => {
-      flatForSelect.push({ value: child.slug, label: `  → ${child.name}` });
-    });
-  });
+   const flatForSelect = [];
+   const rootsActive = roots.filter(c => c.active !== false);
+   rootsActive.forEach(root => {
+     flatForSelect.push({ value: root.slug, label: root.name, isRoot: true });
+     const childrenActive = getChildren(root.id).filter(c => c.active !== false);
+     childrenActive.forEach(child => {
+       flatForSelect.push({ value: child.slug, label: child.name, isChild: true });
+     });
+   });
 
   return {
     categories,

@@ -241,7 +241,11 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               <SelectTrigger tabIndex={2} className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={null}>Nenhuma</SelectItem>
-                {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                {categories.map(c => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.isChild ? `  → ${c.label}` : c.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

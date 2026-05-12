@@ -23,6 +23,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function Reports() {
   const [selectedPayable, setSelectedPayable] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
@@ -38,6 +39,18 @@ export default function Reports() {
     setSelectedPayable(payable);
     setDrawerOpen(true);
   };
+
+  // Filtrar payables pelo mês selecionado
+  const filteredPayables = payables.filter(p => {
+    const payableMonth = format(new Date(p.due_date), 'yyyy-MM');
+    return payableMonth === selectedMonth;
+  });
+
+  // Gerar lista de últimos 12 meses para seleção
+  const monthOptions = Array.from({ length: 12 }, (_, i) => {
+    const d = subMonths(new Date(), i);
+    return format(d, 'yyyy-MM');
+  }).reverse();
 
   // Last 6 months data (current year only)
   const currentYear = new Date().getFullYear();
@@ -193,8 +206,22 @@ export default function Reports() {
       </div>
         </TabsContent>
 
-        <TabsContent value="audit" className="mt-6">
-          <AuditReportAccordion payables={payables} onRowClick={handlePayableClick} />
+        <TabsContent value="audit" className="mt-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium">Mês:</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="h-9 px-3 rounded-md border border-input bg-background text-sm"
+            >
+              {monthOptions.map(month => (
+                <option key={month} value={month}>
+                  {format(new Date(month + '-01'), 'MMMM/yyyy', { locale: ptBR })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <AuditReportAccordion payables={filteredPayables} onRowClick={handlePayableClick} />
         </TabsContent>
       </Tabs>
 

@@ -10,7 +10,6 @@ import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
 import { useCategories } from '@/hooks/useCategories';
 import { addMonths, format, startOfMonth } from 'date-fns';
 import { CreditCard, Landmark, Repeat, Layers, Receipt } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -70,14 +69,13 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const { origins } = usePaymentOrigins();
   const { flatForSelect, categories: allCategories } = useCategories();
-  const { data: categoryById = {} } = useQuery({
-    queryKey: ['categoryById'],
-    queryFn: async () => {
-      const cats = await base44.entities.Category.list();
-      return Object.fromEntries(cats.map(c => [c.slug, c.id]));
-    },
-  });
   const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
+  
+  // Map slug -> id para categorias do banco
+  const getCategoryId = (slug) => {
+    const cat = allCategories.find(c => c.slug === slug);
+    return cat?.id || undefined;
+  };
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -119,7 +117,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
          amount: parseFloat(form.amount),
          due_day: parseInt(form.due_day),
          category: form.category || 'outros',
-         category_id: form.category ? categoryById[form.category] : undefined,
+         category_id: form.category ? getCategoryId(form.category) : undefined,
          origin_id: form.origin_id || undefined,
          origin_type: form.origin_type || undefined,
          payment_modality: form.payment_modality,
@@ -144,7 +142,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           due_date: ds + 'T12:00:00',
           competencia: ds,
           category: form.category || undefined,
-          category_id: form.category ? categoryById[form.category] : undefined,
+          category_id: form.category ? getCategoryId(form.category) : undefined,
           status: isCard ? 'provisioned' : 'pending',
           recurrent: false,
           origin_id: form.origin_id || undefined,
@@ -169,7 +167,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
          due_date: form.due_date + 'T12:00:00',
          competencia: form.due_date,
          category: form.category || undefined,
-         category_id: form.category ? categoryById[form.category] : undefined,
+         category_id: form.category ? getCategoryId(form.category) : undefined,
          status: isCard ? 'provisioned' : form.payment_modality === 'automatic_debit' ? 'scheduled' : 'pending',
          recurrent: false,
          origin_id: form.origin_id || undefined,

@@ -37,9 +37,20 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
 
   // Agrupar por categoria/subcategoria conforme viewMode
   const organizedData = useMemo(() => {
+    const catMap = {};
+    const subcatIds = new Set();
+    const catToParent = {}; // Mapear subcategoria -> categoria pai
+    
+    categories.forEach(c => {
+      catMap[c.id] = c;
+      if (c.parent_id) {
+        subcatIds.add(c.id);
+        catToParent[c.id] = c.parent_id;
+      }
+    });
+
     if (viewMode === 'subcategory') {
-      // Modo subcategoria: lista todas as subcategorias como linhas principais
-      // Inclui todos os items, inclusive aqueles com parent_id
+      // Modo subcategoria: agrupa por enum category (não por category_id)
       const grouped = payables.reduce((acc, item) => {
         const cat = item.category || 'outros';
         if (!acc[cat]) acc[cat] = [];
@@ -65,55 +76,68 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
           items: items.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
           total: items.reduce((s, i) => s + (i.amount || 0), 0),
           level: 0,
+          subcategories: [],
         }))
         .sort((a, b) => b.total - a.total);
     } else {
-      // Modo categoria (padrão): agrupa por categoria, filtrando subcategorias
-      const catMap = {};
-      const subcatIds = new Set();
-      
-      categories.forEach(c => {
-        catMap[c.id] = c;
-        if (c.parent_id) {
-          subcatIds.add(c.id);
-        }
-      });
-
-      // Filtrar payables: excluir aqueles com category_id que aponta para uma subcategoria
-      const filteredPayables = payables.filter(p => {
-        if (p.category_id && subcatIds.has(p.category_id)) {
-          return false; // É uma subcategoria, exclui em modo "Por Categoria"
-        }
-        return true;
-      });
-
-      const grouped = filteredPayables.reduce((acc, item) => {
+      // Modo categoria: agrupa por enum + subcategorias organizadas
+      const grouped = payables.reduce((acc, item) => {
         const cat = item.category || 'outros';
         if (!acc[cat]) acc[cat] = [];
         acc[cat].push(item);
         return acc;
       }, {});
 
-      const filtered = {};
-      Object.entries(grouped).forEach(([cat, items]) => {
-        const matchedItems = items.filter(item => {
-          const desc = sanitizeDescription(item.description).toLowerCase();
-          return desc.includes(searchTerm.toLowerCase());
-        });
-        if (matchedItems.length > 0) {
-          filtered[cat] = matchedItems;
-        }
-      });
+      return Object.entries(grouped)
+        .map(([enumCat, items]) => {
+          // Separar items: enum-based vs category_id-based
+          const enumItems = items.filter(i => !i.category_id || !subcatIds.has(i.category_id));
+          const subcategoryItems = items.filter(i => i.category_id && subcatIds.has(i.category_id));
 
-      return Object.entries(filtered)
-        .map(([cat, items]) => ({
-          id: cat,
-          label: CATEGORY_LABELS[cat] || cat,
-          items: items.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
-          total: items.reduce((s, i) => s + (i.amount || 0), 0),
-          level: 0,
-        }))
-        .sort((a, b) => b.total - a.total);
+          // Agrupar items de subcategoria por category_id
+          const subcatGrouped = {};
+          subcategoryItems.forEach(item => {
+            const catId = item.category_id;
+            if (!subcatGrouped[catId]) subcatGrouped[catId] = [];
+            subcatGrouped[catId].push(item);
+          });
+
+          // Criar subcategorias com seus itens filtrados
+          const subcategories = Object.entries(subcatGrouped)
+            .map(([catId, subcatItems]) => {
+              const matchedItems = subcatItems.filter(item => {
+                const desc = sanitizeDescription(item.description).toLowerCase();
+                return desc.includes(searchTerm.toLowerCase());
+              });
+              return matchedItems.length > 0 ? {
+                id: catId,
+                label: catMap[catId]?.name || catId,
+                items: matchedItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
+                total: matchedItems.reduce((s, i) => s + (i.amount || 0), 0),
+                level: 1,
+              } : null;
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.total - a.total);
+
+          // Filtrar enum items
+          const matchedEnumItems = enumItems.filter(item => {
+            const desc = sanitizeDescription(item.description).toLowerCase();
+            return desc.includes(searchTerm.toLowerCase());
+          });
+
+          return {
+            id: enumCat,
+            label: CATEGORY_LABELS[enumCat] || enumCat,
+            items: matchedEnumItems.sort((a, b) => new Date(b.due_date) - new Date(a.due_date)),
+            total: matchedEnumItems.reduce((s, i) => s + (i.amount || 0), 0),
+            level: 0,
+            subcategories,
+            subcategoryTotal: subcategories.reduce((s, sc) => s + sc.total, 0),
+          };
+        })
+        .filter(cat => cat.items.length > 0 || cat.subcategories.length > 0)
+        .sort((a, b) => (b.total + b.subcategoryTotal) - (a.total + a.subcategoryTotal));
     }
   }, [payables, searchTerm, viewMode, categories]);
 
@@ -218,57 +242,117 @@ export default function AuditReportAccordion({ payables = [], onRowClick, viewMo
             <CardContent>
               <Accordion type="multiple" value={searchTerm ? categoriesToOpen : openCategories} onValueChange={setOpenCategories}>
                 {organizedData.map((catData) => (
-                  <AccordionItem key={catData.id} value={catData.id} className="border-b">
-                    <AccordionTrigger className="hover:no-underline py-3">
-                      <div className="flex items-center justify-between w-full pr-4">
-                        <div className={`text-left flex-1 ${getLevelIndent(catData.level)}`}>
-                          <p className="font-medium">{catData.label}</p>
-                          <p className="text-xs text-muted-foreground">{catData.items.length} item(ns)</p>
+                  <div key={catData.id}>
+                    <AccordionItem value={catData.id} className="border-b">
+                      <AccordionTrigger className="hover:no-underline py-3">
+                        <div className="flex items-center justify-between w-full pr-4">
+                          <div className="text-left flex-1">
+                            <p className="font-medium">{catData.label}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {catData.items.length} item(ns)
+                              {catData.subcategories?.length > 0 && ` + ${catData.subcategories.length} subcategoria(s)`}
+                            </p>
+                          </div>
+                          <Badge variant="default">{fmt(catData.total + (catData.subcategoryTotal || 0))}</Badge>
                         </div>
-                        <Badge variant="default">{fmt(catData.total)}</Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="pt-0 pb-4">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="border-b">
-                            <tr className="text-muted-foreground text-xs">
-                              <th className="text-left p-2 font-medium">Data</th>
-                              <th className="text-left p-2 font-medium">Descrição</th>
-                              <th className="text-right p-2 font-medium w-20">Valor</th>
-                              <th className="text-center p-2 font-medium w-16">Parcela</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {catData.items.map((item) => {
-                              const hasInstallment = item.installment_number && item.installment_total;
-                              const description = sanitizeDescription(item.description);
-                              const isHighlight = searchTerm && description.toLowerCase().includes(searchTerm.toLowerCase());
-
-                              return (
-                                <tr
-                                  key={item.id}
-                                  onClick={() => onRowClick(item)}
-                                  className={`border-b hover:bg-muted/50 cursor-pointer transition ${isHighlight ? 'bg-accent/30' : ''}`}
-                                >
-                                  <td className="p-2">{format(new Date(item.due_date), 'dd/MM/yyyy')}</td>
-                                  <td className="p-2 truncate max-w-xs">{description}</td>
-                                  <td className="p-2 text-right font-semibold">{fmt(item.amount)}</td>
-                                  <td className="p-2 text-center">
-                                    {hasInstallment && (
-                                      <Badge variant="secondary" className="text-xs">
-                                        {item.installment_number}/{item.installment_total}
-                                      </Badge>
-                                    )}
-                                  </td>
+                      </AccordionTrigger>
+                      <AccordionContent className="pt-0 pb-4">
+                        {/* Itens diretos da categoria enum */}
+                        {catData.items.length > 0 && (
+                          <div className="overflow-x-auto mb-4">
+                            <table className="w-full text-sm">
+                              <thead className="border-b">
+                                <tr className="text-muted-foreground text-xs">
+                                  <th className="text-left p-2 font-medium">Data</th>
+                                  <th className="text-left p-2 font-medium">Descrição</th>
+                                  <th className="text-right p-2 font-medium w-20">Valor</th>
+                                  <th className="text-center p-2 font-medium w-16">Parcela</th>
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                              </thead>
+                              <tbody>
+                                {catData.items.map((item) => {
+                                  const hasInstallment = item.installment_number && item.installment_total;
+                                  const description = sanitizeDescription(item.description);
+                                  const isHighlight = searchTerm && description.toLowerCase().includes(searchTerm.toLowerCase());
+
+                                  return (
+                                    <tr
+                                      key={item.id}
+                                      onClick={() => onRowClick(item)}
+                                      className={`border-b hover:bg-muted/50 cursor-pointer transition ${isHighlight ? 'bg-accent/30' : ''}`}
+                                    >
+                                      <td className="p-2">{format(new Date(item.due_date), 'dd/MM/yyyy')}</td>
+                                      <td className="p-2 truncate max-w-xs">{description}</td>
+                                      <td className="p-2 text-right font-semibold">{fmt(item.amount)}</td>
+                                      <td className="p-2 text-center">
+                                        {hasInstallment && (
+                                          <Badge variant="secondary" className="text-xs">
+                                            {item.installment_number}/{item.installment_total}
+                                          </Badge>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {/* Subcategorias */}
+                        {catData.subcategories?.length > 0 && (
+                          <div className="space-y-2 pl-4">
+                            {catData.subcategories.map((subcat) => (
+                              <div key={subcat.id} className="border-l-2 border-slate-200 pl-4 py-2">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-sm font-semibold text-slate-700">{subcat.label}</p>
+                                  <Badge variant="secondary" className="text-xs">{fmt(subcat.total)}</Badge>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-xs">
+                                    <thead className="border-b">
+                                      <tr className="text-muted-foreground">
+                                        <th className="text-left p-2 font-medium">Data</th>
+                                        <th className="text-left p-2 font-medium">Descrição</th>
+                                        <th className="text-right p-2 font-medium w-16">Valor</th>
+                                        <th className="text-center p-2 font-medium w-12">Parcela</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {subcat.items.map((item) => {
+                                        const hasInstallment = item.installment_number && item.installment_total;
+                                        const description = sanitizeDescription(item.description);
+                                        const isHighlight = searchTerm && description.toLowerCase().includes(searchTerm.toLowerCase());
+
+                                        return (
+                                          <tr
+                                            key={item.id}
+                                            onClick={() => onRowClick(item)}
+                                            className={`border-b hover:bg-muted/50 cursor-pointer transition ${isHighlight ? 'bg-accent/30' : ''}`}
+                                          >
+                                            <td className="p-2">{format(new Date(item.due_date), 'dd/MM/yyyy')}</td>
+                                            <td className="p-2 truncate max-w-xs">{description}</td>
+                                            <td className="p-2 text-right font-semibold">{fmt(item.amount)}</td>
+                                            <td className="p-2 text-center">
+                                              {hasInstallment && (
+                                                <Badge variant="secondary" className="text-xs">
+                                                  {item.installment_number}/{item.installment_total}
+                                                </Badge>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </div>
                 ))}
               </Accordion>
             </CardContent>

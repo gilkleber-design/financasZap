@@ -223,19 +223,22 @@ export default function Reports() {
             <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <div className="ml-auto flex gap-2">
-              {['category', 'subcategory'].map(mode => (
-                <Button
-                  key={mode}
-                  size="sm"
-                  variant={reportViewMode === mode ? 'secondary' : 'outline'}
-                  onClick={() => setReportViewMode(mode)}
-                  className="text-xs"
-                >
-                  {mode === 'category' ? 'Por Categoria' : 'Por Subcategoria'}
-                </Button>
-              ))}
-            </div>
+            <div className="ml-auto flex flex-col gap-2 items-end">
+               <span className="text-xs text-muted-foreground font-medium">Agrupar por:</span>
+               <div className="flex gap-2">
+                 {['category', 'subcategory'].map(mode => (
+                   <Button
+                     key={mode}
+                     size="sm"
+                     variant={reportViewMode === mode ? 'secondary' : 'outline'}
+                     onClick={() => setReportViewMode(mode)}
+                     className="text-xs"
+                   >
+                     {mode === 'category' ? 'Por Categoria' : 'Por Subcategoria'}
+                   </Button>
+                 ))}
+               </div>
+             </div>
           </div>
           <AuditReportAccordion 
             payables={filteredPayables} 

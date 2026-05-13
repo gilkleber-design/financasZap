@@ -3,10 +3,10 @@ import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Trash2, Check, X, Edit2 } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Edit2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { isAfter, endOfMonth, parseISO, isValid } from 'date-fns';
+import { isAfter, parseISO, isValid, isEqual } from 'date-fns';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -15,57 +15,46 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
   const [step, setStep] = useState('upload'); 
   const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [editingIdx, setEditingIdx] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [progress, setProgress] = useState(0);
   const [invoiceTotalFromBank, setInvoiceTotalFromBank] = useState(0);
+
+  // Usamos os dados do cadastro do cartão para a inteligência de data
+  const cardClosingDay = card.closing_day || 5; 
 
   const handleFile = async (file) => {
     if (!file || file.type !== 'application/pdf') return toast.error('Selecione um arquivo PDF');
-    
     setStep('processing');
-    setProgress(0);
-    
-    const progressInterval = setInterval(() => {
-      setProgress(prev => (prev < 90 ? prev + 10 : prev));
-    }, 500);
 
     try {
       const uploadRes = await base44.integrations.Core.UploadFile({ file });
-      if (!uploadRes?.file_url) throw new Error('Falha no upload.');
-
       const response = await base44.functions.invoke('extractInvoicePDF', {
         file_url: uploadRes.file_url,
         ref_month: refMonth,
       });
 
       const result = response.data;
-      clearInterval(progressInterval);
-      setProgress(100);
-
-      if (!result || !result.items) throw new Error('IA não retornou dados válidos.');
+      if (!result?.items) throw new Error('IA não retornou dados.');
       
-      // Guarda o valor que o banco diz ser o total para comparar
       setInvoiceTotalFromBank(result.integrity_check?.invoice_total || 0);
 
-      const dateLimit = endOfMonth(new Date(refMonth + '-01T12:00:00'));
-      
+      // Criamos a data de corte baseada no cadastro do cartão
+      // Se a competência é 2026-02, e o fechamento é dia 05, a trava é 05/02/2026
+      const closingDate = parseISO(`${refMonth.substring(0, 7)}-${cardClosingDay.toString().padStart(2, '0')}`);
+
       const extracted = (result.items || []).map((item, i) => {
         const desc = (item.description || '').toLowerCase();
         
-        // REGRA 1: Forçar sinal negativo em estornos identificados por texto ou sinal
+        // 1. Tratamento de Sinais (Estornos)
         const isNegativeText = desc.includes('estorno') || desc.includes('cancelamento') || desc.includes('est pcls') || desc.includes('pagamento efetuado');
         let finalAmount = Math.abs(item.amount || 0);
-        if (item.amount < 0 || isNegativeText) {
-          finalAmount = -Math.abs(finalAmount);
-        }
+        if (item.amount < 0 || isNegativeText) finalAmount = -Math.abs(finalAmount);
 
-        // REGRA 2: Validar se o item pertence a esta fatura (Data de corte)
-        let isFuture = false;
+        // 2. Trava Automática por Data de Fechamento do Cadastro
+        let isAfterClosing = false;
         if (item.date) {
-            const parsedDate = parseISO(item.date);
-            if (isValid(parsedDate)) {
-                isFuture = isAfter(parsedDate, dateLimit);
+            const itemDate = parseISO(item.date);
+            if (isValid(itemDate)) {
+                // Se a compra foi feita no dia do fechamento ou depois, vai para a próxima fatura
+                isAfterClosing = isAfter(itemDate, closingDate) || isEqual(itemDate, closingDate);
             }
         }
 
@@ -73,107 +62,16 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
           ...item,
           amount: finalAmount,
           _id: i,
-          selected: !isFuture, // Desmarca automaticamente se for do mês seguinte
-          is_future: isFuture
+          selected: !isAfterClosing, 
+          is_future: isAfterClosing
         };
       });
 
       setItems(extracted);
       setStep('review');
-
     } catch (error) {
-      clearInterval(progressInterval);
-      toast.error(error.message || 'Erro no processamento');
+      toast.error('Erro no processamento');
       setStep('upload');
-    }
-  };
-
-  const toggleItem = (idx) => {
-    setItems(prev => prev.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it));
-  };
-
-  const startEdit = (idx) => {
-    setEditingIdx(idx);
-    setEditForm({ description: items[idx].description, amount: items[idx].amount });
-  };
-
-  const saveEdit = (idx) => {
-    setItems(prev => prev.map((it, i) => i === idx
-      ? { ...it, description: editForm.description, amount: parseFloat(editForm.amount) || it.amount }
-      : it
-    ));
-    setEditingIdx(null);
-  };
-
-  const handleImport = async () => {
-    const selected = items.filter(it => it.selected);
-    if (selected.length === 0) return toast.error('Selecione itens');
-    
-    setSaving(true);
-    const { addMonths } = await import('date-fns');
-    const genGroupId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const processedGroups = new Set();
-    const payables = [];
-    const groupIds = {};
-
-    try {
-        selected.forEach(it => {
-          const hasInst = it.installment_number && it.installment_total && it.installment_total > 1;
-          const groupKey = hasInst ? `${it.description}|${it.installment_total}` : null;
-          
-          if (hasInst && !processedGroups.has(groupKey)) {
-            if (!groupIds[groupKey]) groupIds[groupKey] = genGroupId();
-            const startNum = it.installment_number;
-            const totalCount = it.installment_total;
-            const baseDate = new Date(refMonth + '-01T12:00:00');
-            const monthlyAmount = it.amount;
-
-            for (let num = startNum; num <= totalCount; num++) {
-              const daysOffset = num - startNum;
-              const futureDate = addMonths(baseDate, daysOffset);
-              const futureDateStr = futureDate.toISOString().split('T')[0];
-              payables.push({
-                description: `${it.description} (${num}/${totalCount})`,
-                amount: monthlyAmount,
-                due_date: futureDateStr + 'T12:00:00',
-                competencia: futureDateStr.substring(0, 7) + '-01',
-                category: it.category || 'outros',
-                status: 'provisioned',
-                origin_id: card.id,
-                origin_type: 'card',
-                payment_modality: 'card_invoice',
-                recurrent: false,
-                installment_number: num,
-                installment_count: totalCount,
-                installment_total_amount: monthlyAmount * totalCount,
-                installment_group_id: groupIds[groupKey],
-              });
-            }
-            processedGroups.add(groupKey);
-          } else if (!hasInst) {
-            payables.push({
-              description: it.description,
-              amount: it.amount,
-              due_date: (it.date || refMonth + '-01') + 'T12:00:00',
-              competencia: refMonth + '-01',
-              category: it.category || 'outros',
-              status: 'provisioned',
-              origin_id: card.id,
-              origin_type: 'card',
-              payment_modality: 'card_invoice',
-              recurrent: false,
-            });
-          }
-        });
-
-        await base44.entities.Payable.bulkCreate(payables);
-        toast.success('Importação realizada!');
-        setSaving(false);
-        setStep('done');
-        onImported();
-    } catch (e) {
-        toast.error('Erro ao salvar lançamentos');
-        setSaving(false);
     }
   };
 
@@ -185,91 +83,93 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto font-sora text-slate-800">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto font-sora">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-slate-800 font-black uppercase tracking-tight">
             <FileText className="w-5 h-5 text-primary" />
-            Conferência de Fatura — {card.name}
+            Importação Direta — {card.name}
           </DialogTitle>
         </DialogHeader>
 
         {step === 'upload' && (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <div className="w-full border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center gap-3 cursor-pointer hover:bg-slate-50 transition-all" onClick={() => fileRef.current?.click()}>
-              <Upload className="w-10 h-10 text-slate-300" />
-              <p className="text-sm font-bold text-slate-600">Arraste o PDF da fatura aqui</p>
-            </div>
-            <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={e => handleFile(e.target.files[0])} />
+          <div className="py-12 flex flex-col items-center gap-6">
+             <div className="text-center space-y-1">
+                <p className="text-sm font-bold text-slate-700">Fechamento configurado: Dia {cardClosingDay}</p>
+                <p className="text-[10px] text-slate-400 uppercase font-bold">Lançamentos a partir deste dia serão ignorados nesta fatura</p>
+             </div>
+             <div 
+               className="w-full border-2 border-dashed border-slate-200 rounded-3xl p-12 flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-50 hover:border-primary/40 transition-all" 
+               onClick={() => fileRef.current?.click()}
+             >
+               <Upload className="w-12 h-12 text-slate-300" />
+               <p className="text-sm font-black text-slate-500 uppercase tracking-tighter">Clique para subir o PDF</p>
+             </div>
+             <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={e => handleFile(e.target.files[0])} />
           </div>
         )}
 
         {step === 'processing' && (
-          <div className="flex flex-col items-center gap-4 py-12 text-center">
-            <Loader2 className="w-12 h-12 text-primary animate-spin" />
-            <p className="text-sm font-black uppercase tracking-tight">IA a calcular estornos e datas...</p>
-            <div className="w-full max-w-xs h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} />
-            </div>
+          <div className="py-24 flex flex-col items-center gap-4">
+            <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aplicando regras de negócio e travas de data...</p>
           </div>
         )}
 
         {step === 'review' && (
           <div className="space-y-4">
-            {diffWithBank > 0.1 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
+            {diffWithBank < 0.1 ? (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex gap-3 items-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                <p className="text-xs font-black text-emerald-700 uppercase">Valores conferidos com sucesso!</p>
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
                 <div className="text-[11px]">
-                  <p className="font-black text-amber-700 uppercase">Atenção à Discrepância</p>
-                  <p className="text-amber-600">O total selecionado ({fmt(selectedTotal)}) difere do total do PDF ({fmt(invoiceTotalFromBank)}).</p>
-                  <p className="font-bold text-amber-800 mt-1">Dica: Desmarque itens de fevereiro ou verifique os estornos em verde.</p>
+                  <p className="font-black text-amber-700 uppercase">Discrepância Residual</p>
+                  <p className="text-amber-600 font-medium">Diferença de {fmt(diffWithBank)}. Verifique se há pagamentos da fatura anterior no meio da lista.</p>
                 </div>
               </div>
             )}
 
-            <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden bg-white shadow-sm">
+            <div className="divide-y border rounded-2xl bg-white overflow-hidden shadow-sm">
               {items.map((it, idx) => (
-                <div key={idx} className={`flex items-center gap-3 px-4 py-3 transition-colors ${it.selected ? 'bg-white' : 'bg-slate-50/50 opacity-40'}`}>
-                  <input type="checkbox" checked={it.selected} onChange={() => toggleItem(idx)} className="w-4 h-4 accent-primary" />
-                  
+                <div key={idx} className={`flex items-center gap-3 px-4 py-3 ${it.selected ? 'bg-white' : 'bg-slate-50 opacity-40'}`}>
+                  <input 
+                    type="checkbox" 
+                    checked={it.selected} 
+                    onChange={() => setItems(prev => prev.map((item, i) => i === idx ? {...item, selected: !item.selected} : item))} 
+                    className="w-4 h-4 accent-primary" 
+                  />
                   <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                          <p className={`text-sm truncate font-bold uppercase ${it.amount < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                              {it.description}
-                          </p>
-                          {it.is_future && <Badge className="bg-amber-100 text-amber-700 text-[8px] h-4 font-black">PRÓX. FATURA</Badge>}
-                          {it.amount < 0 && <Badge className="bg-emerald-100 text-emerald-700 text-[8px] h-4 font-black">ESTORNO</Badge>}
-                      </div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">{it.date} • {it.category}</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-xs font-bold uppercase truncate ${it.amount < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>{it.description}</p>
+                      {it.is_future && <Badge className="bg-slate-100 text-slate-500 text-[7px] h-3.5 border-none font-black">MÊS SEGUINTE</Badge>}
+                    </div>
+                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{it.date} • {it.category}</p>
                   </div>
-                  <span className={`text-sm font-black min-w-[90px] text-right ${it.amount < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {it.amount < 0 ? '+' : '-'} {fmt(Math.abs(it.amount))}
+                  <span className={`text-xs font-black min-w-[80px] text-right ${it.amount < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {it.amount < 0 ? '+' : '-'} {fmt(Math.abs(it.amount))}
                   </span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300" onClick={() => startEdit(idx)}><Edit2 className="w-3.5 h-3.5" /></Button>
                 </div>
               ))}
             </div>
 
-            <div className="bg-slate-900 p-5 rounded-2xl text-white shadow-2xl">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400">Total Selecionado:</p>
-                  <p className={`text-2xl font-black ${diffWithBank <= 0.1 ? 'text-emerald-400' : 'text-white'}`}>
-                    {fmt(selectedTotal)}
-                  </p>
-                </div>
-                <Button onClick={handleImport} disabled={saving || items.filter(i => i.selected).length === 0} className="bg-white text-slate-900 hover:bg-slate-100 font-black px-6 h-11">
-                  {saving ? 'A PROCESSAR...' : 'CONFIRMAR IMPORTAÇÃO'}
-                </Button>
-              </div>
+            <div className="bg-slate-900 p-6 rounded-[2rem] text-white shadow-2xl">
+               <div className="flex justify-between items-center px-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-slate-500">Valor no PDF</p>
+                    <p className="text-lg font-black text-slate-300">{fmt(invoiceTotalFromBank)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase text-slate-500">Lançamentos Selecionados</p>
+                    <p className={`text-2xl font-black ${diffWithBank < 0.1 ? 'text-emerald-400' : 'text-white'}`}>{fmt(selectedTotal)}</p>
+                  </div>
+               </div>
+               <Button className="w-full mt-5 h-12 bg-white text-slate-900 font-black hover:bg-slate-100 rounded-xl transition-all" onClick={onImported}>
+                  IMPORTAR PARA O FLUXO
+               </Button>
             </div>
-          </div>
-        )}
-
-        {step === 'done' && (
-          <div className="flex flex-col items-center gap-4 py-8 text-center">
-            <CheckCircle2 className="w-16 h-16 text-emerald-500" />
-            <p className="text-lg font-black uppercase">Fatura Sincronizada!</p>
-            <Button onClick={onClose} className="w-full h-12 font-bold bg-slate-900 text-white">CONCLUIR</Button>
           </div>
         )}
       </DialogContent>

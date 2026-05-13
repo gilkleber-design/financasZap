@@ -2,9 +2,13 @@
   "name": "Card",
   "type": "object",
   "properties": {
+    "holder_name": {
+      "type": "string",
+      "description": "Nome do titular impresso no cart\u00e3o (ex: JOAO C SILVA)"
+    },
     "name": {
       "type": "string",
-      "description": "Nome do cart\u00e3o (ex: Nubank, Ita\u00fa Platinum)"
+      "description": "Apelido do cart\u00e3o (ex: Nubank, Ita\u00fa Platinum)"
     },
     "type": {
       "type": "string",
@@ -46,6 +50,7 @@
     }
   },
   "required": [
+    "holder_name",
     "name",
     "type"
   ]

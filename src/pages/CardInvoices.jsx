@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, RefreshCw, Pencil, Upload, Undo2, ChevronDown, ChevronUp, ListFilter, X } from 'lucide-react';
+import { CreditCard, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Upload, Undo2, ChevronDown, ChevronUp, ListFilter } from 'lucide-react';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction } from '@/components/ui/alert-dialog';
-import { format, startOfMonth, addMonths, subMonths, endOfMonth } from 'date-fns';
+import { format, startOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
@@ -26,12 +26,11 @@ const STATUS_CONFIG = {
 export default function CardInvoices() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [payingPayable, setPayingPayable] = useState(null);
-  const [editingInvoiceItems, setEditingInvoiceItems] = useState(null);
   const [importingCard, setImportingCard] = useState(null);
-  const [reopeningInvoice, setReopeningInvoice] = useState(null);
   
-  // NOVA TRAVA DE SEGURANÇA
+  // Estados para as confirmações
   const [pendingClosureCardId, setPendingClosureCardId] = useState(null); 
+  const [pendingReopenData, setPendingReopenData] = useState(null);
 
   const [openItems, setOpenItems] = useState({});
   const queryClient = useQueryClient();
@@ -62,9 +61,8 @@ export default function CardInvoices() {
     onSuccess: () => { 
       queryClient.invalidateQueries(); 
       setPendingClosureCardId(null);
-      toast.success('Fatura fechada e consolidada!'); 
+      toast.success('Fatura fechada com sucesso!'); 
     },
-    onError: () => toast.error('Erro ao processar fechamento')
   });
 
   const reopenInvoiceMutation = useMutation({
@@ -72,12 +70,15 @@ export default function CardInvoices() {
       if (invoicePayable?.id) await base44.entities.Payable.delete(invoicePayable.id);
       if (invoice?.id) await base44.entities.CardInvoice.delete(invoice.id);
     },
-    onSuccess: () => { queryClient.invalidateQueries(); setReopeningInvoice(null); toast.success('Fatura reaberta!'); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries(); 
+      setPendingReopenData(null); 
+      toast.success('Fatura reaberta e lançamento excluído.'); 
+    },
   });
 
   return (
     <div className="p-6 space-y-6 pb-24 font-sora text-slate-800">
-      {/* Header e Navegação */}
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold tracking-tight">Faturas de Cartão</h1>
         <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -101,7 +102,7 @@ export default function CardInvoices() {
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-slate-100 text-primary" onClick={() => setImportingCard({ card, refMonth: refMonthStr })}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-slate-100 text-primary hover:bg-primary/10" onClick={() => setImportingCard({ card, refMonth: refMonthStr })}>
                       <Upload className="w-4 h-4" />
                     </Button>
                     <div>
@@ -123,29 +124,60 @@ export default function CardInvoices() {
               <CardContent className="p-0">
                 <Collapsible open={isExpanded} onOpenChange={() => toggleItems(card.id)}>
                   <div className="px-5 py-3 flex items-center justify-between bg-slate-50/50 border-y">
-                    <div className="flex gap-4 text-[11px] text-slate-500 font-bold uppercase">
+                    <div className="flex gap-4 text-[11px] text-slate-500 font-bold uppercase tracking-tight">
                       <span>Fecha: {card.closing_day || '-'}</span>
                       <span>Vence: {card.due_day || '-'}</span>
-                      <span>{items.length} itens</span>
+                      <span className="flex items-center gap-1.5"><ListFilter className="w-3.5 h-3.5" /> {items.length} itens</span>
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      {/* Lógica de Botões Condicionais */}
                       {!invoicePayable && items.length > 0 && (
                         <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-primary" onClick={() => setPendingClosureCardId(card.id)}>
                           FECHAR FATURA
                         </Button>
                       )}
+
                       {invoicePayable && invoicePayable.status !== 'paid' && (
-                        <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-emerald-600" onClick={() => setPayingPayable(invoicePayable)}>
-                          PAGAR AGORA
-                        </Button>
+                        <>
+                          <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-amber-600" onClick={() => setPendingReopenData({ invoice: existingInvoice, invoicePayable })}>
+                            <Undo2 className="w-3 h-3 mr-1" /> REABRIR
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-emerald-600" onClick={() => setPayingPayable(invoicePayable)}>
+                            PAGAR AGORA
+                          </Button>
+                        </>
                       )}
+
                       <CollapsibleTrigger asChild>
-                        <Button variant="link" size="sm" className="h-8 text-[11px] font-bold no-underline">{isExpanded ? 'OCULTAR' : 'VER LANÇAMENTOS'}</Button>
+                        <Button variant="link" size="sm" className="h-8 text-[11px] font-bold no-underline">
+                          {isExpanded ? 'OCULTAR' : 'VER LANÇAMENTOS'}
+                        </Button>
                       </CollapsibleTrigger>
                     </div>
                   </div>
-                  {/* ... Conteúdo dos lançamentos ... */}
+
+                  <CollapsibleContent className="bg-slate-50/20">
+                    <div className="p-4 space-y-3">
+                      {items.length > 0 ? (
+                        <div className="bg-white rounded-xl border shadow-sm divide-y overflow-hidden">
+                          {items.map(p => (
+                            <div key={p.id} className="flex items-center justify-between px-4 py-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-slate-700 truncate">{p.description}</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">
+                                  {format(new Date((p.purchase_date || p.due_date).includes('T') ? (p.purchase_date || p.due_date) : (p.purchase_date || p.due_date) + 'T12:00:00'), 'dd/MM/yy')}
+                                </p>
+                              </div>
+                              <p className="text-sm font-bold text-slate-900">{fmt(p.amount)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center py-8 text-xs text-slate-400 font-medium uppercase tracking-widest">Nenhum lançamento</p>
+                      )}
+                    </div>
+                  </CollapsibleContent>
                 </Collapsible>
               </CardContent>
             </Card>
@@ -153,41 +185,38 @@ export default function CardInvoices() {
         })}
       </div>
 
-      {/* MODAL DE CONFIRMAÇÃO DE FECHAMENTO */}
+      {/* MODAL: CONFIRMAR FECHAMENTO */}
       <AlertDialog open={!!pendingClosureCardId} onOpenChange={() => setPendingClosureCardId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deseja fechar a fatura?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Isso irá consolidar todos os lançamentos individuais deste mês em um único pagamento nas suas contas a pagar.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Fechar fatura?</AlertDialogTitle>
+            <AlertDialogDescription>Isso consolidará os gastos em um único lançamento nas suas contas a pagar.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
-            <AlertDialogCancel className="flex-1">Não, conferir mais</AlertDialogCancel>
-            <AlertDialogAction 
-              className="flex-1 bg-primary text-white" 
-              onClick={() => generateMutation.mutate(pendingClosureCardId)}
-            >
-              Sim, fechar agora
-            </AlertDialogAction>
+            <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
+            <AlertDialogAction className="flex-1 bg-primary" onClick={() => generateMutation.mutate(pendingClosureCardId)}>CONFIRMAR</AlertDialogAction>
           </div>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Outros Modais (Pagar, Importar, Reabrir) */}
+      {/* MODAL: CONFIRMAR REABERTURA */}
+      <AlertDialog open={!!pendingReopenData} onOpenChange={() => setPendingReopenData(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reabrir esta fatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lançamento consolidado em "Contas a Pagar" será excluído e os itens voltarão a ficar pendentes de fechamento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3 mt-4">
+            <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
+            <Button variant="destructive" className="flex-1 font-bold" onClick={() => reopenInvoiceMutation.mutate(pendingReopenData)}>REABRIR AGORA</Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {payingPayable && <ConfirmPayableModal payable={payingPayable} onClose={() => { setPayingPayable(null); queryClient.invalidateQueries(); }} />}
       {importingCard && <ImportInvoicePDFModal card={importingCard.card} refMonth={importingCard.refMonth} onClose={() => setImportingCard(null)} onImported={() => queryClient.invalidateQueries()} />}
-      {reopeningInvoice && (
-        <AlertDialog open onOpenChange={() => setReopeningInvoice(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Reabrir fatura?</AlertDialogTitle></AlertDialogHeader>
-            <div className="flex gap-2 p-4">
-              <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
-              <Button variant="destructive" className="flex-1 font-bold" onClick={() => reopenInvoiceMutation.mutate(reopeningInvoice)}>REABRIR</Button>
-            </div>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
     </div>
   );
 }

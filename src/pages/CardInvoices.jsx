@@ -28,7 +28,7 @@ export default function CardInvoices() {
   const [payingPayable, setPayingPayable] = useState(null);
   const [importingCard, setImportingCard] = useState(null);
   
-  // Estados para as confirmações
+  // Travas de segurança para fechamento e reabertura
   const [pendingClosureCardId, setPendingClosureCardId] = useState(null); 
   const [pendingReopenData, setPendingReopenData] = useState(null);
 
@@ -57,12 +57,28 @@ export default function CardInvoices() {
   const getInvoice = (cardId) => invoices.find(inv => inv.card_id === cardId && inv.month && inv.month.startsWith(refMonthStr));
 
   const generateMutation = useMutation({
-    mutationFn: async (cardId) => base44.functions.invoke('generateCardInvoices', { forceCardId: cardId, forceMonth: format(mStart, 'yyyy-MM') + '-01' }),
-    onSuccess: () => { 
+    mutationFn: async (cardId) => {
+      console.log(`Iniciando fechamento para cartão: ${cardId}, mês: ${refMonthStr}`);
+      return await base44.functions.invoke('generateCardInvoices', { 
+        forceCardId: cardId, 
+        forceMonth: format(mStart, 'yyyy-MM') + '-01' 
+      });
+    },
+    onSuccess: (res) => { 
+      const result = res.data?.results?.[0];
+      if (result?.status === 'no_items') {
+        toast.info('Nenhum item pendente para fechar neste mês.');
+      } else {
+        toast.success('Fatura fechada com sucesso!'); 
+      }
       queryClient.invalidateQueries(); 
       setPendingClosureCardId(null);
-      toast.success('Fatura fechada com sucesso!'); 
     },
+    onError: (err) => {
+      console.error("Erro no fechamento:", err);
+      toast.error('Ocorreu um erro ao tentar fechar a fatura.');
+      setPendingClosureCardId(null);
+    }
   });
 
   const reopenInvoiceMutation = useMutation({
@@ -73,7 +89,7 @@ export default function CardInvoices() {
     onSuccess: () => { 
       queryClient.invalidateQueries(); 
       setPendingReopenData(null); 
-      toast.success('Fatura reaberta e lançamento excluído.'); 
+      toast.success('Fatura reaberta e consolidado removido.'); 
     },
   });
 
@@ -131,7 +147,6 @@ export default function CardInvoices() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {/* Lógica de Botões Condicionais */}
                       {!invoicePayable && items.length > 0 && (
                         <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-primary" onClick={() => setPendingClosureCardId(card.id)}>
                           FECHAR FATURA
@@ -165,7 +180,7 @@ export default function CardInvoices() {
                             <div key={p.id} className="flex items-center justify-between px-4 py-3">
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-slate-700 truncate">{p.description}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                                   {format(new Date((p.purchase_date || p.due_date).includes('T') ? (p.purchase_date || p.due_date) : (p.purchase_date || p.due_date) + 'T12:00:00'), 'dd/MM/yy')}
                                 </p>
                               </div>
@@ -174,7 +189,7 @@ export default function CardInvoices() {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-center py-8 text-xs text-slate-400 font-medium uppercase tracking-widest">Nenhum lançamento</p>
+                        <p className="text-center py-8 text-xs text-slate-400 font-medium uppercase tracking-widest">Nenhum lançamento pendente</p>
                       )}
                     </div>
                   </CollapsibleContent>
@@ -185,28 +200,26 @@ export default function CardInvoices() {
         })}
       </div>
 
-      {/* MODAL: CONFIRMAR FECHAMENTO */}
+      {/* MODAL: FECHAMENTO */}
       <AlertDialog open={!!pendingClosureCardId} onOpenChange={() => setPendingClosureCardId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Fechar fatura?</AlertDialogTitle>
-            <AlertDialogDescription>Isso consolidará os gastos em um único lançamento nas suas contas a pagar.</AlertDialogDescription>
+            <AlertDialogTitle>Deseja fechar a fatura?</AlertDialogTitle>
+            <AlertDialogDescription>Isso irá consolidar os lançamentos em um único item nas Contas a Pagar.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
             <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>
-            <AlertDialogAction className="flex-1 bg-primary" onClick={() => generateMutation.mutate(pendingClosureCardId)}>CONFIRMAR</AlertDialogAction>
+            <AlertDialogAction className="flex-1 bg-primary font-bold" onClick={() => generateMutation.mutate(pendingClosureCardId)}>FECHAR AGORA</AlertDialogAction>
           </div>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL: CONFIRMAR REABERTURA */}
+      {/* MODAL: REABERTURA */}
       <AlertDialog open={!!pendingReopenData} onOpenChange={() => setPendingReopenData(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reabrir esta fatura?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O lançamento consolidado em "Contas a Pagar" será excluído e os itens voltarão a ficar pendentes de fechamento.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Reabrir fatura?</AlertDialogTitle>
+            <AlertDialogDescription>O lançamento consolidado será excluído e os itens individuais voltarão a ficar em aberto.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
             <AlertDialogCancel className="flex-1">CANCELAR</AlertDialogCancel>

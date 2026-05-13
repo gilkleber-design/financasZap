@@ -128,7 +128,7 @@ function RecurrencesTab() {
           <div className="divide-y divide-border">
             {isLoading && <p className="p-6 text-center text-sm text-muted-foreground">Carregando...</p>}
             {!isLoading && active.length === 0 && (
-              <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma despesa fixa. Use "Nova Despesa" e escolha o tipo "Fixa".</p>
+              <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma despesa fixa.</p>
             )}
             {active.map(r => (
               <div key={r.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
@@ -203,7 +203,7 @@ function RecurrencesTab() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Regerar parcelas?</AlertDialogTitle>
-              <AlertDialogDescription>Gera 13 novos lançamentos futuros para "{regeneratingRecurrence.description}". Parcelas já existentes não serão removidas.</AlertDialogDescription>
+              <AlertDialogDescription>Gera 13 novos lançamentos para "{regeneratingRecurrence.description}".</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="flex gap-2">
               <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
@@ -220,7 +220,7 @@ function RecurrencesTab() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Remover recorrência?</AlertDialogTitle>
-              <AlertDialogDescription>Deleta "{deletingRecurrence.description}" e todos os lançamentos vinculados.</AlertDialogDescription>
+              <AlertDialogDescription>Deleta a recorrência e todos os seus lançamentos.</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="flex gap-2">
               <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
@@ -272,7 +272,7 @@ export default function Payables() {
         for (const p of toDelete) await base44.entities.Payable.delete(p.id);
       }
     },
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamentos removidos'); },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Removidos'); },
   });
 
   const undoPaymentMutation = useMutation({
@@ -286,7 +286,6 @@ export default function Payables() {
   const getStatus = (p) => {
     if (p.status === 'paid') return 'paid';
     if (p.status === 'scheduled') return 'scheduled';
-    // Qualquer item de cartão não-pago é tratado como provisionado — nunca vence individualmente (quem vence é a fatura)
     if (p.origin_type === 'card' && !p.is_card_invoice_payable && p.status !== 'paid') return 'provisioned';
     if (p.due_date && isPast(new Date(p.due_date)) && !isToday(new Date(p.due_date))) return 'overdue';
     return p.status || 'pending';
@@ -298,7 +297,6 @@ export default function Payables() {
   const mStart = startOfMonth(currentMonth);
   const mEnd = endOfMonth(currentMonth);
 
-  // Filtra por tipo (aba)
   const byTab = (p) => {
     if (activeTab === 'fixas') return p.recurrence_id || p.recurrent;
     if (activeTab === 'parceladas') return !!p.installment_group_id;
@@ -308,8 +306,10 @@ export default function Payables() {
 
   const filtered = payables.filter(p => {
     if (!byTab(p)) return false;
-    // itens consolidados de fatura (is_card_invoice_payable) são gerenciados em Faturas de Cartão
-    if (p.is_card_invoice_payable) return false;
+    
+    // PERMITIMOS a fatura consolidada (is_card_invoice_payable) nas abas Geral e Avulsas
+    if (p.is_card_invoice_payable && activeTab !== 'todas' && activeTab !== 'avulsas') return false;
+
     const status = getStatus(p);
     if (filterStatus === 'open' && (status === 'paid' || status === 'provisioned')) return false;
     if (filterStatus === 'overdue' && status !== 'overdue') return false;
@@ -340,23 +340,22 @@ export default function Payables() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 font-sora">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-sora font-bold">Contas a Pagar</h1>
+          <h1 className="text-2xl font-bold">Contas a Pagar</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {filterStatus === 'open' ? `${pendingCount} pendentes · ${overdueCount} vencidas · ${fmt(totalFiltered)}` :
              filterStatus === 'overdue' ? `${filtered.length} vencidas · ${fmt(totalFiltered)}` :
-             filterStatus === 'provisioned' ? `${filtered.length} provisionados no cartão · ${fmt(totalFiltered)}` :
+             filterStatus === 'provisioned' ? `${filtered.length} no cartão · ${fmt(totalFiltered)}` :
              `${filtered.length} pagas · ${fmt(totalFiltered)}`}
           </p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
+        <Button onClick={() => setShowForm(true)} className="bg-primary hover:bg-primary/90">
           <Plus className="w-4 h-4 mr-2" /> Nova Despesa
         </Button>
       </div>
 
-      {/* Abas de tipo */}
       <div className="flex gap-1 bg-muted/40 p-1 rounded-xl w-fit">
         {TABS.map(({ value, label, icon: Icon }) => (
           <button
@@ -372,12 +371,10 @@ export default function Payables() {
         ))}
       </div>
 
-      {/* Aba Fixas: mostra RecurrencesTab */}
       {activeTab === 'fixas' ? (
         <RecurrencesTab />
       ) : (
         <>
-          {/* Filtros de status */}
           <div className="flex items-center gap-2 flex-wrap">
             {['open', 'overdue', 'paid', 'provisioned'].map(s => (
               <Button key={s} variant={filterStatus === s ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus(s)} className="text-xs">
@@ -386,25 +383,24 @@ export default function Payables() {
             ))}
           </div>
 
-          {/* Navegação de mês */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+              <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
               <span className="text-sm font-medium min-w-[140px] text-center capitalize">
                 {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
               </span>
-              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+              <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
             {filterStatus !== 'paid' && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Filtrar por:</span>
+                <span className="text-xs text-muted-foreground font-bold">BASEAR EM:</span>
                 {['due_date', 'competencia'].map(fb => (
-                  <Button key={fb} variant={filterBy === fb ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy(fb)} className="text-xs">
-                    {fb === 'due_date' ? 'Vencimento' : 'Competência'}
+                  <Button key={fb} variant={filterBy === fb ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy(fb)} className="text-[10px] h-6 px-2">
+                    {fb === 'due_date' ? 'VENCIMENTO' : 'COMPETÊNCIA'}
                   </Button>
                 ))}
               </div>
@@ -414,51 +410,40 @@ export default function Payables() {
           <Card className="border-0 shadow-sm">
             <CardContent className="p-0">
               <div className="divide-y divide-border">
-                {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma conta encontrada</p>}
+                {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Tudo limpo por aqui.</p>}
                 {filtered.map(p => {
                   const status = getStatus(p);
-                  const typeIcon = p.recurrence_id || p.recurrent ? Repeat : p.installment_group_id ? Layers : null;
-                  const TypeIcon = typeIcon;
+                  const TypeIcon = p.recurrence_id || p.recurrent ? Repeat : p.installment_group_id ? Layers : null;
                   return (
-                    <div key={p.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors">
-                      <div className={`w-2 h-10 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-400' : status === 'overdue' ? 'bg-red-400' : status === 'scheduled' ? 'bg-blue-400' : 'bg-amber-400'}`} />
+                    <div key={p.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/10 transition-colors">
+                      <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-400' : status === 'overdue' ? 'bg-red-400' : 'bg-amber-400'}`} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium truncate">{p.description}</p>
-                          {TypeIcon && <TypeIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <p className="text-sm truncate">{p.description}</p>
+                          {TypeIcon && <TypeIcon className="w-3 h-3 text-muted-foreground" />}
+                          {p.is_card_invoice_payable && <Badge className="bg-primary/10 text-primary border-none text-[9px] px-1 h-4">FATURA</Badge>}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           {p.due_date && (
-                            <span className="text-xs text-muted-foreground">
-                              Venc: {format(new Date(p.due_date.includes('T') ? p.due_date : p.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
+                              {format(new Date(p.due_date.includes('T') ? p.due_date : p.due_date + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
                             </span>
                           )}
-                          {p.category && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{CATEGORY_LABELS[p.category] || p.category}</Badge>}
-                          {p.installment_group_id && p.installment_number && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{p.installment_number}/{p.installment_count}</Badge>}
+                          {p.category && <Badge variant="outline" className="text-[9px] py-0 h-4 border-slate-200">{CATEGORY_LABELS[p.category] || p.category}</Badge>}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-semibold text-red-500">-{fmt(p.amount)}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[status] || STATUS_COLORS.pending}`}>
+                        <p className="text-sm font-bold text-red-500">-{fmt(p.amount)}</p>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${STATUS_COLORS[status] || STATUS_COLORS.pending}`}>
                           {STATUS_LABELS[status] || status}
                         </span>
                       </div>
-                      <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-500" onClick={() => setEditingPayable(p)}>
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      {status !== 'paid' && (
-                        <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingPayable(p)}>
-                          <CheckCircle2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {status === 'paid' && (
-                        <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500" onClick={() => undoPaymentMutation.mutate(p)}>
-                          <Undo2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => setDeletingPayable(p)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingPayable(p)}><Edit2 className="w-3.5 h-3.5" /></Button>
+                        {status !== 'paid' && <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => setConfirmingPayable(p)}><CheckCircle2 className="w-4 h-4" /></Button>}
+                        {status === 'paid' && <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500" onClick={() => undoPaymentMutation.mutate(p)}><Undo2 className="w-4 h-4" /></Button>}
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-500" onClick={() => setDeletingPayable(p)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -475,22 +460,16 @@ export default function Payables() {
       {deletingPayable && !deleteMode && (
         <AlertDialog open onOpenChange={() => setDeletingPayable(null)}>
           <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir "{deletingPayable.description}"?</AlertDialogTitle>
-              <AlertDialogDescription>Escolha como deseja proceder:</AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" onClick={() => setDeleteMode('this')}>
-                <div><p className="font-medium">Apenas este lançamento</p><p className="text-xs text-muted-foreground">Remove somente este</p></div>
+            <AlertDialogHeader><AlertDialogTitle>Excluir lançamento?</AlertDialogTitle></AlertDialogHeader>
+            <div className="space-y-2 py-4">
+              <Button variant="outline" className="w-full text-left justify-start h-auto p-3" onClick={() => setDeleteMode('this')}>
+                <div><p className="font-bold text-sm">Apenas este</p><p className="text-xs text-muted-foreground">Remove somente esta ocorrência.</p></div>
               </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setDeleteMode('forward')}>
-                <div><p className="font-medium">Daqui em diante</p><p className="text-xs text-muted-foreground">Mantém passados, remove futuros</p></div>
-              </Button>
-              <Button variant="outline" className="w-full justify-start text-red-500" onClick={() => setDeleteMode('all')}>
-                <div><p className="font-medium">Todos com mesmo nome</p><p className="text-xs text-muted-foreground">Deleta todos os lançamentos</p></div>
+              <Button variant="outline" className="w-full text-left justify-start h-auto p-3" onClick={() => setDeleteMode('all')}>
+                <div><p className="font-bold text-sm">Todos</p><p className="text-xs text-muted-foreground">Remove todas as repetições.</p></div>
               </Button>
             </div>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="w-full">Cancelar</AlertDialogCancel>
           </AlertDialogContent>
         </AlertDialog>
       )}
@@ -498,19 +477,10 @@ export default function Payables() {
       {deletingPayable && deleteMode && (
         <AlertDialog open onOpenChange={() => { setDeletingPayable(null); setDeleteMode(null); }}>
           <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-              <AlertDialogDescription>
-                {deleteMode === 'this' && `Remove apenas "${deletingPayable.description}"`}
-                {deleteMode === 'forward' && `Remove este e todos os futuros de "${deletingPayable.description}"`}
-                {deleteMode === 'all' && `Remove TODOS os lançamentos de "${deletingPayable.description}"`}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="flex gap-2">
+            <AlertDialogHeader><AlertDialogTitle>Confirmar exclusão?</AlertDialogTitle></AlertDialogHeader>
+            <div className="flex gap-2 mt-4">
               <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
-              <Button variant="destructive" className="flex-1" onClick={() => deletePayablesMutation.mutateAsync({ payable: deletingPayable, mode: deleteMode }).then(() => { setDeletingPayable(null); setDeleteMode(null); })} disabled={deletePayablesMutation.isPending}>
-                {deletePayablesMutation.isPending ? 'Removendo...' : 'Remover'}
-              </Button>
+              <Button variant="destructive" className="flex-1 font-bold" onClick={() => deletePayablesMutation.mutateAsync({ payable: deletingPayable, mode: deleteMode }).then(() => { setDeletingPayable(null); setDeleteMode(null); })}>EXCLUIR</Button>
             </div>
           </AlertDialogContent>
         </AlertDialog>

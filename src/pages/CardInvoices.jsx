@@ -23,21 +23,6 @@ const STATUS_CONFIG = {
   overdue: { label: 'Vencida',  color: 'bg-red-100 text-red-700',         icon: AlertCircle },
 };
 
-// Helper para pegar logo do banco automaticamente
-const getBankLogo = (bankName) => {
-  if (!bankName) return null;
-  const name = bankName.toLowerCase();
-  if (name.includes('itau')) return 'https://logo.clearbit.com/itau.com.br';
-  if (name.includes('bradesco')) return 'https://logo.clearbit.com/bradesco.com.br';
-  if (name.includes('nubank')) return 'https://logo.clearbit.com/nubank.com.br';
-  if (name.includes('santander')) return 'https://logo.clearbit.com/santander.com.br';
-  if (name.includes('inter')) return 'https://logo.clearbit.com/bancointer.com.br';
-  if (name.includes('btg')) return 'https://logo.clearbit.com/btgpactual.com';
-  if (name.includes('caixa')) return 'https://logo.clearbit.com/caixa.gov.br';
-  if (name.includes('brasil') || name.includes('bb')) return 'https://logo.clearbit.com/bb.com.br';
-  return null;
-};
-
 export default function CardInvoices() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [payingPayable, setPayingPayable] = useState(null);
@@ -101,14 +86,13 @@ export default function CardInvoices() {
           const existingInvoice = getInvoice(card.id);
           const invoiceStatus = existingInvoice?.status || (invoicePayable?.status === 'paid' ? 'paid' : null);
           const isExpanded = openItems[card.id];
-          const bankLogo = getBankLogo(card.bank);
 
           return (
             <Card key={card.id} className="border-0 shadow-sm overflow-hidden bg-white">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    {/* Botão Importar (Símbolo apenas) à esquerda da logo */}
+                    {/* Botão Importar (Ícone apenas) posicionado à esquerda */}
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -118,14 +102,9 @@ export default function CardInvoices() {
                       <Upload className="w-4 h-4" />
                     </Button>
 
-                    {/* Logo do Banco + Nome do Cartão */}
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg border flex items-center justify-center bg-white overflow-hidden shrink-0">
-                        {bankLogo ? (
-                          <img src={bankLogo} alt={card.bank} className="w-7 h-7 object-contain" />
-                        ) : (
-                          <CreditCard className="w-5 h-5 text-slate-400" />
-                        )}
+                      <div className="w-10 h-10 rounded-lg border flex items-center justify-center bg-slate-50 shrink-0">
+                        <CreditCard className="w-5 h-5 text-primary/70" />
                       </div>
                       <div>
                         <CardTitle className="text-base font-bold">{card.name}</CardTitle>
@@ -157,7 +136,7 @@ export default function CardInvoices() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {/* Ações rápidas */}
+                      {/* Ações Rápidas de Fatura */}
                       {!invoicePayable && items.length > 0 && (
                         <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-primary" onClick={() => generateMutation.mutate(card.id)}>
                           FECHAR FATURA
@@ -203,7 +182,7 @@ export default function CardInvoices() {
                       {invoicePayable && (
                         <div className="bg-white border rounded-xl p-4 flex items-center justify-between shadow-sm">
                           <div>
-                            <p className="text-[10px] font-black uppercase text-slate-400">Status Consolidado</p>
+                            <p className="text-[10px] font-black uppercase text-slate-400">Consolidado</p>
                             <p className="text-sm font-bold text-slate-700">{invoicePayable.description}</p>
                           </div>
                           <div className="text-right flex items-center gap-3">
@@ -225,7 +204,7 @@ export default function CardInvoices() {
         })}
       </div>
 
-      {/* Modais mantidos conforme original */}
+      {/* Modais */}
       {payingPayable && <ConfirmPayableModal payable={payingPayable} onClose={() => { setPayingPayable(null); queryClient.invalidateQueries(); }} />}
       {editingInvoiceItems && <EditInvoiceItemsModal items={editingInvoiceItems} onClose={() => setEditingInvoiceItems(null)} onSaved={() => queryClient.invalidateQueries()} />}
       {importingCard && <ImportInvoicePDFModal card={importingCard.card} refMonth={importingCard.refMonth} onClose={() => setImportingCard(null)} onImported={() => { queryClient.invalidateQueries(); setImportingCard(null); }} />}

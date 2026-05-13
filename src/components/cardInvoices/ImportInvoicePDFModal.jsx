@@ -252,7 +252,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
             <div className="bg-slate-900 p-5 rounded-2xl text-white shadow-2xl">
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400">Total Selecionado</p>
+                  <p className="text-[10px] font-black uppercase text-slate-400">Total Selecionado:</p>
                   <p className={`text-2xl font-black ${diffWithBank <= 0.1 ? 'text-emerald-400' : 'text-white'}`}>
                     {fmt(selectedTotal)}
                   </p>

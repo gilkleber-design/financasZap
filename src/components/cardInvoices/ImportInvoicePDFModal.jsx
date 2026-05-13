@@ -18,7 +18,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
   const [editingIdx, setEditingIdx] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [progress, setProgress] = useState(0);
-  const [integrityCheck, setIntegrityCheck] = useState(null);
+  const [invoiceTotalFromBank, setInvoiceTotalFromBank] = useState(0);
 
   const handleFile = async (file) => {
     if (!file || file.type !== 'application/pdf') return toast.error('Selecione um arquivo PDF');
@@ -44,18 +44,23 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       setProgress(100);
 
       if (!result || !result.items) throw new Error('IA não retornou dados válidos.');
+      
+      // Guarda o valor que o banco diz ser o total para comparar
+      setInvoiceTotalFromBank(result.integrity_check?.invoice_total || 0);
 
-      // Data de corte para evitar gastos do mês seguinte na fatura atual
       const dateLimit = endOfMonth(new Date(refMonth + '-01T12:00:00'));
       
       const extracted = (result.items || []).map((item, i) => {
         const desc = (item.description || '').toLowerCase();
         
-        // Garante que estornos e cancelamentos sejam valores negativos
-        const isNegative = item.amount < 0 || desc.includes('estorno') || desc.includes('cancelamento') || desc.includes('est pcls');
-        const finalAmount = isNegative ? -Math.abs(item.amount || 0) : Math.abs(item.amount || 0);
+        // REGRA 1: Forçar sinal negativo em estornos identificados por texto ou sinal
+        const isNegativeText = desc.includes('estorno') || desc.includes('cancelamento') || desc.includes('est pcls') || desc.includes('pagamento efetuado');
+        let finalAmount = Math.abs(item.amount || 0);
+        if (item.amount < 0 || isNegativeText) {
+          finalAmount = -Math.abs(finalAmount);
+        }
 
-        // Verifica se o item pertence à próxima fatura
+        // REGRA 2: Validar se o item pertence a esta fatura (Data de corte)
         let isFuture = false;
         if (item.date) {
             const parsedDate = parseISO(item.date);
@@ -68,13 +73,12 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
           ...item,
           amount: finalAmount,
           _id: i,
-          selected: !isFuture, // Desmarcado por padrão se for do mês seguinte
+          selected: !isFuture, // Desmarca automaticamente se for do mês seguinte
           is_future: isFuture
         };
       });
 
       setItems(extracted);
-      setIntegrityCheck(result.integrity_check || null);
       setStep('review');
 
     } catch (error) {
@@ -177,13 +181,15 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     return items.filter(it => it.selected).reduce((s, it) => s + (it.amount || 0), 0);
   }, [items]);
 
+  const diffWithBank = Math.abs(selectedTotal - invoiceTotalFromBank);
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto font-sora text-slate-800">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            Revisar Lançamentos — {card.name}
+            Conferência de Fatura — {card.name}
           </DialogTitle>
         </DialogHeader>
 
@@ -198,9 +204,9 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         )}
 
         {step === 'processing' && (
-          <div className="flex flex-col items-center gap-4 py-12">
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
-            <p className="text-sm font-black uppercase">A IA está lendo sua fatura...</p>
+            <p className="text-sm font-black uppercase tracking-tight">IA a calcular estornos e datas...</p>
             <div className="w-full max-w-xs h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} />
             </div>
@@ -209,12 +215,13 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
         {step === 'review' && (
           <div className="space-y-4">
-            {integrityCheck && (Math.abs(integrityCheck.diff) > 0.1) && (
-              <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            {diffWithBank > 0.1 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
                 <div className="text-[11px]">
-                  <p className="font-black text-red-700 uppercase">Divergência de Valores</p>
-                  <p className="text-red-600">Fatura: {fmt(integrityCheck.invoice_total)} | IA: {fmt(integrityCheck.total_extracted)}</p>
+                  <p className="font-black text-amber-700 uppercase">Atenção à Discrepância</p>
+                  <p className="text-amber-600">O total selecionado ({fmt(selectedTotal)}) difere do total do PDF ({fmt(invoiceTotalFromBank)}).</p>
+                  <p className="font-bold text-amber-800 mt-1">Dica: Desmarque itens de fevereiro ou verifique os estornos em verde.</p>
                 </div>
               </div>
             )}
@@ -224,41 +231,34 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                 <div key={idx} className={`flex items-center gap-3 px-4 py-3 transition-colors ${it.selected ? 'bg-white' : 'bg-slate-50/50 opacity-40'}`}>
                   <input type="checkbox" checked={it.selected} onChange={() => toggleItem(idx)} className="w-4 h-4 accent-primary" />
                   
-                  {editingIdx === idx ? (
-                    <div className="flex-1 flex gap-2">
-                        <Input value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="h-8 text-xs" />
-                        <Input type="number" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: e.target.value})} className="h-8 text-xs w-24" />
-                        <Button size="sm" className="h-8" onClick={() => saveEdit(idx)}><Check className="w-3 h-3"/></Button>
-                    </div>
-                  ) : (
-                    <>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <p className={`text-sm truncate font-bold uppercase ${it.amount < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                                    {it.amount < 0 && '[ESTORNO] '} {it.description}
-                                </p>
-                                {it.is_future && <Badge className="bg-amber-100 text-amber-700 text-[8px] h-4 font-black">PRÓX. FATURA</Badge>}
-                            </div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">{it.date} • {it.category}</p>
-                        </div>
-                        <span className={`text-sm font-black min-w-[90px] text-right ${it.amount < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {it.amount < 0 ? '+' : '-'} {fmt(Math.abs(it.amount))}
-                        </span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300" onClick={() => startEdit(idx)}><Edit2 className="w-3.5 h-3.5" /></Button>
-                    </>
-                  )}
+                  <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                          <p className={`text-sm truncate font-bold uppercase ${it.amount < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                              {it.description}
+                          </p>
+                          {it.is_future && <Badge className="bg-amber-100 text-amber-700 text-[8px] h-4 font-black">PRÓX. FATURA</Badge>}
+                          {it.amount < 0 && <Badge className="bg-emerald-100 text-emerald-700 text-[8px] h-4 font-black">ESTORNO</Badge>}
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">{it.date} • {it.category}</p>
+                  </div>
+                  <span className={`text-sm font-black min-w-[90px] text-right ${it.amount < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {it.amount < 0 ? '+' : '-'} {fmt(Math.abs(it.amount))}
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300" onClick={() => startEdit(idx)}><Edit2 className="w-3.5 h-3.5" /></Button>
                 </div>
               ))}
             </div>
 
-            <div className="bg-slate-900 p-5 rounded-2xl text-white">
+            <div className="bg-slate-900 p-5 rounded-2xl text-white shadow-2xl">
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-[10px] font-black uppercase text-slate-400">Total Selecionado</p>
-                  <p className="text-2xl font-black">{fmt(selectedTotal)}</p>
+                  <p className={`text-2xl font-black ${diffWithBank <= 0.1 ? 'text-emerald-400' : 'text-white'}`}>
+                    {fmt(selectedTotal)}
+                  </p>
                 </div>
                 <Button onClick={handleImport} disabled={saving || items.filter(i => i.selected).length === 0} className="bg-white text-slate-900 hover:bg-slate-100 font-black px-6 h-11">
-                  {saving ? 'SALVANDO...' : 'CONFIRMAR IMPORTAÇÃO'}
+                  {saving ? 'A PROCESSAR...' : 'CONFIRMAR IMPORTAÇÃO'}
                 </Button>
               </div>
             </div>
@@ -268,7 +268,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         {step === 'done' && (
           <div className="flex flex-col items-center gap-4 py-8 text-center">
             <CheckCircle2 className="w-16 h-16 text-emerald-500" />
-            <p className="text-lg font-black uppercase">Importação Concluída!</p>
+            <p className="text-lg font-black uppercase">Fatura Sincronizada!</p>
             <Button onClick={onClose} className="w-full h-12 font-bold bg-slate-900 text-white">CONCLUIR</Button>
           </div>
         )}

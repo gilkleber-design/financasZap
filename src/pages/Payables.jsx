@@ -311,17 +311,26 @@ export default function Payables() {
     if (p.is_card_invoice_payable && activeTab !== 'todas' && activeTab !== 'avulsas') return false;
 
     const status = getStatus(p);
-    if (filterStatus === 'open' && (status === 'paid' || status === 'provisioned')) return false;
-    if (filterStatus === 'overdue' && status !== 'overdue') return false;
-    if (filterStatus === 'paid' && status !== 'paid') return false;
-    if (filterStatus === 'provisioned' && status !== 'provisioned') return false;
 
+    // LÓGICA DE FILTRO DE STATUS
+    if (filterStatus === 'open') {
+        // Na aba "Em Aberto", mostramos tudo que não for pago ou provisionado.
+        if (status === 'paid' || status === 'provisioned') return false;
+    } else {
+        // Nos outros filtros, o status precisa bater exatamente.
+        if (filterStatus === 'overdue' && status !== 'overdue') return false;
+        if (filterStatus === 'paid' && status !== 'paid') return false;
+        if (filterStatus === 'provisioned' && status !== 'provisioned') return false;
+    }
+
+    // FILTRO DE DATA (MÊS)
     if (filterStatus === 'paid' || status === 'paid') {
       const payDate = paidDateMap[p.id] || p.due_date;
       if (!payDate) return false;
       const d = new Date(payDate.includes('T') ? payDate : payDate + 'T12:00:00');
       return d >= mStart && d <= mEnd;
     }
+
     const dateField = filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date;
     if (!dateField) return false;
     const d = new Date(dateField.includes('T') ? dateField : dateField + 'T12:00:00');
@@ -340,7 +349,7 @@ export default function Payables() {
   ];
 
   return (
-    <div className="p-6 space-y-6 font-sora">
+    <div className="p-6 space-y-6 font-sora text-slate-800">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Contas a Pagar</h1>
@@ -397,7 +406,7 @@ export default function Payables() {
             </div>
             {filterStatus !== 'paid' && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-bold">BASEAR EM:</span>
+                <span className="text-xs text-muted-foreground font-bold uppercase tracking-tight">Basear em:</span>
                 {['due_date', 'competencia'].map(fb => (
                   <Button key={fb} variant={filterBy === fb ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterBy(fb)} className="text-[10px] h-6 px-2">
                     {fb === 'due_date' ? 'VENCIMENTO' : 'COMPETÊNCIA'}
@@ -407,7 +416,7 @@ export default function Payables() {
             )}
           </div>
 
-          <Card className="border-0 shadow-sm">
+          <Card className="border-0 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               <div className="divide-y divide-border">
                 {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Tudo limpo por aqui.</p>}
@@ -419,7 +428,7 @@ export default function Payables() {
                       <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-400' : status === 'overdue' ? 'bg-red-400' : 'bg-amber-400'}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 font-bold">
-                          <p className="text-sm truncate">{p.description}</p>
+                          <p className="text-sm truncate text-slate-700">{p.description}</p>
                           {TypeIcon && <TypeIcon className="w-3 h-3 text-muted-foreground" />}
                           {p.is_card_invoice_payable && <Badge className="bg-primary/10 text-primary border-none text-[9px] px-1 h-4">FATURA</Badge>}
                         </div>
@@ -429,7 +438,7 @@ export default function Payables() {
                               {format(new Date(p.due_date.includes('T') ? p.due_date : p.due_date + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
                             </span>
                           )}
-                          {p.category && <Badge variant="outline" className="text-[9px] py-0 h-4 border-slate-200">{CATEGORY_LABELS[p.category] || p.category}</Badge>}
+                          {p.category && <Badge variant="outline" className="text-[9px] py-0 h-4 border-slate-200 uppercase font-black text-slate-400 tracking-wider">{CATEGORY_LABELS[p.category] || p.category}</Badge>}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">

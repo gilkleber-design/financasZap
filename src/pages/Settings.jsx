@@ -294,98 +294,112 @@ export default function Settings() {
               </Button>
             </div>
 
-            {showCardForm && (
-              <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-accent/20 mb-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <Label>Nome do Cartão *</Label>
-                    <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú Platinum" />
-                  </div>
-                  <div>
-                    <Label>Tipo</Label>
-                    <Select value={cardForm.type} onValueChange={v => setCard('type', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="credit">Crédito</SelectItem>
-                        <SelectItem value="debit">Débito</SelectItem>
-                        <SelectItem value="both">Crédito e Débito</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Banco</Label>
-                    <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú" />
-                  </div>
-                  {(cardForm.type === 'credit' || cardForm.type === 'both') && (
-                    <>
-                      <div>
-                        <Label>Dia de Fechamento</Label>
-                        <Input type="number" min={1} max={31} value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} className="mt-1" placeholder="Ex: 28" />
-                      </div>
-                      <div>
-                        <Label>Dia de Vencimento</Label>
-                        <Input type="number" min={1} max={31} value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} className="mt-1" placeholder="Ex: 7" />
-                      </div>
-                    </>
-                  )}
+          {showCardForm && (
+  <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-accent/20 mb-3">
+    <div className="grid grid-cols-2 gap-3">
+      <div className="col-span-2">
+        <Label>Nome do Cartão (Apelido) *</Label>
+        <Input value={cardForm.name} onChange={e => setCard('name', e.target.value)} className="mt-1" placeholder="Ex: Cartão da Mãe, Nubank Gil" />
+      </div>
 
-                  {/* Cartão Adicional */}
-                  <div className="col-span-2 flex items-center justify-between pt-1">
-                    <Label className="flex items-center gap-2 cursor-pointer">
-                      <CreditCard className="w-4 h-4 text-primary" />
-                      Cartão Adicional
-                    </Label>
-                    <Switch checked={cardForm.is_additional} onCheckedChange={v => setCard('is_additional', v)} />
-                  </div>
+      {/* NOVO CAMPO: Titular do Cartão */}
+      <div className="col-span-2">
+        <Label>Nome do Titular (Como está no cartão) *</Label>
+        <Input value={cardForm.holder_name} onChange={e => setCard('holder_name', e.target.value)} className="mt-1" placeholder="Ex: Maria José Kléber" />
+      </div>
 
-                  {cardForm.is_additional && (
-                    <div className="col-span-2">
-                      <Label>Cartão Principal *</Label>
-                      <Select value={cardForm.principal_card_id} onValueChange={v => setCard('principal_card_id', v)}>
-                        <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar cartão principal..." /></SelectTrigger>
-                        <SelectContent>
-                          {principalCards.map(pc => (
-                            <SelectItem key={pc.id} value={pc.id}>{pc.name} {pc.bank ? `(${pc.bank})` : ''}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground mt-1">Gastos deste cartão serão somados à fatura do cartão principal.</p>
-                    </div>
-                  )}
+      <div>
+        <Label>Tipo</Label>
+        <Select value={cardForm.type} onValueChange={v => setCard('type', v)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="credit">Crédito</SelectItem>
+            <SelectItem value="debit">Débito</SelectItem>
+            <SelectItem value="both">Crédito e Débito</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Banco</Label>
+        <Input value={cardForm.bank} onChange={e => setCard('bank', e.target.value)} className="mt-1" placeholder="Ex: Nubank, Itaú" />
+      </div>
 
-                  {/* Dono do cartão (admin) */}
-                  {currentUser?.role === 'admin' && members.length > 0 && (
-                    <div className="col-span-2">
-                      <Label>Atribuir a Membro</Label>
-                      <Select value={cardForm.assigned_user_id || '_none'} onValueChange={v => setCard('assigned_user_id', v === '_none' ? '' : v)}>
-                        <SelectTrigger className="mt-1"><SelectValue placeholder="Todos (sem filtro)" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">— Todos (sem filtro) —</SelectItem>
-                          {members.map(m => (
-                            <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
-                  <Button size="sm" onClick={() => {
-                    if (!cardForm.name) { toast.error('Informe o nome'); return; }
-                    if (cardForm.is_additional && !cardForm.principal_card_id) { toast.error('Selecione o cartão principal'); return; }
-                    createCardMutation.mutate({
-                      ...cardForm,
-                      closing_day: cardForm.closing_day ? parseInt(cardForm.closing_day) : undefined,
-                      due_day: cardForm.due_day ? parseInt(cardForm.due_day) : undefined,
-                      principal_card_id: cardForm.is_additional ? cardForm.principal_card_id : undefined,
-                      assigned_user_id: cardForm.assigned_user_id || undefined,
-                      active: true,
-                    });
-                  }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
-                </div>
-              </div>
-            )}
+      {/* Datas de Fatura */}
+      {(cardForm.type === 'credit' || cardForm.type === 'both') && (
+        <>
+          <div>
+            <Label>Dia de Fechamento</Label>
+            <Input type="number" min={1} max={31} value={cardForm.closing_day} onChange={e => setCard('closing_day', e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label>Dia de Vencimento</Label>
+            <Input type="number" min={1} max={31} value={cardForm.due_day} onChange={e => setCard('due_day', e.target.value)} className="mt-1" />
+          </div>
+        </>
+      )}
+
+      {/* Cartão Adicional Switch */}
+      <div className="col-span-2 flex items-center justify-between pt-1">
+        <Label className="flex items-center gap-2 cursor-pointer">
+          <CreditCard className="w-4 h-4 text-primary" />
+          Este é um Cartão Adicional?
+        </Label>
+        <Switch checked={cardForm.is_additional} onCheckedChange={v => setCard('is_additional', v)} />
+      </div>
+
+      {/* CAMPO CONDICIONAL: Só aparece se for Adicional */}
+      {cardForm.is_additional && (
+        <div className="col-span-2 bg-white/50 p-3 rounded-lg border border-dashed border-amber-200">
+          <Label>Vincular ao Cartão Principal *</Label>
+          <Select value={cardForm.principal_card_id} onValueChange={v => setCard('principal_card_id', v)}>
+            <SelectTrigger className="mt-1 bg-white"><SelectValue placeholder="Selecionar cartão titular..." /></SelectTrigger>
+            <SelectContent>
+              {/* Filtra apenas os que são principais de verdade */}
+              {allCards.filter(c => !c.is_additional).map(pc => (
+                <SelectItem key={pc.id} value={pc.id}>{pc.name} {pc.bank ? `(${pc.bank})` : ''}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-amber-700 mt-2 font-medium italic">
+            ⚠️ O pagamento desta fatura será consolidado automaticamente no cartão principal selecionado.
+          </p>
+        </div>
+      )}
+
+      {/* Dono da Conta no App (Atribuir a Membro) */}
+      {currentUser?.role === 'admin' && members.length > 0 && (
+        <div className="col-span-2 border-t pt-3 mt-1">
+          <Label>Atribuir Responsável no App (Quem vê os lançamentos)</Label>
+          <Select value={cardForm.assigned_user_id || '_none'} onValueChange={v => setCard('assigned_user_id', v === '_none' ? '' : v)}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">— Todos (sem filtro) —</SelectItem>
+              {members.map(m => (
+                <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+    
+    <div className="flex gap-2 mt-4">
+      <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
+      <Button size="sm" onClick={() => {
+        if (!cardForm.name || !cardForm.holder_name) { toast.error('Nome e Titular são obrigatórios'); return; }
+        if (cardForm.is_additional && !cardForm.principal_card_id) { toast.error('Selecione o cartão principal'); return; }
+        createCardMutation.mutate({
+          ...cardForm,
+          closing_day: cardForm.closing_day ? parseInt(cardForm.closing_day) : undefined,
+          due_day: cardForm.due_day ? parseInt(cardForm.due_day) : undefined,
+          principal_card_id: cardForm.is_additional ? cardForm.principal_card_id : undefined,
+          assigned_user_id: cardForm.assigned_user_id || undefined,
+          active: true,
+        });
+      }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
+    </div>
+  </div>
+)}
 
             {cards.length === 0 && !showCardForm && (
               <p className="text-sm text-muted-foreground text-center py-3">Nenhum cartão cadastrado.</p>

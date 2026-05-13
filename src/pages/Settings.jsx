@@ -436,7 +436,11 @@ export default function Settings() {
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-[10px] font-bold uppercase text-muted-foreground bg-white px-1 rounded border border-border">
-                    {c.holder_name || 'Titular ñ informado'}
+                   {c.holder_name && (
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground bg-white px-1.5 py-0.5 rounded border border-border">
+                      {c.holder_name}
+                    </span>
+                  )}
                   </span>
                   <Badge variant="outline" className="text-[10px] py-0 h-4 px-1.5 capitalize">{c.type}</Badge>
                   {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}

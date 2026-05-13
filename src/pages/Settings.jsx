@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,25 +11,49 @@ import { Switch } from '@/components/ui/switch';
 import { Plus, Trash2, Building2, MessageSquare, ExternalLink, CreditCard, Landmark, Tag } from 'lucide-react';
 import CategoryManager from '@/components/settings/CategoryManager';
 import CategoryRuleManager from '@/components/settings/CategoryRuleManager';
+import WorkspaceMembersPanel from '@/components/settings/WorkspaceMembersPanel';
 import { toast } from 'sonner';
 
 export default function Settings() {
   const queryClient = useQueryClient();
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    base44.auth.me().then(setCurrentUser).catch(() => {});
+  }, []);
+
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', type: 'pj', bank: '', default_tax_rate: '', notes: '' });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const [showCardForm, setShowCardForm] = useState(false);
-  const [cardForm, setCardForm] = useState({ name: '', type: 'credit', bank: '', closing_day: '', due_day: '' });
+  const [cardForm, setCardForm] = useState({
+    name: '', type: 'credit', bank: '', closing_day: '', due_day: '',
+    is_additional: false, principal_card_id: '', assigned_user_id: '',
+  });
   const setCard = (k, v) => setCardForm(p => ({ ...p, [k]: v }));
 
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [accountForm, setAccountForm] = useState({ name: '', type: 'corrente', bank: '' });
   const setAcc = (k, v) => setAccountForm(p => ({ ...p, [k]: v }));
 
-  const { data: cards = [] } = useQuery({
+  const { data: allCards = [] } = useQuery({
     queryKey: ['cards'],
     queryFn: () => base44.entities.Card.list(),
+  });
+
+  // Admin vê todos; user vê apenas os seus
+  const cards = currentUser?.role === 'admin'
+    ? allCards
+    : allCards.filter(c => !c.assigned_user_id || c.assigned_user_id === currentUser?.id);
+
+  // Cartões principais (não adicionais) para o select de "cartão principal"
+  const principalCards = allCards.filter(c => !c.is_additional);
+
+  const { data: members = [] } = useQuery({
+    queryKey: ['workspace_members'],
+    queryFn: () => base44.entities.User.list(),
+    enabled: currentUser?.role === 'admin',
   });
 
   const { data: accounts = [] } = useQuery({
@@ -60,7 +84,7 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries();
       setShowCardForm(false);
-      setCardForm({ name: '', type: 'credit', bank: '' });
+      setCardForm({ name: '', type: 'credit', bank: '', closing_day: '', due_day: '', is_additional: false, principal_card_id: '', assigned_user_id: '' });
       toast.success('Cartão adicionado!');
     },
     onError: (err) => {
@@ -102,8 +126,11 @@ export default function Settings() {
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-sora font-bold">Configurações</h1>
-        <p className="text-muted-foreground text-sm mt-1">Gerencie suas fontes de renda</p>
+        <p className="text-muted-foreground text-sm mt-1">Gerencie seu workspace</p>
       </div>
+
+      {/* Membros do Workspace — apenas admin */}
+      <WorkspaceMembersPanel currentUser={currentUser} />
 
       {/* Income Sources */}
       <Card className="border-0 shadow-sm">
@@ -301,15 +328,58 @@ export default function Settings() {
                       </div>
                     </>
                   )}
+
+                  {/* Cartão Adicional */}
+                  <div className="col-span-2 flex items-center justify-between pt-1">
+                    <Label className="flex items-center gap-2 cursor-pointer">
+                      <CreditCard className="w-4 h-4 text-primary" />
+                      Cartão Adicional
+                    </Label>
+                    <Switch checked={cardForm.is_additional} onCheckedChange={v => setCard('is_additional', v)} />
+                  </div>
+
+                  {cardForm.is_additional && (
+                    <div className="col-span-2">
+                      <Label>Cartão Principal *</Label>
+                      <Select value={cardForm.principal_card_id} onValueChange={v => setCard('principal_card_id', v)}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar cartão principal..." /></SelectTrigger>
+                        <SelectContent>
+                          {principalCards.map(pc => (
+                            <SelectItem key={pc.id} value={pc.id}>{pc.name} {pc.bank ? `(${pc.bank})` : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">Gastos deste cartão serão somados à fatura do cartão principal.</p>
+                    </div>
+                  )}
+
+                  {/* Dono do cartão (admin) */}
+                  {currentUser?.role === 'admin' && members.length > 0 && (
+                    <div className="col-span-2">
+                      <Label>Atribuir a Membro</Label>
+                      <Select value={cardForm.assigned_user_id || '_none'} onValueChange={v => setCard('assigned_user_id', v === '_none' ? '' : v)}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Todos (sem filtro)" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">— Todos (sem filtro) —</SelectItem>
+                          {members.map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowCardForm(false)} className="flex-1">Cancelar</Button>
                   <Button size="sm" onClick={() => {
                     if (!cardForm.name) { toast.error('Informe o nome'); return; }
+                    if (cardForm.is_additional && !cardForm.principal_card_id) { toast.error('Selecione o cartão principal'); return; }
                     createCardMutation.mutate({
                       ...cardForm,
                       closing_day: cardForm.closing_day ? parseInt(cardForm.closing_day) : undefined,
                       due_day: cardForm.due_day ? parseInt(cardForm.due_day) : undefined,
+                      principal_card_id: cardForm.is_additional ? cardForm.principal_card_id : undefined,
+                      assigned_user_id: cardForm.assigned_user_id || undefined,
                       active: true,
                     });
                   }} disabled={createCardMutation.isPending} className="flex-1">Salvar</Button>
@@ -320,29 +390,42 @@ export default function Settings() {
             {cards.length === 0 && !showCardForm && (
               <p className="text-sm text-muted-foreground text-center py-3">Nenhum cartão cadastrado.</p>
             )}
-            {cards.map(c => (
-              <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{c.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
-                        {c.type === 'credit' ? 'Crédito' : c.type === 'debit' ? 'Débito' : 'Crédito e Débito'}
-                      </Badge>
-                      {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}
-                      {c.closing_day && <span className="text-xs text-muted-foreground">Fecha dia {c.closing_day}</span>}
-                      {c.due_day && <span className="text-xs text-muted-foreground">Vence dia {c.due_day}</span>}
+            {cards.map(c => {
+              const principalName = c.is_additional && c.principal_card_id
+                ? allCards.find(pc => pc.id === c.principal_card_id)?.name
+                : null;
+              const assignedMember = c.assigned_user_id
+                ? members.find(m => m.id === c.assigned_user_id)
+                : null;
+              return (
+                <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border mb-2 ${c.is_additional ? 'bg-amber-50/50 border-amber-200 ml-4' : 'bg-muted/30 border-border'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.is_additional ? 'bg-amber-100 text-amber-600' : 'bg-primary/10 text-primary'}`}>
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">{c.name}</p>
+                        {c.is_additional && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300 py-0 h-4 px-1.5">Adicional</Badge>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">
+                          {c.type === 'credit' ? 'Crédito' : c.type === 'debit' ? 'Débito' : 'Crédito e Débito'}
+                        </Badge>
+                        {c.bank && <span className="text-xs text-muted-foreground">{c.bank}</span>}
+                        {c.closing_day && <span className="text-xs text-muted-foreground">Fecha dia {c.closing_day}</span>}
+                        {c.due_day && <span className="text-xs text-muted-foreground">Vence dia {c.due_day}</span>}
+                        {principalName && <span className="text-xs text-amber-600">→ {principalName}</span>}
+                        {assignedMember && <span className="text-xs text-blue-600">{assignedMember.full_name || assignedMember.email}</span>}
+                      </div>
                     </div>
                   </div>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteCardMutation.mutate(c.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-red-500" onClick={() => deleteCardMutation.mutate(c.id)}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
         </CardContent>

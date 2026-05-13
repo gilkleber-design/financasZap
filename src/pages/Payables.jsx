@@ -64,7 +64,7 @@ function RecurrencesTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground font-bold uppercase">{active.length} ativas</p>
+        <p className="text-sm text-muted-foreground font-bold uppercase">{recurrences.filter(r => r.active !== false).length} ativas</p>
         <Button size="sm" onClick={() => setShowForm(true)} className="font-bold">
           <Plus className="w-4 h-4 mr-1" /> Nova Fixa
         </Button>

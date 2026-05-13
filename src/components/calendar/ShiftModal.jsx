@@ -118,7 +118,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                 return (
                   <div key={s.id} className="flex items-center justify-between text-xs">
                     <span className="text-amber-800 font-medium">
-                      {h?.sigla} — {s.shift_kind === 'sobreaviso' ? '🍅 Sobreaviso' : `${s.type} (${s.shift_kind})`}
+                      {h?.sigla} — {s.shift_kind === 'sobreaviso' ? 'Sobreaviso' : `${s.type} (${s.shift_kind})`}
                       {' · '}
                       <span className="text-emerald-700">{fmt(liq)}</span>
                       {src?.default_tax_rate > 0 && <span className="text-muted-foreground ml-1">({fmt(s.valor)} bruto)</span>}
@@ -157,8 +157,8 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                    <SelectContent>
                      <SelectItem value="SD">SD (Diurno)</SelectItem>
                      <SelectItem value="SN">SN (Noturno)</SelectItem>
-                     <SelectItem value="turno">🔄 Turno (Meio período)</SelectItem>
-                     <SelectItem value="sobreaviso">🍅 Sobreaviso</SelectItem>
+                     <SelectItem value="turno">Turno (Meio período)</SelectItem>
+                     <SelectItem value="sobreaviso">Sobreaviso</SelectItem>
                    </SelectContent>
                  </Select>
                </div>
@@ -170,9 +170,9 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                 <Select value={shiftKind} onValueChange={setShiftKind}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="regular">🫐 Regular</SelectItem>
-                    <SelectItem value="extra">🍌 Extra</SelectItem>
-                    <SelectItem value="avista">💵 À Vista</SelectItem>
+                    <SelectItem value="regular">Regular</SelectItem>
+                    <SelectItem value="extra">Extra</SelectItem>
+                    <SelectItem value="avista">À Vista</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -209,7 +209,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
 
           {isAvista && hospital && (
             <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-xs text-green-700">
-              💵 Plantão à vista: um recebível será gerado imediatamente com vencimento no dia do plantão. Ele <strong>não entra</strong> no fechamento do mês.
+              Plantão à vista: um recebível será gerado imediatamente com vencimento no dia do plantão. Ele <strong>não entra</strong> no fechamento do mês.
             </div>
           )}
 

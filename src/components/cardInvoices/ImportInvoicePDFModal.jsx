@@ -40,7 +40,12 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
       let extracted = (result.items || []).map((item, i) => {
         const desc = (item.description || '').toLowerCase();
-        const isCredit = item.amount < 0 || desc.includes('estorno') || desc.includes('cancelamento') || desc.includes('est pcls') || desc.includes('pagamento efetuado');
+        
+        // 1. Identifica se é o Recibo de Pagamento da fatura passada
+        const isPayment = desc.includes('pagamento');
+
+        // 2. Identifica se é um Crédito/Estorno real (e garante que não é o pagamento)
+        const isCredit = !isPayment && (item.amount < 0 || desc.includes('estorno') || desc.includes('cancelamento') || desc.includes('cance lamento') || desc.includes('est pcls'));
         
         let finalAmount = Math.abs(item.amount || 0);
         if (isCredit) finalAmount = -Math.abs(finalAmount);
@@ -64,34 +69,33 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
           date_display: displayDate,
           sort_date: sortDate,
           _id: i,
-          selected: !isAfterClosing, 
+          selected: !isAfterClosing && !isPayment, // Desmarca se for futuro ou se for o pagamento anterior
           is_future: isAfterClosing,
-          is_credit: isCredit
+          is_credit: isCredit,
+          is_payment: isPayment
         };
       });
 
       extracted.sort((a, b) => compareAsc(a.sort_date, b.sort_date));
 
-      // --- A CAMADA DE REPARO CONTÁBIL ---
-      // 1. Calculamos quanto dá a soma inicial (apenas itens válidos do mês)
+      // --- CAMADA DE REPARO CONTÁBIL DE SEGURANÇA ---
       const initialTotal = extracted
-        .filter(it => !it.is_future)
+        .filter(it => !it.is_future && !it.is_payment)
         .reduce((acc, it) => acc + (it.amount || 0), 0);
       
-      // 2. Se a IA sumiu com estornos, a soma do app será MAIOR que a do banco.
-      // Precisamos injetar um item negativo (crédito) para compensar a falha da IA.
       const lostCreditsDiff = initialTotal - bankTotal;
 
-      if (lostCreditsDiff > 1) { // Se a diferença for maior que R$ 1,00
+      if (lostCreditsDiff > 1) { 
           extracted.unshift({
              _id: 'ajuste-ia',
-             description: 'ESTORNOS E CANCELAMENTOS NÃO DETECTADOS PELA IA',
+             description: 'ESTORNOS NÃO DETECTADOS PELA IA',
              amount: -Math.abs(lostCreditsDiff),
              date_display: 'Ajuste',
-             sort_date: new Date(0), // Fica no topo da lista
+             sort_date: new Date(0), 
              selected: true,
              is_future: false,
              is_credit: true,
+             is_payment: false,
              category: 'outros',
              is_adjustment: true
           });
@@ -167,7 +171,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         {step === 'processing' && (
           <div className="py-24 flex flex-col items-center gap-4 text-center">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Varrendo arquivo PDF e reparando falhas...</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filtrando pagamentos e sincronizando...</p>
           </div>
         )}
 
@@ -192,16 +196,18 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className={`text-xs font-bold uppercase truncate ${it.is_credit ? 'text-emerald-600' : 'text-slate-700'} ${it.is_adjustment ? 'text-emerald-700' : ''}`}>
+                      <p className={`text-xs font-bold uppercase truncate ${it.is_credit ? 'text-emerald-600' : 'text-slate-700'} ${it.is_payment ? 'text-blue-600' : ''} ${it.is_adjustment ? 'text-emerald-700' : ''}`}>
                          {it.description}
                       </p>
                       {it.is_future && <Badge className="bg-slate-200 text-slate-600 text-[7px] font-black border-none h-3.5 uppercase">Próx. Mês</Badge>}
+                      {it.is_credit && <Badge className="bg-emerald-100 text-emerald-700 text-[7px] font-black border-none h-3.5 uppercase">Estorno</Badge>}
+                      {it.is_payment && <Badge className="bg-blue-100 text-blue-700 text-[7px] font-black border-none h-3.5 uppercase">Pagto Anterior</Badge>}
                       {it.is_adjustment && <Badge className="bg-emerald-100 text-emerald-700 text-[7px] font-black border-none h-3.5 uppercase">Ajuste de IA</Badge>}
                     </div>
                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{it.date_display} • {it.category}</p>
                   </div>
-                  <span className={`text-xs font-black min-w-[90px] text-right ${it.is_credit ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {it.is_credit ? '+' : '-'} {fmt(Math.abs(it.amount))}
+                  <span className={`text-xs font-black min-w-[90px] text-right ${it.is_credit ? 'text-emerald-600' : 'text-red-600'} ${it.is_payment ? 'text-blue-600' : ''}`}>
+                    {it.is_credit || it.is_payment ? '+' : '-'} {fmt(Math.abs(it.amount))}
                   </span>
                 </div>
               ))}

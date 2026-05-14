@@ -1,33 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import * as pdfjsLib from 'npm:pdfjs-dist@4.4.168/legacy/build/pdf.mjs';
 
 async function extractTextFromPDF(buffer) {
-  const loadingTask = pdfjsLib.getDocument({ data: buffer, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true });
-  const pdf = await loadingTask.promise;
-  const allLines = [];
-
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const content = await page.getTextContent();
-
-    // Agrupa itens por linha (Y aproximado), ordena por X
-    const byY = {};
-    for (const item of content.items) {
-      if (!item.str) continue;
-      const y = Math.round(item.transform[5]);
-      if (!byY[y]) byY[y] = [];
-      byY[y].push({ x: item.transform[4], str: item.str });
-    }
-
-    const sortedYs = Object.keys(byY).map(Number).sort((a, b) => b - a);
-    for (const y of sortedYs) {
-      const lineItems = byY[y].sort((a, b) => a.x - b.x);
-      const lineStr = lineItems.map(it => it.str).join(' ').trim();
-      if (lineStr) allLines.push(lineStr);
-    }
-  }
-
-  return allLines.join('\n');
+  // Usa unpdf que é mais leve e compatível com Deno
+  const { extractText } = await import('npm:unpdf@0.11.0');
+  const { text } = await extractText(buffer, { mergePages: true });
+  return text;
 }
 
 function parseItauTransactions(text) {

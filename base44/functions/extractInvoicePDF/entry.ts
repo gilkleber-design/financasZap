@@ -20,7 +20,10 @@ function parseItauTransactions(raw) {
   const blockMatch = raw.match(/Lançamentos atuais[\s\S]*?(?=Compras parceladas|Resumo da fatura|Total desta fatura|$)/i);
   const block = blockMatch ? blockMatch[0] : raw;
 
-  console.log('--- BLOCO DE LANÇAMENTOS ---');
+  console.log('--- TEXTO COMPLETO (primeiros 5000 chars) ---');
+  console.log(raw.substring(0, 5000));
+  console.log('--- BLOCO ENCONTRADO:', !!blockMatch, 'tamanho:', block.length);
+  console.log('--- BLOCO (primeiros 3000) ---');
   console.log(block.substring(0, 3000));
 
   // Regex global para capturar: DD/MM DESCRIÇÃO [XX/YY] VALOR

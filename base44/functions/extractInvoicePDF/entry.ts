@@ -3,14 +3,13 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 async function extractTextFromPDF(buffer) {
   const { extractText } = await import('npm:unpdf@0.11.0');
   const result = await extractText(buffer, { mergePages: false });
-  console.log('--- RESULT KEYS:', Object.keys(result));
-  console.log('--- RESULT.text type:', typeof result.text, Array.isArray(result.text));
-  console.log('--- RESULT sample:', JSON.stringify(result).substring(0, 500));
-  const pages = result.text;
-  if (Array.isArray(pages)) {
-    return pages.join('\n');
-  }
-  return String(pages);
+  const pages = Array.isArray(result.text) ? result.text : [String(result.text)];
+  // Loga cada página separadamente para diagnóstico
+  pages.forEach((p, i) => {
+    console.log(`=== PÁGINA ${i + 1} (${p.length} chars) ===`);
+    console.log(p.substring(0, 2000));
+  });
+  return pages.join('\n--- PAGE BREAK ---\n');
 }
 
 function parseItauTransactions(raw) {

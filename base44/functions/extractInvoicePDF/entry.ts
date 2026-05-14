@@ -1,140 +1,113 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { extractText } from 'npm:unpdf';
 
-// ─── Itaú PDF parser — trabalha com texto condensado do Gemini ──────────────
-
-// Padrão Itaú condensado: "DD/MM ESTABELECIMENTO [XX/YY] VALOR CATEGORIA CIDADE"
-// Ex: "04/04 POSTO PARALELA ISALVADO 284,70 outros SALVADOR"
-// Ex: "25/08 AdaptaOrg 09/12 99,00 educacao Sao Paulo"
-
-function parseItauText(text) {
+function parseItauTransactions(text) {
   const items = [];
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // Regex principal: data + descrição + opcional parcela + valor
-  // Captura: date(DD/MM) | desc | [parcela XX/YY] | amount
-  const lineRe = /(\d{2}\/\d{2})\s+(.+?)\s+(?:(\d{2})\/(\d{2})\s+)?([\d.]+,\d{2})/g;
+  // DD/MM ... VALOR (positivo — negativos têm "-" e não batem)
+  const txPattern = /^(\d{2}\/\d{2})\s+(.*)\s+(\d[\d.]*,\d{2})$/;
+  // Parcela embutida no final do nome: "AdaptaOrg 09/12"
+  const installPattern = /^(.*?)\s+(\d{2})\/(\d{2})$/;
 
-  let match;
-  while ((match = lineRe.exec(text)) !== null) {
-    const [, date, rawDesc, instNum, instTotal, rawAmount] = match;
+  let inFutureInstallments = false;
+  let i = 0;
 
-    // Ignora linhas de totais/resumo
-    const descLower = rawDesc.toLowerCase();
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // A partir de "Compras parceladas" tudo é parcela futura — ignorar
+    if (/^Compras parceladas/.test(line)) { inFutureInstallments = true; i++; continue; }
+    if (inFutureInstallments) { i++; continue; }
+
+    // Cabeçalhos e linhas de resumo — ignorar
     if (
-      descLower.includes('pagamento') ||
-      descLower.includes('total') ||
-      descLower.includes('saldo') ||
-      descLower.includes('fatura anterior') ||
-      descLower.includes('vencimento') ||
-      descLower.includes('postagem') ||
-      descLower.includes('emissão') ||
-      descLower.includes('fechamento') ||
-      descLower.includes('previsão')
-    ) continue;
+      /^DATA\s+(ESTABELECIMENTO|PRODUTOS|VALOR)/.test(line) ||
+      /^Lançamentos/.test(line) ||
+      /^Pagamentos efetuados/.test(line) ||
+      /^Total/.test(line) ||
+      /^Resumo da fatura/.test(line) ||
+      /^continua\.\.\./.test(line) ||
+      /^GIL CRUZ$/.test(line)
+    ) { i++; continue; }
 
-    const amount = parseFloat(rawAmount.replace(/\./g, '').replace(',', '.'));
-    if (isNaN(amount) || amount === 0) continue;
+    const txMatch = line.match(txPattern);
+    if (txMatch) {
+      let [, date, middle, valueStr] = txMatch;
+      middle = middle.trim();
+      let installNumber = null;
+      let installTotal = null;
 
-    // Detecta se é negativo (pagamento/estorno) pelo contexto
-    // O Itaú não coloca sinal, mas "PAGAMENTO" já é filtrado acima
-    // Estornos têm "-" antes do valor no PDF, mas o Gemini pode não preservar
-    const isNegative = text.includes(`-${rawAmount}`) && 
-      text.indexOf(`-${rawAmount}`) === match.index + match[0].indexOf(rawAmount) - 1;
-
-    // Extrai categoria do texto após o valor (próximos ~50 chars)
-    const afterMatch = text.substring(match.index + match[0].length, match.index + match[0].length + 60);
-    const category = extractCategory(rawDesc + ' ' + afterMatch);
-
-    // Detecta parcela: pode vir no rawDesc "AdaptaOrg 09/12" ou nos grupos capturados
-    let installNumber = instNum ? parseInt(instNum, 10) : null;
-    let installTotal = instTotal ? parseInt(instTotal, 10) : null;
-    let cleanDesc = rawDesc.trim();
-
-    // Tenta também parcela embutida na descrição
-    if (!installNumber) {
-      const embeddedInstall = cleanDesc.match(/\s+(\d{2})\/(\d{2})\s*$/);
-      if (embeddedInstall) {
-        installNumber = parseInt(embeddedInstall[1], 10);
-        installTotal  = parseInt(embeddedInstall[2], 10);
-        cleanDesc = cleanDesc.replace(/\s+\d{2}\/\d{2}\s*$/, '').trim();
+      const instMatch = middle.match(installPattern);
+      if (instMatch) {
+        middle = instMatch[1].trim();
+        installNumber = parseInt(instMatch[2], 10);
+        installTotal = parseInt(instMatch[3], 10);
       }
+
+      const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
+      let category = 'outros';
+
+      // Linha seguinte começa com minúscula → é a linha de categoria
+      const nextLine = lines[i + 1] || '';
+      if (nextLine && nextLine[0] >= 'a' && nextLine[0] <= 'z') {
+        const spaceIdx = nextLine.indexOf(' ');
+        const rawCat = spaceIdx > 0 ? nextLine.substring(0, spaceIdx) : nextLine;
+        category = mapCategory(rawCat);
+        i++; // consome linha de categoria
+      }
+
+      const [day, month] = date.split('/');
+      items.push({
+        date_day: day,
+        date_month: month,
+        description: middle,
+        amount,
+        category,
+        installment_number: installNumber,
+        installment_total: installTotal,
+      });
     }
 
-    cleanDesc = sanitizeDesc(cleanDesc);
-
-    const [day, month] = date.split('/');
-    items.push({
-      date_day: day,
-      date_month: month,
-      description: cleanDesc,
-      amount: isNegative ? -amount : amount,
-      category,
-      installment_number: installNumber,
-      installment_total: installTotal,
-    });
+    i++;
   }
 
   return items;
 }
 
-function sanitizeDesc(desc) {
-  if (!desc) return desc;
-  // Remove sufixo cidade colado (Itaú trunca nome em ~23 chars e cola cidade no final)
-  let c = desc
-    .replace(/\s*(SAO PAULO|SALVADOR|GUARULHOS|CURITIBA|BARRETOS|CAMACARI|ITUPEVA|CORUMBATAI|LAURO DE FRE|SANTA BARBARA|BARRETO)[A-Z\s]*$/i, '')
-    .trim();
-  c = c.replace(/\s+BRA?$/i, '').trim();
-  // Remove sufixo colado sem espaço (ex: "ISALVADO" → "I", "DSALVADO" → "D")
-  // Padrão: palavra que termina com cidade colada sem espaço
-  c = c.replace(/(SALVA?DO?R?|SAOPAULO|GUARULH|CURITIB|BARRET|CAMACA)[A-Z]*$/i, '').trim();
-  // Une letras isoladas: "G I L" → "GIL"  
-  c = c.replace(/\b([A-Z])\s(?=[A-Z][\s$])/g, '$1');
-  // DL * → DL*
-  c = c.replace(/DL\s+\*/g, 'DL*');
-  return c;
-}
-
-function extractCategory(text) {
-  if (!text) return 'outros';
-  const t = text.toLowerCase();
-  if (t.includes('transporte') || t.includes('uber') || t.includes('posto')) return 'transporte';
-  if (t.includes('alimenta') || t.includes('supermercado') || t.includes('restaurante') || t.includes('hortifruti') || t.includes('lanche')) return 'alimentacao';
-  if (t.includes('saúde') || t.includes('saude') || t.includes('drogaria') || t.includes('farmácia') || t.includes('raia')) return 'saude';
-  if (t.includes('educa')) return 'educacao';
-  if (t.includes('lazer') || t.includes('zig')) return 'lazer';
-  if (t.includes('vestuár') || t.includes('vestuario') || t.includes('roupa')) return 'vestuario';
-  if (t.includes('serviç') || t.includes('servicos') || t.includes('serviços')) return 'servicos';
+function mapCategory(raw) {
+  const t = (raw || '').toLowerCase();
+  if (t === 'transporte') return 'transporte';
+  if (t === 'supermercado') return 'supermercado';
+  if (t === 'saúde' || t === 'saude') return 'saude';
+  if (t === 'educacao' || t === 'educação') return 'educacao';
+  if (t === 'lazer') return 'lazer';
+  if (t === 'vestuário' || t === 'vestuario') return 'vestuario';
+  if (t === 'serviços' || t === 'servicos') return 'servicos';
+  if (t === 'restaurante') return 'restaurante';
   return 'outros';
 }
-
-// ─── Handler principal ──────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const { file_url, ref_month } = await req.json();
 
-    // Extrai texto bruto do PDF via Gemini (retorna markdown/texto condensado)
-    const rawText = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      model: 'gemini_3_flash',
-      prompt: `Extraia o texto deste PDF de fatura de cartão de crédito Itaú exatamente como está, preservando datas, nomes de estabelecimentos, valores e categorias. Retorne como texto simples, cada informação separada por espaço na mesma linha. Formato esperado por transação: DD/MM ESTABELECIMENTO VALOR categoria CIDADE`,
-      file_urls: [file_url],
-    });
+    // Extrai texto direto do PDF — zero IA
+    const response = await fetch(file_url);
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    const { text } = await extractText(buffer, { mergePages: true });
 
-    const text = typeof rawText === 'string' ? rawText : JSON.stringify(rawText);
+    const parsed = parseItauTransactions(text);
 
-    // Parse baseado em regras
-    const parsed = parseItauText(text);
-
-    // Resolve ano: ref_month vem como "YYYY-MM"
     const [refYear, refMonthNum] = ref_month.split('-').map(Number);
 
     const items = parsed.map(item => {
       const itemMonth = parseInt(item.date_month, 10);
-      // Se mês do item > mês de referência, é do ano anterior (ex: compra em dez para fatura de jan)
       let year = refYear;
       if (itemMonth > refMonthNum) year = refYear - 1;
 
-      const dateStr = `${year}-${item.date_month.padStart(2,'0')}-${item.date_day.padStart(2,'0')}`;
+      const dateStr = `${year}-${item.date_month.padStart(2, '0')}-${item.date_day.padStart(2, '0')}`;
 
       return {
         description: item.description,
@@ -150,9 +123,9 @@ Deno.serve(async (req) => {
       .filter(it => it.amount > 0)
       .reduce((s, it) => s + it.amount, 0);
 
-    return Response.json({ 
-      items, 
-      integrity_check: { invoice_total: Math.round(invoice_total * 100) / 100 }
+    return Response.json({
+      items,
+      integrity_check: { invoice_total: Math.round(invoice_total * 100) / 100 },
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

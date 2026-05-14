@@ -31,10 +31,11 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         ref_month: refMonth,
       });
 
-      // 2. Mapeamento Automático
+      // 2. Mapeamento Automático (usa categoriesRef para garantir dados carregados)
+      const loadedCategories = await base44.entities.Category.list();
       const extracted = (data.items || []).map(item => {
         const aiCat = (item.category || '').toLowerCase();
-        const matchedCat = categories.find(c => c.name.toLowerCase().includes(aiCat) || aiCat.includes(c.name.toLowerCase()));
+        const matchedCat = loadedCategories.find(c => c.name.toLowerCase().includes(aiCat) || aiCat.includes(c.name.toLowerCase()));
 
         return {
           ...item,

@@ -102,11 +102,19 @@ function parseItauTransactions(raw, refMonth) {
   // Usamos busca global em todo o texto para não depender de linha única
   const txRegex = /(\d{2}\/\d{2})\s{2,}(.+?)\s{2,}(\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
 
+  // Normaliza o texto: remove espaços extras que o pdfjs insere em caracteres especiais
+  // Ex: "Lan  ç  amentos" → "Lançamentos"
+  const normalized = raw
+    .replace(/Lan\s*[cç]\s*amentos/gi, 'Lançamentos')
+    .replace(/\bs\s*[aá]\s*[uú]\s*de\b/gi, 'saúde')
+    .replace(/servi\s*[cç]\s*os/gi, 'serviços')
+    .replace(/vestu\s*[aá]\s*rio/gi, 'vestuário');
+
   // Extrai apenas os blocos de lançamentos (compras e saques), ignorando "próximas faturas"
-  const blockRegex = /Lan[cç]amentos[:\s]*compras e saques([\s\S]*?)(?=Lan[cç]amentos[:\s]*produtos|Compras parceladas|Lan[cç]amentos no cart)/gi;
+  const blockRegex = /Lançamentos[:\s]*compras e saques([\s\S]*?)(?=Lançamentos[:\s]*produtos|Compras parceladas|Lançamentos no cart)/gi;
   const blocks = [];
   let bm;
-  while ((bm = blockRegex.exec(raw)) !== null) blocks.push(bm[1]);
+  while ((bm = blockRegex.exec(normalized)) !== null) blocks.push(bm[1]);
   if (blocks.length === 0) return items;
 
   const block = blocks.join('\n');

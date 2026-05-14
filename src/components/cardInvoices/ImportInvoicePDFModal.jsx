@@ -30,28 +30,52 @@ async function extractTextFromPDF(file) {
   return pageTexts.join('\n--- PAGE BREAK ---\n');
 }
 
+// Mapeamento de categorias do Itaú para slugs internos
+const ITAU_CATEGORY_MAP = {
+  'educacao': 'educacao',
+  'transporte': 'transporte',
+  'saude': 'saude',
+  'supermercado': 'alimentacao',
+  'restaurante': 'alimentacao',
+  'vestuario': 'vestuario',
+  'lazer': 'lazer',
+  'servicos': 'servicos',
+  'outros': 'outros',
+};
+
 function parseItauTransactions(raw, refMonth) {
   const items = [];
-
-  const blockMatch = raw.match(/Lançamentos[:\s]+compras e saques[\s\S]*?(?=Próxima fatura|Limites de crédito|Encargos cobrados|$)/gi);
-  const block = blockMatch ? blockMatch.join('\n') : '';
-  if (!block) return items;
-
-  const txRegex = /^(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/gm;
-  const installRegex = /^(.*?)\s+(\d{2})\/(\d{2})$/;
-
   const [refYear, refMonthNum] = refMonth.split('-').map(Number);
 
-  let match;
-  while ((match = txRegex.exec(block)) !== null) {
-    let [, date, desc, valueStr] = match;
+  // Extrai todos os blocos de "Lançamentos: compras e saques"
+  // O separador de blocos é PAGE BREAK ou outra seção
+  const blockRegex = /Lan[cç]amentos[:\s]+compras e saques[\s\S]*?(?=Lan[cç]amentos[:\s]+produtos|Compras parceladas|Limites de cr[eé]dito|Encargos cobrados|$)/gi;
+  const blocks = [];
+  let bm;
+  while ((bm = blockRegex.exec(raw)) !== null) blocks.push(bm[0]);
+  if (blocks.length === 0) return items;
+
+  const block = blocks.join('\n');
+  const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // Linha de transação: começa com DD/MM, depois nome, depois valor
+  // Ex: "25/08  AdaptaOrg  09/12  99,00"  ou  "04/04  POSTO PARALELA ISALVADO  284,70"
+  const txLineRegex = /^(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(txLineRegex);
+    if (!m) continue;
+
+    let [, date, desc, valueStr] = m;
     desc = desc.trim();
 
-    if (/^(Total|Pagamento|Saldo|Encargo|IOF|DATA|VALOR|Lançamentos|Próxima)/i.test(desc)) continue;
+    // Pula cabeçalhos e pagamentos
+    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do)/i.test(desc)) continue;
 
+    // Detecta parcela no final da descrição: "Nome 09/12"
     let installNumber = null;
     let installTotal = null;
-    const instMatch = desc.match(installRegex);
+    const instMatch = desc.match(/^(.*?)\s+(\d{2})\/(\d{2})$/);
     if (instMatch) {
       desc = instMatch[1].trim();
       installNumber = parseInt(instMatch[2], 10);
@@ -63,8 +87,18 @@ function parseItauTransactions(raw, refMonth) {
     const itemMonth = parseInt(month, 10);
     let year = refYear;
     if (itemMonth > refMonthNum) year = refYear - 1;
-
     const dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+    // Linha seguinte pode ser "categoria cidade" — tenta capturar
+    let itauCategory = '';
+    if (i + 1 < lines.length) {
+      const nextLine = lines[i + 1];
+      // Se a próxima linha NÃO começa com data e NÃO é valor isolado, é categoria+cidade
+      if (!/^\d{2}\/\d{2}/.test(nextLine) && !/^\d{1,3}(?:\.\d{3})*,\d{2}$/.test(nextLine)) {
+        const catMatch = nextLine.match(/^([a-záéíóúâêîôûãõç]+(?:\s[a-záéíóúâêîôûãõç]+)?)/i);
+        if (catMatch) itauCategory = catMatch[1].toLowerCase();
+      }
+    }
 
     items.push({
       _id: Math.random().toString(36),
@@ -74,7 +108,8 @@ function parseItauTransactions(raw, refMonth) {
       date_display: `${day}/${month}`,
       installment_number: installNumber,
       installment_total: installTotal,
-      selected: !/pagamento/i.test(desc),
+      itau_category: itauCategory,
+      selected: true,
       category_id: '',
     });
   }

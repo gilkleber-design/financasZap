@@ -6,86 +6,52 @@ async function extractTextFromPDF(buffer) {
   return text;
 }
 
-// Quebra o texto corrido em tokens e remonta linhas no formato "DD/MM DESCRIÇÃO VALOR"
-function preprocessText(raw) {
-  // Insere quebra antes de cada padrão de data DD/MM
-  const withBreaks = raw.replace(/(\d{2}\/\d{2}(?=\s+[A-ZÁÉÍÓÚÃÕÂÊÔÇ]))/g, '\n$1');
-  return withBreaks;
-}
-
-function parseItauTransactions(text) {
+function parseItauTransactions(raw) {
   const items = [];
-  const processed = preprocessText(text);
-  const lines = processed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  const txPattern = /^(\d{2}\/\d{2})\s+(.*)\s+(\d[\d.]*,\d{2})$/;
-  const installPattern = /^(.*?)\s+(\d{2})\/(\d{2})$/;
+  // Extrai o bloco entre "Lançamentos atuais" e "Compras parceladas" / "Resumo da fatura" / "Total desta fatura"
+  const blockMatch = raw.match(/Lançamentos atuais[\s\S]*?(?=Compras parceladas|Resumo da fatura|Total desta fatura|$)/i);
+  const block = blockMatch ? blockMatch[0] : raw;
 
-  let inTransactions = false;
-  let inFutureInstallments = false;
-  let i = 0;
+  console.log('--- BLOCO DE LANÇAMENTOS ---');
+  console.log(block.substring(0, 3000));
 
-  while (i < lines.length) {
-    const line = lines[i];
+  // Regex global para capturar: DD/MM DESCRIÇÃO [XX/YY] VALOR
+  // Aceita letras, números, espaços, acentos, traços, pontos nas descrições
+  const txRegex = /(\d{2}\/\d{2})\s+([\wÀ-ÿ][\w\sÀ-ÿ.,'&\-*#@!()]+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})/g;
+  const installRegex = /^(.*?)\s+(\d{2})\/(\d{2})$/;
 
-    // Detecta início da seção de lançamentos
-    if (/Lançamentos atuais|lançamentos do período/i.test(line)) { inTransactions = true; i++; continue; }
-    // Detecta fim da seção (parcelas futuras ou resumo)
-    if (/Compras parceladas|próximas faturas|Resumo da fatura|Total desta fatura/i.test(line)) { inFutureInstallments = true; i++; continue; }
-    
-    if (!inTransactions || inFutureInstallments) { i++; continue; }
+  let match;
+  while ((match = txRegex.exec(block)) !== null) {
+    let [, date, desc, valueStr] = match;
+    desc = desc.trim();
 
-    if (
-      /^DATA\s+(ESTABELECIMENTO|PRODUTOS|VALOR)/i.test(line) ||
-      /^Pagamento efetuado/i.test(line) ||
-      /^Total/i.test(line) ||
-      /^continua\.\.\./i.test(line)
-    ) { i++; continue; }
+    // Ignora linhas de totais/pagamentos
+    if (/^(Total|Pagamento|Saldo|Encargo|IOF|Lançamentos)/i.test(desc)) continue;
 
-    const txMatch = line.match(txPattern);
-    if (txMatch) {
-      let [, date, middle, valueStr] = txMatch;
-      middle = middle.trim();
-      let installNumber = null;
-      let installTotal = null;
-
-      const instMatch = middle.match(installPattern);
-      if (instMatch) {
-        middle = instMatch[1].trim();
-        installNumber = parseInt(instMatch[2], 10);
-        installTotal = parseInt(instMatch[3], 10);
-      }
-
-      const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
-
-      const [day, month] = date.split('/');
-      items.push({
-        date_day: day,
-        date_month: month,
-        description: middle,
-        amount,
-        installment_number: installNumber,
-        installment_total: installTotal,
-      });
+    let installNumber = null;
+    let installTotal = null;
+    const instMatch = desc.match(installRegex);
+    if (instMatch) {
+      desc = instMatch[1].trim();
+      installNumber = parseInt(instMatch[2], 10);
+      installTotal = parseInt(instMatch[3], 10);
     }
 
-    i++;
+    const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
+    const [day, month] = date.split('/');
+
+    items.push({
+      date_day: day,
+      date_month: month,
+      description: desc,
+      amount,
+      installment_number: installNumber,
+      installment_total: installTotal,
+    });
   }
 
   return items;
-}
-
-function mapCategory(raw) {
-  const t = (raw || '').toLowerCase();
-  if (t === 'transporte') return 'transporte';
-  if (t === 'supermercado') return 'supermercado';
-  if (t === 'saúde' || t === 'saude') return 'saude';
-  if (t === 'educacao' || t === 'educação') return 'educacao';
-  if (t === 'lazer') return 'lazer';
-  if (t === 'vestuário' || t === 'vestuario') return 'vestuario';
-  if (t === 'serviços' || t === 'servicos') return 'servicos';
-  if (t === 'restaurante') return 'restaurante';
-  return 'outros';
 }
 
 Deno.serve(async (req) => {
@@ -98,6 +64,9 @@ Deno.serve(async (req) => {
     const text = await extractTextFromPDF(buffer);
 
     const parsed = parseItauTransactions(text);
+
+    console.log('--- PARSED ITEMS COUNT:', parsed.length);
+    parsed.forEach((it, i) => console.log(`  [${i}] ${it.date_day}/${it.date_month} | ${it.description} | ${it.amount}`));
 
     const [refYear, refMonthNum] = ref_month.split('-').map(Number);
 
@@ -112,7 +81,6 @@ Deno.serve(async (req) => {
         description: item.description,
         amount: item.amount,
         date: dateStr,
-        category: item.category,
         installment_number: item.installment_number,
         installment_total: item.installment_total,
       };
@@ -122,14 +90,10 @@ Deno.serve(async (req) => {
       .filter(it => it.amount > 0)
       .reduce((s, it) => s + it.amount, 0);
 
-    console.log('--- DEBUG TEXT COMPLETO ---');
-    console.log(text.substring(0, 4000));
-    console.log('--- PARSED ITEMS COUNT:', parsed.length);
-
     return Response.json({
       items,
       integrity_check: { invoice_total: Math.round(invoice_total * 100) / 100 },
-      debug_text: text.substring(0, 2000),
+      debug_text: text.substring(0, 3000),
     });
   } catch (error) {
     return Response.json({ error: error.message, stack: error.stack }, { status: 500 });

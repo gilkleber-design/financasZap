@@ -1,35 +1,45 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 async function extractTextFromPDF(buffer) {
-  // Usa unpdf que é mais leve e compatível com Deno
   const { extractText } = await import('npm:unpdf@0.11.0');
   const { text } = await extractText(buffer, { mergePages: true });
   return text;
 }
 
+// Quebra o texto corrido em tokens e remonta linhas no formato "DD/MM DESCRIÇÃO VALOR"
+function preprocessText(raw) {
+  // Insere quebra antes de cada padrão de data DD/MM
+  const withBreaks = raw.replace(/(\d{2}\/\d{2}(?=\s+[A-ZÁÉÍÓÚÃÕÂÊÔÇ]))/g, '\n$1');
+  return withBreaks;
+}
+
 function parseItauTransactions(text) {
   const items = [];
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const processed = preprocessText(text);
+  const lines = processed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
   const txPattern = /^(\d{2}\/\d{2})\s+(.*)\s+(\d[\d.]*,\d{2})$/;
   const installPattern = /^(.*?)\s+(\d{2})\/(\d{2})$/;
 
+  let inTransactions = false;
   let inFutureInstallments = false;
   let i = 0;
 
   while (i < lines.length) {
     const line = lines[i];
 
-    if (/^Compras parceladas/.test(line)) { inFutureInstallments = true; i++; continue; }
-    if (inFutureInstallments) { i++; continue; }
+    // Detecta início da seção de lançamentos
+    if (/Lançamentos atuais|lançamentos do período/i.test(line)) { inTransactions = true; i++; continue; }
+    // Detecta fim da seção (parcelas futuras ou resumo)
+    if (/Compras parceladas|próximas faturas|Resumo da fatura|Total desta fatura/i.test(line)) { inFutureInstallments = true; i++; continue; }
+    
+    if (!inTransactions || inFutureInstallments) { i++; continue; }
 
     if (
-      /^DATA\s+(ESTABELECIMENTO|PRODUTOS|VALOR)/.test(line) ||
-      /^Lançamentos/.test(line) ||
-      /^Pagamentos efetuados/.test(line) ||
-      /^Total/.test(line) ||
-      /^Resumo da fatura/.test(line) ||
-      /^continua\.\.\./.test(line)
+      /^DATA\s+(ESTABELECIMENTO|PRODUTOS|VALOR)/i.test(line) ||
+      /^Pagamento efetuado/i.test(line) ||
+      /^Total/i.test(line) ||
+      /^continua\.\.\./i.test(line)
     ) { i++; continue; }
 
     const txMatch = line.match(txPattern);
@@ -47,15 +57,6 @@ function parseItauTransactions(text) {
       }
 
       const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
-      let category = 'outros';
-
-      const nextLine = lines[i + 1] || '';
-      if (nextLine && nextLine[0] >= 'a' && nextLine[0] <= 'z') {
-        const spaceIdx = nextLine.indexOf(' ');
-        const rawCat = spaceIdx > 0 ? nextLine.substring(0, spaceIdx) : nextLine;
-        category = mapCategory(rawCat);
-        i++;
-      }
 
       const [day, month] = date.split('/');
       items.push({
@@ -63,7 +64,6 @@ function parseItauTransactions(text) {
         date_month: month,
         description: middle,
         amount,
-        category,
         installment_number: installNumber,
         installment_total: installTotal,
       });

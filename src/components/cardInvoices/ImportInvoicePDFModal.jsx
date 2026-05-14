@@ -104,9 +104,9 @@ function parseItauTransactions(raw, refMonth) {
   const [refYear, refMonthNum] = refMonth.split('-').map(Number);
 
   // Regex que encontra uma transação: DD/MM  NOME  VALOR
-  // - Entre data e nome: 1+ espaços (às vezes é só 1)
-  // - Entre nome e valor: 2+ espaços (separador de coluna PDF)
-  const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s{2,}(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
+  // Exclusões: linhas que começam com palavras-chave de cabeçalho/rodapé
+  const txRegex = /(\d{2}\/\d{2})\s+([^-\n]*?[A-Z0-9][^-\n]*?)\s{2,}(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
+  const skipPatterns = /^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total|Limite|Juros|Multa|IOF|Encargos|Novo teto|Credito|Esses|Caso|Fique|Os juros|Continua|Próxima|Demais|GIL|P\s|PAGAMENTO|Lançamentos|compras|saques|parceladas|Encargos|Limites|Anuidade|transporte|saúde|educacao|lazer|vestuario|servicos|restaurante|supermercado|outros|serviços|alimentacao|L\s|Subtotal|Descontos|Caixa|disponível|utilizado)/i;
 
   // Normaliza o texto: remove espaços extras que o pdfjs insere em caracteres especiais
   // Ex: "Lan  ç  amentos" → "Lançamentos"
@@ -153,10 +153,12 @@ function parseItauTransactions(raw, refMonth) {
   while ((m = txRegex.exec(block)) !== null) {
     const [, date, desc, valueStr] = m;
 
-    // Pula cabeçalhos e totais
-    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do|GIL |continua)/i.test(desc.trim())) continue;
+    // Pula cabeçalhos, categorias e totais
+    if (skipPatterns.test(desc.trim())) continue;
     // Pula valores negativos (pagamentos)
     if (valueStr.startsWith('-')) continue;
+    // Pula linhas muito curtas (ruído)
+    if (desc.trim().length < 3) continue;
 
     items.push(makePayable(date, desc, valueStr, refYear, refMonthNum));
   }

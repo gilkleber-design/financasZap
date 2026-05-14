@@ -27,11 +27,11 @@ async function extractTextFromPDF(buffer) {
     useSystemFonts: true,
   });
   const pdf = await loadingTask.promise;
-  const pageTexts = [];
+  const streamPages = [];
+  const rowPages = [];
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
     const rows = [];
 
@@ -42,24 +42,24 @@ async function extractTextFromPDF(buffer) {
       const x = Math.round(item.transform[4]);
       const y = Math.round(item.transform[5]);
       let row = rows.find(r => Math.abs(r.y - y) <= 3);
-
       if (!row) {
         row = { y, items: [] };
         rows.push(row);
       }
-
       row.items.push({ x, str });
     }
 
-    const pageText = rows
+    streamPages.push(content.items.map(item => String(item.str || '').trim()).filter(Boolean).join('\n'));
+    rowPages.push(rows
       .sort((a, b) => b.y - a.y)
-      .map(row => row.items.sort((a, b) => a.x - b.x).map(it => it.str).join('  '))
-      .join('\n');
-
-    pageTexts.push(pageText);
+      .map(row => row.items.sort((a, b) => a.x - b.x).map(it => it.str).join(' '))
+      .join('\n'));
   }
 
-  return normalizePdfText(pageTexts.join('\n--- PAGE BREAK ---\n'));
+  return {
+    streamText: normalizePdfText(streamPages.join('\n--- PAGE BREAK ---\n')),
+    rowText: normalizePdfText(rowPages.join('\n--- PAGE BREAK ---\n')),
+  };
 }
 
 function brlToNumber(value) {
@@ -84,24 +84,24 @@ function cleanDescription(description) {
 function parseItauTransactions(raw, refMonth) {
   const firstBlock = raw.search(/Lançamentos[:\s-]*(compras e saques|produtos e serviços)/i);
   const source = firstBlock >= 0 ? raw.slice(firstBlock) : raw;
-  const endIndex = source.search(/Total dos lan[çc]amentos atuais|Compras parceladas\s*-\s*pr[oó]ximas faturas|Pr[oó]xima fatura|Limites de cr[eé]dito|Encargos cobrados/i);
+  const endIndex = source.search(/Total dos lan[çc]amentos atuais|Compras parceladas\s*-\s*pr[oó]ximas faturas|Limites de cr[eé]dito|Encargos cobrados/i);
   const block = endIndex >= 0 ? source.slice(0, endIndex) : source;
 
   const skipDescription = /^(DATA|VALOR|ESTABELECIMENTO|TOTAL|SUBTOTAL|SALDO|LIMITE|JUROS|MULTA|IOF|ENCARGOS|LANÇAMENTOS|COMPRAS|SAQUES|PRODUTOS|SERVIÇOS|PRÓXIMA|ANUIDADE|DESCONTOS|CAIXA|DISPON[IÍ]VEL|UTILIZADO|CONTINUA)/i;
+  const categoryLine = /^(transporte|alimentacao|alimentação|sa[uú]de|educacao|educação|lazer|vestuario|vestuário|servicos|serviços|supermercado|restaurante|outros|farmacia|farmácia)\b/i;
   const paymentPattern = /\b(PAGAMENTO|PAGTO|PGTO|D[ÉE]BITO\s+AUTOM[ÁA]TICO|PAG\s+FATURA)\b/i;
   const reversalPattern = /\b(ESTORNO|CR[ÉE]DITO|CREDITO|DEVOLU[CÇ][AÃ]O|REEMBOLSO)\b/i;
+  const dateLine = /^\d{2}\/\d{2}$/;
+  const moneyLine = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$/;
   const items = [];
-  const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|\n|$)/g;
-  let match;
+  const seen = new Set();
+  const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
 
-  while ((match = txRegex.exec(block)) !== null) {
-    const dateToken = match[1];
-    let description = cleanDescription(match[2]);
-    const amountText = match[3];
-
-    if (!description || description.length < 3) continue;
-    if (skipDescription.test(description)) continue;
-    if (paymentPattern.test(description)) continue;
+  const addItem = (dateToken, rawDescription, amountText) => {
+    let description = cleanDescription(rawDescription);
+    if (!description || description.length < 3) return;
+    if (skipDescription.test(description)) return;
+    if (paymentPattern.test(description)) return;
 
     let parcelCurrent = null;
     let parcelTotal = null;
@@ -114,15 +114,34 @@ function parseItauTransactions(raw, refMonth) {
 
     const isReversal = reversalPattern.test(description) || amountText.startsWith('-');
     const amount = isReversal ? -Math.abs(brlToNumber(amountText)) : brlToNumber(amountText);
+    const date = resolveDate(dateToken, refMonth);
+    const key = `${date}|${description}|${amount}|${parcelCurrent || ''}|${parcelTotal || ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
 
     items.push({
-      date: resolveDate(dateToken, refMonth),
+      date,
       description,
       amount,
       is_reversal: isReversal,
       parcel_current: parcelCurrent,
       parcel_total: parcelTotal,
     });
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!dateLine.test(lines[i])) continue;
+    const dateToken = lines[i];
+    const desc = lines[i + 1] || '';
+    const amount = lines[i + 2] || '';
+    if (moneyLine.test(amount)) addItem(dateToken, desc, amount);
+  }
+
+  const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|\n|$)/g;
+  let match;
+  while ((match = txRegex.exec(block)) !== null) {
+    const description = match[2].split(/\n/).filter(line => !categoryLine.test(line.trim())).join(' ');
+    addItem(match[1], description, match[3]);
   }
 
   return items.sort((a, b) => {
@@ -175,12 +194,26 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'ref_month inválido' }, { status: 400 });
     }
 
-    const text = await extractTextFromPDF(buffer);
-    console.log('PDF TEXT DEBUG', text.slice(0, 5000));
-    const items = parseItauTransactions(text, refMonth);
-    console.log('ITEMS DEBUG', items.length);
+    const { streamText, rowText } = await extractTextFromPDF(buffer);
+    const items = [...parseItauTransactions(streamText, refMonth), ...parseItauTransactions(rowText, refMonth)];
+    const uniqueItems = [];
+    const seen = new Set();
 
-    return Response.json({ items });
+    for (const item of items) {
+      const key = `${item.date}|${item.description}|${item.amount}|${item.parcel_current || ''}|${item.parcel_total || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniqueItems.push(item);
+    }
+
+    uniqueItems.sort((a, b) => {
+      const byDate = a.date.localeCompare(b.date);
+      return byDate !== 0 ? byDate : a.description.localeCompare(b.description);
+    });
+
+    const extractedTotal = Number(uniqueItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2));
+
+    return Response.json({ extracted_total: extractedTotal, items: uniqueItems });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

@@ -104,8 +104,8 @@ function parseItauTransactions(raw, refMonth) {
   const [refYear, refMonthNum] = refMonth.split('-').map(Number);
 
   // Regex que encontra uma transação: DD/MM  NOME  VALOR
-  // Exclusões: linhas que começam com palavras-chave de cabeçalho/rodapé
-  const txRegex = /(\d{2}\/\d{2})\s+([^-\n]*?[A-Z0-9][^-\n]*?)\s{2,}(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
+  // Aceita hífens e qualquer caractere na descrição, desde que seguido por 2 espaços e um valor
+  const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s{2,}(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
   const skipPatterns = /^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total|Limite|Juros|Multa|IOF|Encargos|Novo teto|Credito|Esses|Caso|Fique|Os juros|Continua|Próxima|Demais|GIL|P\s|PAGAMENTO|Lançamentos|compras|saques|parceladas|Encargos|Limites|Anuidade|transporte|saúde|educacao|lazer|vestuario|servicos|restaurante|supermercado|outros|serviços|alimentacao|L\s|Subtotal|Descontos|Caixa|disponível|utilizado)/i;
 
   // Normaliza o texto: remove espaços extras que o pdfjs insere em caracteres especiais
@@ -122,32 +122,16 @@ function parseItauTransactions(raw, refMonth) {
     return items;
   }
 
-  // Extrai bloco de compras/saques: do início até o subtotal "Lançamentos no cart"
-  let block = normalized.replace(/^[\s\S]*?Lançamentos[:\s]*compras e saques/i, '');
-  block = block.replace(/Lançamentos no cart[\s\S]*/i, '');
-
-  // Extrai lançamentos de produtos/serviços: procura o padrão DD/MM ... VALOR
-  // em qualquer lugar após "PRODUTOS/serviços" até o fim do texto
-  const prodServIdx = normalized.search(/PRODUTOS\/servi[çc]os\s+VALOR/i);
-  if (prodServIdx !== -1) {
-    const remainingText = normalized.substring(prodServIdx);
-    console.log('=== PROD SERV RAW FULL ===\n', remainingText.substring(0, 2000));
-    // Procura por DD/MM seguido de espaços, descrição, espaços, e valor
-    const prodMatches = [];
-    const prodRegex = /(\d{2}\/\d{2})\s+(.+?)\s{2,}(\d{1,3}(?:\.\d{3})*,\d{2})/g;
-    let m;
-    while ((m = prodRegex.exec(remainingText)) !== null) {
-      prodMatches.push(m[0]);
-    }
-    console.log('=== PROD SERV EXTRACTED ===\n', prodMatches.join('\n'));
-    console.log('=== PROD SERV COUNT:', prodMatches.length);
-    // NÃO adiciona ao bloco - já estão em "Lançamentos compras e saques"
-    // block += '\n' + prodMatches.join('\n');
-  } else {
-    console.log('=== PROD SERV SECTION: NENHUMA ===');
+  // Extrai bloco principal: de "Lançamentos compras e saques" até os totais ou próximas faturas
+  let blockIdx = normalized.search(/Lançamentos[:\s]*compras e saques/i);
+  let block = blockIdx !== -1 ? normalized.substring(blockIdx) : normalized;
+  
+  const endIdx = block.search(/Total dos Lançamentos atuais|Compras parceladas\s*-\s*pr\s*[óo]\s*ximas faturas/i);
+  if (endIdx !== -1) {
+    block = block.substring(0, endIdx);
   }
 
-  console.log('=== BLOCK FULL (first 3000) ===\n', block.substring(0, 3000));
+  console.log('=== BLOCK EXTRACTED (first 3000) ===\n', block.substring(0, 3000));
 
   let m;
   while ((m = txRegex.exec(block)) !== null) {

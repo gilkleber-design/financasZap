@@ -150,7 +150,6 @@ function parseItauTransactions(raw, refMonth) {
   }
 
   console.log('=== SKIPPED ITEMS ===', JSON.stringify(skipped, null, 2));
-  console.log('=== ALL ITEMS ===', JSON.stringify(items.map(i => ({ date: i.date_display, desc: i.description, amount: i.amount })), null, 2));
   console.log('=== BLOCK FULL ===\n', block);
   return items;
 }

@@ -1,10 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-/**
- * Limpa espaços fantasmas (G I L -> GIL) e sufixos de cidades
- */
 function sanitizeDescription(desc) {
   if (!desc) return desc;
+  // Une letras separadas (G I L -> GIL)
   let cleaned = desc.replace(/([A-Z])\s(?=[A-Z]\s|[A-Z]$)/g, '$1'); 
   const geoSuffixes = [/\s*SAO PAULO\s*BRA?$/i, /\s*SALVADOR\s*BRA?$/i, /[A-Z]{3,}BRA$/, /\s+BRA$/i, /\s+BR$/i];
   cleaned = cleaned.trim();
@@ -19,14 +17,12 @@ Deno.serve(async (req) => {
 
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt: `Extraia os lançamentos desta fatura de cartão de crédito.
-      Referência da Fatura: ${ref_month}.
-      
-      REGRAS DE EXTRAÇÃO:
-      1. SÓ extraia se houver DATA (DD/MM) e VALOR. Ignore propagandas, limites e textos de ajuda.
-      2. RECONSTRUÇÃO: Una letras separadas por espaços (ex: "U B E R" vira "UBER").
-      3. PARCELAS: Identifique o padrão "01/10" ou semelhante. Retorne installment_number e installment_total.
-      4. SINAL: Compras são positivas. Estornos, créditos e "Pagamento Efetuado" devem ter amount NEGATIVO.
-      5. DATAS: Use o mês ${ref_month} para inferir o ano correto de cada DD/MM.`,
+      Referência: ${ref_month}.
+      REGRAS:
+      - Extraia DATA (DD/MM) e VALOR. Ignore propagandas e informativos.
+      - Una letras separadas por espaços.
+      - Identifique parcelas (ex: 01/10) para installment_number e installment_total.
+      - Estornos e Pagamentos da fatura anterior: amount NEGATIVO.`,
       file_urls: [file_url],
       response_json_schema: {
         type: 'object',

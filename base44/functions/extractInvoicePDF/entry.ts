@@ -1,32 +1,31 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 async function extractTextFromPDF(buffer) {
-  const { extractText } = await import('npm:unpdf@0.11.0');
-  const result = await extractText(buffer, { mergePages: false });
-  const pages = Array.isArray(result.text) ? result.text : [String(result.text)];
-  // Loga cada página separadamente para diagnóstico
-  pages.forEach((p, i) => {
-    console.log(`=== PÁGINA ${i + 1} (${p.length} chars) ===`);
-    console.log(p.substring(0, 2000));
-  });
-  return pages.join('\n--- PAGE BREAK ---\n');
+  const pdfjsLib = await import('npm:pdfjs-dist@4.4.168/legacy/build/pdf.mjs');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = false;
+
+  const loadingTask = pdfjsLib.getDocument({ data: buffer, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true });
+  const pdf = await loadingTask.promise;
+
+  const pageTexts = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(item => item.str).join('\n');
+    pageTexts.push(pageText);
+  }
+
+  return pageTexts.join('\n--- PAGE BREAK ---\n');
 }
 
 function parseItauTransactions(raw) {
   const items = [];
 
-  // Extrai apenas os blocos de lançamentos (páginas com "Lançamentos: compras e saques")
   const blockMatch = raw.match(/Lançamentos[:\s]+compras e saques[\s\S]*?(?=Próxima fatura|Limites de crédito|Encargos cobrados|$)/gi);
   const block = blockMatch ? blockMatch.join('\n') : '';
 
-  console.log('--- BLOCO LANÇAMENTOS (tamanho):', block.length);
-  console.log(block.substring(0, 2000));
-
   if (!block) return items;
 
-  // Formato Itaú: cada linha de transação = "DD/MM DESCRIÇÃO [PP/TT] VALOR"
-  // seguida de uma linha de categoria+cidade (ignorada)
-  // Regex: data | descrição (com opcional parcela XX/YY) | valor
   const txRegex = /^(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/gm;
   const installRegex = /^(.*?)\s+(\d{2})\/(\d{2})$/;
 
@@ -35,7 +34,6 @@ function parseItauTransactions(raw) {
     let [, date, desc, valueStr] = match;
     desc = desc.trim();
 
-    // Ignora linhas de totais/cabeçalhos
     if (/^(Total|Pagamento|Saldo|Encargo|IOF|DATA|VALOR|Lançamentos|Próxima)/i.test(desc)) continue;
 
     let installNumber = null;
@@ -74,9 +72,6 @@ Deno.serve(async (req) => {
 
     const parsed = parseItauTransactions(text);
 
-    console.log('--- PARSED ITEMS COUNT:', parsed.length);
-    parsed.forEach((it, i) => console.log(`  [${i}] ${it.date_day}/${it.date_month} | ${it.description} | ${it.amount}`));
-
     const [refYear, refMonthNum] = ref_month.split('-').map(Number);
 
     const items = parsed.map(item => {
@@ -102,7 +97,6 @@ Deno.serve(async (req) => {
     return Response.json({
       items,
       integrity_check: { invoice_total: Math.round(invoice_total * 100) / 100 },
-      debug_text: text.substring(0, 3000),
     });
   } catch (error) {
     return Response.json({ error: error.message, stack: error.stack }, { status: 500 });

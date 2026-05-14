@@ -155,6 +155,12 @@ function extractExpectedTotal(raw) {
   return match ? brlToNumber(match[1].replace(/\s+/g, '')) : null;
 }
 
+function isFinanceChargeItem(description) {
+  const text = description || '';
+  if (/REPASSE\s+DE\s+IOF/i.test(text)) return false;
+  return /\b(MULTA|JUROS\s+DE\s+MORA|JUROS\s+DO\s+ROTATIVO|ENCARGOS?\s+REFINANCIAMENT|ENCARGOS?\s+FINANCEIROS|IOF(?:\s+DE\s+FINANCIAMENTO)?)\b/i.test(text);
+}
+
 function parseItauTransactions(raw, refMonth) {
   const skipDescription = /^(DATA|VALOR|ESTABELECIMENTO|TOTAL|SUBTOTAL|SALDO|LIMITE|JUROS|MULTA|IOF|ENCARGOS|LANÇAMENTOS|COMPRAS|SAQUES|PRODUTOS|SERVIÇOS|PRÓXIMA|ANUIDADE|DESCONTOS|CAIXA|DISPON[IÍ]VEL|UTILIZADO|CONTINUA|PAGAMENTO)/i;
   const categoryLine = /^(transporte|alimentacao|alimentação|sa[uú]de|educacao|educação|lazer|vestuario|vestuário|servicos|serviços|supermercado|restaurante|outros|farmacia|farmácia)\b/i;
@@ -300,7 +306,7 @@ async function extractWithLLMFallback(base44, rawText, refMonth, expectedTotal, 
     is_reversal: !!item.is_reversal || Number(item.amount) < 0,
     parcel_current: item.parcel_current || null,
     parcel_total: item.parcel_total || null,
-  })).filter(item => item.date && item.description && Number.isFinite(item.amount));
+  })).filter(item => item.date && item.description && Number.isFinite(item.amount) && !isFinanceChargeItem(item.description));
 }
 
 async function getPayload(req) {

@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,12 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
   const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
 
+  // 1. Busca as categorias oficiais do banco
+  const { data: categories = [] } = useQuery({ 
+    queryKey: ['categories'], 
+    queryFn: () => base44.entities.Category.list() 
+  });
+
   const handleFile = async (file) => {
     setStep('processing');
     try {
@@ -24,12 +31,20 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         ref_month: refMonth,
       });
 
-      const extracted = (data.items || []).map(item => ({
-        ...item,
-        _id: Math.random().toString(36),
-        selected: !item.description.toLowerCase().includes('pagamento'),
-        date_display: item.date ? format(parseISO(item.date), 'dd/MM') : ''
-      }));
+      // 2. Mapeamento Automático
+      const extracted = (data.items || []).map(item => {
+        const aiCat = (item.category || '').toLowerCase();
+        const matchedCat = categories.find(c => c.name.toLowerCase().includes(aiCat) || aiCat.includes(c.name.toLowerCase()));
+
+        return {
+          ...item,
+          _id: Math.random().toString(36),
+          selected: !item.description.toLowerCase().includes('pagamento'),
+          date_display: item.date ? format(parseISO(item.date), 'dd/MM') : '',
+          category_id: matchedCat ? matchedCat.id : ''
+        };
+      });
+      
       setItems(extracted);
       setStep('review');
     } catch (error) {
@@ -50,25 +65,26 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     const selected = items.filter(it => it.selected);
     if (selected.length === 0) return toast.error('Nenhum item selecionado');
     setSaving(true);
+    
     try {
       const allPayables = [];
       selected.forEach(it => {
         const total = it.installment_total || 1;
         const current = it.installment_number || 1;
-        
-        // AQUI ESTÁ A CORREÇÃO QUE FALTAVA NO SEU CÓDIGO: Formata a data real da compra
         const originalDate = it.date ? format(parseISO(it.date), 'yyyy-MM-dd') + 'T12:00:00' : null;
         
         for (let i = 0; i <= (total - current); i++) {
           const mDate = addMonths(parseISO(refMonth + '-01'), i);
+          
+          // 4. Atualizar Payload com category_id
           allPayables.push({
             description: `${it.description} ${total > 1 ? `(parcela ${current + i}/${total})` : ''}`.trim(),
             amount: it.amount,
             due_date: format(mDate, 'yyyy-MM-dd') + 'T12:00:00',
             competencia: format(mDate, 'yyyy-MM-01'),
-            issue_date: originalDate, // SALVA A DATA DA COMPRA
-            purchase_date: originalDate, // SALVA A DATA DA COMPRA
-            category: it.category || 'outros',
+            issue_date: originalDate,
+            purchase_date: originalDate,
+            category_id: it.category_id || null, 
             origin_id: card.id,
             origin_type: 'card',
             status: 'provisioned'
@@ -81,7 +97,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
       onImported();
       onClose();
     } catch (e) {
-      toast.error('Erro ao salvar');
+      toast.error('Erro ao salvar no banco');
       setSaving(false);
     }
   };
@@ -113,7 +129,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         {step === 'processing' && (
           <div className="py-20 text-center space-y-4">
             <Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" />
-            <p className="font-black text-[10px] text-slate-400 uppercase">Processando dados...</p>
+            <p className="font-black text-[10px] text-slate-400 uppercase">Processando e categorizando...</p>
           </div>
         )}
 
@@ -139,7 +155,23 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                          </Badge>
                       )}
                     </div>
-                    <span className="text-[9px] font-black text-slate-400 uppercase">{it.date_display} • {it.category}</span>
+                    
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="text-[9px] font-black text-slate-400 uppercase">{it.date_display} •</span>
+                      
+                      {/* 3. Dropdown de Categorias */}
+                      <select
+                        className="bg-transparent border-none p-0 text-[9px] font-black text-slate-400 uppercase focus:ring-0 cursor-pointer hover:text-slate-600 w-auto"
+                        value={it.category_id || ''}
+                        onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, category_id: e.target.value} : x))}
+                      >
+                        <option value="">SEM CATEGORIA</option>
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
                   </div>
 
                   <input 

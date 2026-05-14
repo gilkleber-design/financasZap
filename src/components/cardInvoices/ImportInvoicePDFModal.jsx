@@ -28,7 +28,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         ...item,
         _id: Math.random().toString(36),
         selected: !item.description.toLowerCase().includes('pagamento'),
-        date_display: format(parseISO(item.date), 'dd/MM')
+        date_display: item.date ? format(parseISO(item.date), 'dd/MM') : ''
       }));
       setItems(extracted);
       setStep('review');
@@ -38,10 +38,7 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     }
   };
 
-  // --- FUNÇÕES DE EXCLUSÃO ---
-  const deleteItem = (id) => {
-    setItems(prev => prev.filter(it => it._id !== id));
-  };
+  const deleteItem = (id) => setItems(prev => prev.filter(it => it._id !== id));
 
   const clearInvoice = () => {
     setItems([]);
@@ -59,6 +56,9 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
         const total = it.installment_total || 1;
         const current = it.installment_number || 1;
         
+        // AQUI ESTÁ A CORREÇÃO QUE FALTAVA NO SEU CÓDIGO: Formata a data real da compra
+        const originalDate = it.date ? format(parseISO(it.date), 'yyyy-MM-dd') + 'T12:00:00' : null;
+        
         for (let i = 0; i <= (total - current); i++) {
           const mDate = addMonths(parseISO(refMonth + '-01'), i);
           allPayables.push({
@@ -66,6 +66,8 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
             amount: it.amount,
             due_date: format(mDate, 'yyyy-MM-dd') + 'T12:00:00',
             competencia: format(mDate, 'yyyy-MM-01'),
+            issue_date: originalDate, // SALVA A DATA DA COMPRA
+            purchase_date: originalDate, // SALVA A DATA DA COMPRA
             category: it.category || 'outros',
             origin_id: card.id,
             origin_type: 'card',
@@ -140,15 +142,13 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
                     <span className="text-[9px] font-black text-slate-400 uppercase">{it.date_display} • {it.category}</span>
                   </div>
 
-                  {/* Valor sem setas de número */}
                   <input 
                     type="text" 
-                    className="w-20 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700"
+                    className="w-20 bg-transparent border-none p-0 text-right text-xs font-black focus:ring-0 text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     value={it.amount} 
                     onChange={(e) => setItems(items.map(x => x._id === it._id ? {...x, amount: parseFloat(e.target.value) || 0} : x))} 
                   />
 
-                  {/* Lixo individual sempre visível */}
                   <button onClick={() => deleteItem(it._id)} className="text-slate-300 hover:text-red-500 p-2 transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>

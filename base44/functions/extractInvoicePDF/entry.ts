@@ -384,7 +384,7 @@ Deno.serve(async (req) => {
     let extractedTotal = Number(uniqueItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2));
     let finalItems = uniqueItems;
 
-    if (expectedTotal && Math.abs(extractedTotal - expectedTotal) > 1) {
+    if (false && expectedTotal && Math.abs(extractedTotal - expectedTotal) > 1) {
       const fallbackItems = await extractWithLLMFallback(base44, streamText, refMonth, expectedTotal, fileUrl);
       const fallbackTotal = Number(fallbackItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2));
       if (fallbackItems.length > 0 && Math.abs(fallbackTotal - expectedTotal) < Math.abs(extractedTotal - expectedTotal)) {

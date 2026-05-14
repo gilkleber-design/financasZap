@@ -1,13 +1,40 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import { extractText } from 'npm:unpdf';
+import * as pdfjsLib from 'npm:pdfjs-dist@4.4.168/legacy/build/pdf.mjs';
+
+async function extractTextFromPDF(buffer) {
+  const loadingTask = pdfjsLib.getDocument({ data: buffer, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true });
+  const pdf = await loadingTask.promise;
+  const allLines = [];
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+
+    // Agrupa itens por linha (Y aproximado), ordena por X
+    const byY = {};
+    for (const item of content.items) {
+      if (!item.str) continue;
+      const y = Math.round(item.transform[5]);
+      if (!byY[y]) byY[y] = [];
+      byY[y].push({ x: item.transform[4], str: item.str });
+    }
+
+    const sortedYs = Object.keys(byY).map(Number).sort((a, b) => b - a);
+    for (const y of sortedYs) {
+      const lineItems = byY[y].sort((a, b) => a.x - b.x);
+      const lineStr = lineItems.map(it => it.str).join(' ').trim();
+      if (lineStr) allLines.push(lineStr);
+    }
+  }
+
+  return allLines.join('\n');
+}
 
 function parseItauTransactions(text) {
   const items = [];
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // DD/MM ... VALOR (positivo — negativos têm "-" e não batem)
   const txPattern = /^(\d{2}\/\d{2})\s+(.*)\s+(\d[\d.]*,\d{2})$/;
-  // Parcela embutida no final do nome: "AdaptaOrg 09/12"
   const installPattern = /^(.*?)\s+(\d{2})\/(\d{2})$/;
 
   let inFutureInstallments = false;
@@ -16,19 +43,16 @@ function parseItauTransactions(text) {
   while (i < lines.length) {
     const line = lines[i];
 
-    // A partir de "Compras parceladas" tudo é parcela futura — ignorar
     if (/^Compras parceladas/.test(line)) { inFutureInstallments = true; i++; continue; }
     if (inFutureInstallments) { i++; continue; }
 
-    // Cabeçalhos e linhas de resumo — ignorar
     if (
       /^DATA\s+(ESTABELECIMENTO|PRODUTOS|VALOR)/.test(line) ||
       /^Lançamentos/.test(line) ||
       /^Pagamentos efetuados/.test(line) ||
       /^Total/.test(line) ||
       /^Resumo da fatura/.test(line) ||
-      /^continua\.\.\./.test(line) ||
-      /^GIL CRUZ$/.test(line)
+      /^continua\.\.\./.test(line)
     ) { i++; continue; }
 
     const txMatch = line.match(txPattern);
@@ -48,13 +72,12 @@ function parseItauTransactions(text) {
       const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
       let category = 'outros';
 
-      // Linha seguinte começa com minúscula → é a linha de categoria
       const nextLine = lines[i + 1] || '';
       if (nextLine && nextLine[0] >= 'a' && nextLine[0] <= 'z') {
         const spaceIdx = nextLine.indexOf(' ');
         const rawCat = spaceIdx > 0 ? nextLine.substring(0, spaceIdx) : nextLine;
         category = mapCategory(rawCat);
-        i++; // consome linha de categoria
+        i++;
       }
 
       const [day, month] = date.split('/');
@@ -93,10 +116,9 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const { file_url, ref_month } = await req.json();
 
-    // Extrai texto direto do PDF — zero IA
     const response = await fetch(file_url);
     const buffer = new Uint8Array(await response.arrayBuffer());
-    const { text } = await extractText(buffer, { mergePages: true });
+    const text = await extractTextFromPDF(buffer);
 
     const parsed = parseItauTransactions(text);
 
@@ -126,8 +148,9 @@ Deno.serve(async (req) => {
     return Response.json({
       items,
       integrity_check: { invoice_total: Math.round(invoice_total * 100) / 100 },
+      debug_text: text.substring(0, 500),
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
   }
 });

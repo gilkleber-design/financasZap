@@ -132,6 +132,7 @@ function parseItauTransactions(raw, refMonth) {
   if (prodServSection) {
     // Extrai o padrão DD/MM <desc> VALOR diretamente da seção (ignora coluna esquerda)
     const prodText = prodServSection[1];
+    console.log('=== PROD SERV RAW FULL ===\n', prodText);
     // Procura por DD/MM seguido de espaços, descrição, espaços, e valor
     const prodMatches = [];
     const prodRegex = /(\d{2}\/\d{2})\s+(.+?)\s{2,}(\d{1,3}(?:\.\d{3})*,\d{2})/g;
@@ -140,6 +141,7 @@ function parseItauTransactions(raw, refMonth) {
       prodMatches.push(m[0]);
     }
     console.log('=== PROD SERV EXTRACTED ===\n', prodMatches.join('\n'));
+    console.log('=== PROD SERV COUNT:', prodMatches.length);
     block += '\n' + prodMatches.join('\n');
   } else {
     console.log('=== PROD SERV SECTION: NENHUMA ===');

@@ -141,7 +141,8 @@ function parseItauTransactions(raw, refMonth) {
     }
     console.log('=== PROD SERV EXTRACTED ===\n', prodMatches.join('\n'));
     console.log('=== PROD SERV COUNT:', prodMatches.length);
-    block += '\n' + prodMatches.join('\n');
+    // NÃO adiciona ao bloco - já estão em "Lançamentos compras e saques"
+    // block += '\n' + prodMatches.join('\n');
   } else {
     console.log('=== PROD SERV SECTION: NENHUMA ===');
   }

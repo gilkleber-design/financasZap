@@ -77,8 +77,38 @@ function resolveDate(date, refMonth) {
 function cleanDescription(description) {
   return description
     .replace(/\s+(transporte|alimentacao|alimentação|sa[uú]de|educacao|educação|lazer|vestuario|vestuário|servicos|serviços|supermercado|restaurante|outros|farmacia|farmácia)\s+\S+$/i, '')
+    .replace(/\b(MAIS\s+DETALHES|DETALHES|VER\s+MAIS)\b/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+function descriptionFingerprint(description) {
+  return String(description || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(MAIS\s+DETALHES|DETALHES|VER\s+MAIS)\b/gi, '')
+    .replace(/[^A-Z0-9]/gi, '')
+    .replace(/^DL/, '')
+    .toUpperCase();
+}
+
+function isSameTransaction(a, b) {
+  if (a.date !== b.date || a.amount !== b.amount) return false;
+  if ((a.parcel_current || '') !== (b.parcel_current || '')) return false;
+  if ((a.parcel_total || '') !== (b.parcel_total || '')) return false;
+
+  const aDesc = descriptionFingerprint(a.description);
+  const bDesc = descriptionFingerprint(b.description);
+  return aDesc === bDesc || aDesc.includes(bDesc) || bDesc.includes(aDesc);
+}
+
+function isLikelyDescription(line) {
+  if (!line || line.length < 3) return false;
+  if (/^\d{2}\/\d{2}$/.test(line)) return false;
+  if (/^-?\d{1,3}(?:\.\d{3})*,\d{2}$/.test(line)) return false;
+  if (/^(DATA|VALOR|ESTABELECIMENTO|TOTAL|SUBTOTAL|SALDO|LIMITE|JUROS|MULTA|IOF|ENCARGOS|LANÇAMENTOS|COMPRAS|SAQUES|PRODUTOS|SERVIÇOS|PRÓXIMA|ANUIDADE|DESCONTOS|CAIXA|DISPON[IÍ]VEL|UTILIZADO|CONTINUA)$/i.test(line)) return false;
+  if (/^(transporte|alimentacao|alimentação|sa[uú]de|educacao|educação|lazer|vestuario|vestuário|servicos|serviços|supermercado|restaurante|outros|farmacia|farmácia)\b/i.test(line)) return false;
+  return /[A-Za-zÀ-ÿ]/.test(line);
 }
 
 function parseItauTransactions(raw, refMonth) {
@@ -115,7 +145,7 @@ function parseItauTransactions(raw, refMonth) {
     const isReversal = reversalPattern.test(description) || amountText.startsWith('-');
     const amount = isReversal ? -Math.abs(brlToNumber(amountText)) : brlToNumber(amountText);
     const date = resolveDate(dateToken, refMonth);
-    const key = `${date}|${description}|${amount}|${parcelCurrent || ''}|${parcelTotal || ''}`;
+    const key = `${date}|${descriptionFingerprint(description)}|${amount}|${parcelCurrent || ''}|${parcelTotal || ''}`;
     if (seen.has(key)) return;
     seen.add(key);
 
@@ -132,9 +162,25 @@ function parseItauTransactions(raw, refMonth) {
   for (let i = 0; i < lines.length; i++) {
     if (!dateLine.test(lines[i])) continue;
     const dateToken = lines[i];
-    const desc = lines[i + 1] || '';
-    const amount = lines[i + 2] || '';
-    if (moneyLine.test(amount)) addItem(dateToken, desc, amount);
+    const descParts = [];
+    let amount = '';
+
+    for (let j = i + 1; j < Math.min(lines.length, i + 8); j++) {
+      if (dateLine.test(lines[j])) break;
+      if (moneyLine.test(lines[j])) {
+        amount = lines[j];
+        break;
+      }
+      if (isLikelyDescription(lines[j])) descParts.push(lines[j]);
+    }
+
+    if (amount && descParts.length) addItem(dateToken, descParts.join(' '), amount);
+  }
+
+  const inlineRegex = /(\d{2}\/\d{2})\s+([^\n]+?)(?:\s+(-?\d{1,3}(?:\.\d{3})*,\d{2}))/g;
+  let inlineMatch;
+  while ((inlineMatch = inlineRegex.exec(block)) !== null) {
+    addItem(inlineMatch[1], inlineMatch[2], inlineMatch[3]);
   }
 
   const txRegex = /(\d{2}\/\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|\n|$)/g;
@@ -197,12 +243,15 @@ Deno.serve(async (req) => {
     const { streamText, rowText } = await extractTextFromPDF(buffer);
     const items = [...parseItauTransactions(streamText, refMonth), ...parseItauTransactions(rowText, refMonth)];
     const uniqueItems = [];
-    const seen = new Set();
 
     for (const item of items) {
-      const key = `${item.date}|${item.description}|${item.amount}|${item.parcel_current || ''}|${item.parcel_total || ''}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const existingIndex = uniqueItems.findIndex(existing => isSameTransaction(existing, item));
+      if (existingIndex >= 0) {
+        if (item.description.length > uniqueItems[existingIndex].description.length) {
+          uniqueItems[existingIndex] = item;
+        }
+        continue;
+      }
       uniqueItems.push(item);
     }
 

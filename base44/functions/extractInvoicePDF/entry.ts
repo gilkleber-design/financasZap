@@ -2,9 +2,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 async function extractTextFromPDF(buffer) {
   const { extractText } = await import('npm:unpdf@0.11.0');
-  // Extrai página por página e concatena tudo
   const result = await extractText(buffer, { mergePages: false });
-  const pages = result.text; // array de strings quando mergePages=false
+  console.log('--- RESULT KEYS:', Object.keys(result));
+  console.log('--- RESULT.text type:', typeof result.text, Array.isArray(result.text));
+  console.log('--- RESULT sample:', JSON.stringify(result).substring(0, 500));
+  const pages = result.text;
   if (Array.isArray(pages)) {
     return pages.join('\n');
   }

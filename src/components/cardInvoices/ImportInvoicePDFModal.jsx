@@ -127,10 +127,11 @@ function parseItauTransactions(raw, refMonth) {
   block = block.replace(/(?:Lançamentos no cart|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)[\s\S]*/i, '');
 
   // Extrai bloco de produtos/serviços (lançamentos atuais adicionais) se existir
-  const prodServMatch = normalized.match(/Lançamentos[:\s]*produtos e servi[çc]os([\s\S]*?)(?:Lançamentos produtos|Lançamentos no cart|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)/i);
+  const prodServMatch = normalized.match(/Lançamentos[:\s]*produtos e servi[çc]os([\s\S]*?)(?:Lançamentos produtos e servi|Compras parceladas|Encargos cobrados|Limites de cr[eé]dito|Pr[oó]xima fatura)/i);
   if (prodServMatch) block += '\n' + prodServMatch[1];
 
   console.log('=== BLOCK FULL ===\n', block);
+  console.log('=== PROD SERV MATCH ===\n', prodServMatch ? prodServMatch[1] : 'NENHUM');
 
   let m;
   while ((m = txRegex.exec(block)) !== null) {

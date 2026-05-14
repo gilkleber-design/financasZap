@@ -63,75 +63,64 @@ const ITAU_CATEGORY_MAP = {
   'outros': 'outros',
 };
 
+function makePayable(date, desc, valueStr, refYear, refMonthNum) {
+  // Detecta parcela no final: "Nome 09/12"
+  let installNumber = null;
+  let installTotal = null;
+  const instMatch = desc.match(/^(.*?)\s+(\d{2})\/(\d{2})$/);
+  if (instMatch) {
+    desc = instMatch[1].trim();
+    installNumber = parseInt(instMatch[2], 10);
+    installTotal = parseInt(instMatch[3], 10);
+  }
+
+  const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
+  const [day, month] = date.split('/');
+  const itemMonth = parseInt(month, 10);
+  let year = refYear;
+  if (itemMonth > refMonthNum) year = refYear - 1;
+  const dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+  return {
+    _id: Math.random().toString(36),
+    description: desc.trim(),
+    amount,
+    date: dateStr,
+    date_display: `${day}/${month}`,
+    installment_number: installNumber,
+    installment_total: installTotal,
+    selected: true,
+    category_id: '',
+  };
+}
+
 function parseItauTransactions(raw, refMonth) {
   const items = [];
   const [refYear, refMonthNum] = refMonth.split('-').map(Number);
 
-  // Extrai todos os blocos de "Lançamentos: compras e saques"
-  // O separador de blocos é PAGE BREAK ou outra seção
-  const blockRegex = /Lan[cç]amentos[:\s]+compras e saques[\s\S]*?(?=Lan[cç]amentos[:\s]+produtos|Compras parceladas|Limites de cr[eé]dito|Encargos cobrados|$)/gi;
+  // Regex que encontra uma transação: DD/MM  NOME  VALOR
+  // Usamos busca global em todo o texto para não depender de linha única
+  const txRegex = /(\d{2}\/\d{2})\s{2,}(.+?)\s{2,}(\d{1,3}(?:\.\d{3})*,\d{2})(?=\s|$)/g;
+
+  // Extrai apenas os blocos de lançamentos (compras e saques), ignorando "próximas faturas"
+  const blockRegex = /Lan[cç]amentos[:\s]*compras e saques([\s\S]*?)(?=Lan[cç]amentos[:\s]*produtos|Compras parceladas|Lan[cç]amentos no cart)/gi;
   const blocks = [];
   let bm;
-  while ((bm = blockRegex.exec(raw)) !== null) blocks.push(bm[0]);
+  while ((bm = blockRegex.exec(raw)) !== null) blocks.push(bm[1]);
   if (blocks.length === 0) return items;
 
   const block = blocks.join('\n');
-  const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // Linha de transação: começa com DD/MM, depois nome, depois valor
-  // Ex: "25/08  AdaptaOrg  09/12  99,00"  ou  "04/04  POSTO PARALELA ISALVADO  284,70"
-  const txLineRegex = /^(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+  let m;
+  while ((m = txRegex.exec(block)) !== null) {
+    const [, date, desc, valueStr] = m;
 
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(txLineRegex);
-    if (!m) continue;
+    // Pula cabeçalhos
+    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do|GIL |continua)/i.test(desc.trim())) continue;
+    // Pula valores negativos (pagamentos)
+    if (valueStr.startsWith('-')) continue;
 
-    let [, date, desc, valueStr] = m;
-    desc = desc.trim();
-
-    // Pula cabeçalhos e pagamentos
-    if (/^(DATA|VALOR|ESTABELECIMENTO|PAGAMENTO|Total dos|Total do)/i.test(desc)) continue;
-
-    // Detecta parcela no final da descrição: "Nome 09/12"
-    let installNumber = null;
-    let installTotal = null;
-    const instMatch = desc.match(/^(.*?)\s+(\d{2})\/(\d{2})$/);
-    if (instMatch) {
-      desc = instMatch[1].trim();
-      installNumber = parseInt(instMatch[2], 10);
-      installTotal = parseInt(instMatch[3], 10);
-    }
-
-    const amount = parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
-    const [day, month] = date.split('/');
-    const itemMonth = parseInt(month, 10);
-    let year = refYear;
-    if (itemMonth > refMonthNum) year = refYear - 1;
-    const dateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-
-    // Linha seguinte pode ser "categoria cidade" — tenta capturar
-    let itauCategory = '';
-    if (i + 1 < lines.length) {
-      const nextLine = lines[i + 1];
-      // Se a próxima linha NÃO começa com data e NÃO é valor isolado, é categoria+cidade
-      if (!/^\d{2}\/\d{2}/.test(nextLine) && !/^\d{1,3}(?:\.\d{3})*,\d{2}$/.test(nextLine)) {
-        const catMatch = nextLine.match(/^([a-záéíóúâêîôûãõç]+(?:\s[a-záéíóúâêîôûãõç]+)?)/i);
-        if (catMatch) itauCategory = catMatch[1].toLowerCase();
-      }
-    }
-
-    items.push({
-      _id: Math.random().toString(36),
-      description: desc,
-      amount,
-      date: dateStr,
-      date_display: `${day}/${month}`,
-      installment_number: installNumber,
-      installment_total: installTotal,
-      itau_category: itauCategory,
-      selected: true,
-      category_id: '',
-    });
+    items.push(makePayable(date, desc, valueStr, refYear, refMonthNum));
   }
 
   return items;

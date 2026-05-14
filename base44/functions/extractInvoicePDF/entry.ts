@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 function sanitizeDescription(desc) {
   if (!desc) return desc;
+  // Limpa espaços fantasmas do Itaú (ex: G I L -> GIL)
   let cleaned = desc.replace(/([A-Z])\s(?=[A-Z]\s|[A-Z]$)/g, '$1'); 
   const geoSuffixes = [/\s*SAO PAULO\s*BRA?$/i, /\s*SALVADOR\s*BRA?$/i, /[A-Z]{3,}BRA$/, /\s+BRA$/i, /\s+BR$/i];
   cleaned = cleaned.trim();
@@ -12,16 +13,16 @@ function sanitizeDescription(desc) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { file_url, ref_month } = await req.json(); // ref_month vem como "2026-05"
+    const { file_url, ref_month } = await req.json();
 
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt: `Extraia os lançamentos desta fatura de cartão de crédito.
-      IMPORTANTE: O mês de referência da fatura é ${ref_month}.
-      - Para cada item, extraia a data original (DD/MM).
-      - Se o mês da compra for maior que o mês da fatura (ex: compra em Dezembro na fatura de Maio), o ano é o anterior ao de ${ref_month}.
-      - Caso contrário, o ano é o mesmo de ${ref_month}.
-      - Identifique parcelas (01/10) e retorne installment_number e installment_total.
-      - Una letras separadas e limpe nomes de cidades.`,
+      Referência: ${ref_month}.
+      REGRAS:
+      - SÓ extraia se houver DATA (DD/MM) e VALOR. Ignore propagandas e limites.
+      - Una letras separadas e limpe nomes de cidades.
+      - Identifique parcelas (ex: 01/10) e preencha installment_number e installment_total.
+      - Estornos e Pagamentos da fatura anterior devem ter amount NEGATIVO.`,
       file_urls: [file_url],
       response_json_schema: {
         type: 'object',
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
               properties: {
                 description: { type: 'string' },
                 amount: { type: 'number' },
-                date: { type: 'string' }, // YYYY-MM-DD
+                date: { type: 'string' },
                 installment_number: { type: 'number' },
                 installment_total: { type: 'number' },
                 category: { type: 'string' }
@@ -46,10 +47,12 @@ Deno.serve(async (req) => {
       }
     });
 
-    return Response.json({
-      items: result.items || [],
-      integrity_check: { invoice_total: result.invoice_total || 0 }
-    });
+    const items = (result.items || []).map(item => ({
+      ...item,
+      description: sanitizeDescription(item.description)
+    }));
+
+    return Response.json({ items, integrity_check: { invoice_total: result.invoice_total || 0 } });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

@@ -115,9 +115,14 @@ function parseItauTransactions(raw, refMonth) {
   const blocks = [];
   let bm;
   while ((bm = blockRegex.exec(normalized)) !== null) blocks.push(bm[1]);
-  if (blocks.length === 0) return items;
+  console.log('=== BLOCKS FOUND:', blocks.length, '===');
+  if (blocks.length === 0) {
+    console.log('=== NORMALIZED SAMPLE ===\n', normalized.substring(0, 2000));
+    return items;
+  }
 
   const block = blocks.join('\n');
+  console.log('=== BLOCK SAMPLE (first 1000) ===\n', block.substring(0, 1000));
 
   let m;
   while ((m = txRegex.exec(block)) !== null) {
@@ -150,8 +155,14 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
     setStep('processing');
     try {
       const text = await extractTextFromPDF(file);
-      console.log('=== PDF TEXT ===\n', text.substring(0, 3000));
+      console.log('=== PDF TEXT (first 3000) ===\n', text.substring(0, 3000));
       const extracted = parseItauTransactions(text, refMonth);
+      console.log('=== ITEMS FOUND:', extracted.length, '===');
+      if (extracted.length > 0) {
+        console.log('=== FIRST 5 ITEMS ===', JSON.stringify(extracted.slice(0, 5), null, 2));
+        const total = extracted.reduce((s, i) => s + i.amount, 0);
+        console.log('=== TOTAL CALCULADO:', total.toFixed(2), '===');
+      }
 
       if (extracted.length === 0) {
         console.log('=== FULL TEXT ===\n', text);

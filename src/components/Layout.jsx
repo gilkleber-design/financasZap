@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X, CreditCard } from 'lucide-react';
+import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X, CreditCard, LogOut, UserCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/AuthContext';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -19,6 +20,7 @@ const navItems = [
 export default function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -52,6 +54,22 @@ export default function Layout() {
             </Link>
           ))}
         </nav>
+        <div className="p-4 border-t border-sidebar-border">
+          <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3 mb-2">
+            <UserCircle className="w-8 h-8 text-sidebar-foreground/70 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-white truncate">{user?.full_name || 'Usuário'}</p>
+              <p className="text-[10px] text-sidebar-foreground/50 truncate">{user?.email || ''}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => logout()}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sair
+          </button>
+        </div>
       </aside>
 
       {/* Mobile Top Bar */}
@@ -117,6 +135,22 @@ export default function Layout() {
                 </Link>
               ))}
             </nav>
+            <div className="p-4 border-t border-sidebar-border">
+              <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3 mb-2">
+                <UserCircle className="w-8 h-8 text-sidebar-foreground/70 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{user?.full_name || 'Usuário'}</p>
+                  <p className="text-[10px] text-sidebar-foreground/50 truncate">{user?.email || ''}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => logout()}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Sair
+              </button>
+            </div>
           </aside>
         </div>
       )}

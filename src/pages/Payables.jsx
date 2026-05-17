@@ -71,7 +71,7 @@ function RecurrencesTab({ onEdit }) {
           {recurrences.filter(r => r.active !== false).length} Contas Fixas Ativas
         </p>
         <Button size="sm" onClick={() => setShowForm(true)} className="font-bold bg-primary">
-          <Plus className="w-4 h-4 mr-1" /> NOVA FIXA (MOLDE)
+          <Plus className="w-4 h-4 mr-1" /> NOVA CONTA FIXA
         </Button>
       </div>
 

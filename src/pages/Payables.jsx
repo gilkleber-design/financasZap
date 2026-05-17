@@ -262,7 +262,7 @@ export default function Payables() {
             className="font-bold h-10 px-4 text-slate-600 border-slate-200"
           >
             {viewMode === 'mensal' ? <Settings className="w-4 h-4 mr-2" /> : <ChevronLeft className="w-4 h-4 mr-2" />}
-            {viewMode === 'mensal' ? 'GERENCIAR MOLDES FIXOS' : 'VOLTAR PARA MESES'}
+            {viewMode === 'mensal' ? 'GERENCIAR CONTAS FIXAS' : 'VOLTAR PARA MESES'}
           </Button>
 
           {viewMode === 'mensal' && (

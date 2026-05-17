@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CategorySelect } from '@/components/ui/category-select';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, AlertTriangle, Edit2, Save, Link2, X, Sparkles, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -231,15 +232,16 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
 
           <div>
             <Label className="text-xs">Categoria</Label>
-            <Select value={form.category} onValueChange={v => { set('category', v); setCategorySuggestion(null); }}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>
-                {form.type === 'expense'
-                  ? expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)
-                  : INCOME_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)
-                }
-              </SelectContent>
-            </Select>
+            {form.type === 'expense' ? (
+              <CategorySelect value={form.category} onChange={(value) => { set('category', value); setCategorySuggestion(null); }} className="mt-1" />
+            ) : (
+              <Select value={form.category} onValueChange={v => set('category', v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  {INCOME_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CategorySelect } from '@/components/ui/category-select';
 import { toast } from 'sonner';
 import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
 import { useCategories } from '@/hooks/useCategories';
@@ -15,14 +16,6 @@ const getTodayString = () => {
   return format(now, 'yyyy-MM-dd');
 };
 import { Landmark, Repeat, Layers, Receipt } from 'lucide-react';
-
-const FALLBACK_CATEGORIES = [
-  { value: 'alimentacao', label: 'Alimentação' }, { value: 'transporte', label: 'Transporte' },
-  { value: 'moradia', label: 'Moradia' }, { value: 'saude', label: 'Saúde' },
-  { value: 'educacao', label: 'Educação' }, { value: 'lazer', label: 'Lazer' },
-  { value: 'vestuario', label: 'Vestuário' }, { value: 'servicos', label: 'Serviços' },
-  { value: 'impostos', label: 'Impostos' }, { value: 'outros', label: 'Outros' },
-];
 
 const EXPENSE_TYPES = [
   { value: 'avulsa', label: 'Avulsa', icon: Receipt, desc: 'Despesa única, sem repetição' },
@@ -42,8 +35,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const { origins } = usePaymentOrigins();
-  const { flatForSelect, categories: allCategories } = useCategories();
-  const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
+  const { categories: allCategories } = useCategories();
   
   // Map slug -> id para categorias do banco
   const getCategoryId = (slug) => {
@@ -154,13 +146,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           {/* Categoria */}
           <div>
             <Label>Categoria</Label>
-            <Select value={form.category || ''} onValueChange={v => set('category', v || '')}>
-              <SelectTrigger tabIndex={2} className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={null}>Nenhuma</SelectItem>
-                {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CategorySelect value={form.category} onChange={(value) => set('category', value)} className="mt-1" />
           </div>
 
           {/* Origem do Pagamento */}

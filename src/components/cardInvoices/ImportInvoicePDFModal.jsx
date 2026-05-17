@@ -1,5 +1,4 @@
 import { useState, useRef, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Upload, FileText, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMonths, format, parseISO } from 'date-fns';
+import { CategorySelect } from '@/components/ui/category-select';
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 function toReviewItem(item) {
@@ -31,11 +31,6 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
   const [step, setStep] = useState('upload');
   const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
-
-  const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => base44.entities.Category.list()
-  });
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -173,16 +168,12 @@ export default function ImportInvoicePDFModal({ card, refMonth, onClose, onImpor
 
                     <div className="flex items-center gap-1 mt-0.5">
                       <span className="text-[9px] font-black text-slate-400 uppercase">{it.date_display} •</span>
-                      <select
-                        className="bg-transparent border-none p-0 text-[9px] font-black text-slate-400 uppercase focus:ring-0 cursor-pointer hover:text-slate-600 w-auto"
+                      <CategorySelect
                         value={it.category_id || ''}
-                        onChange={(e) => setItems(items.map(x => x._id === it._id ? { ...x, category_id: e.target.value } : x))}
-                      >
-                        <option value="">SEM CATEGORIA</option>
-                        {categories.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
+                        valueKey="id"
+                        onChange={(value) => setItems(items.map(x => x._id === it._id ? { ...x, category_id: value } : x))}
+                        className="h-6 border-0 bg-transparent p-0 text-[9px] font-black text-slate-400 uppercase shadow-none"
+                      />
                     </div>
                   </div>
 

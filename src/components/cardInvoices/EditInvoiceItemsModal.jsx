@@ -5,27 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CategorySelect } from '@/components/ui/category-select';
 import { toast } from 'sonner';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-
-const CATEGORIES = [
-  { value: 'alimentacao',            label: 'Alimentação' },
-  { value: 'transporte',             label: 'Transporte' },
-  { value: 'moradia',                label: 'Moradia' },
-  { value: 'saude',                  label: 'Saúde' },
-  { value: 'educacao',               label: 'Educação' },
-  { value: 'lazer',                  label: 'Lazer' },
-  { value: 'vestuario',              label: 'Vestuário' },
-  { value: 'servicos',               label: 'Serviços' },
-  { value: 'impostos',               label: 'Impostos' },
-  { value: 'transferencia_liquidacao', label: 'Transferência/Liquidação' },
-  { value: 'outros',                 label: 'Outros' },
-];
-
-const categoryLabel = (slug) => CATEGORIES.find(c => c.value === slug)?.label || slug || '—';
 
 export default function EditInvoiceItemsModal({ items: initialItems, onClose, onSaved }) {
   const [items, setItems] = useState(initialItems);
@@ -226,16 +210,7 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
                       placeholder="Valor"
                       className="text-sm w-28 flex-shrink-0"
                     />
-                    <Select value={editForm.category} onValueChange={v => setEditForm(f => ({ ...f, category: v }))}>
-                      <SelectTrigger className="text-sm flex-1 h-9">
-                        <SelectValue placeholder="Categoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map(c => (
-                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <CategorySelect value={editForm.category} onChange={(value) => setEditForm(f => ({ ...f, category: value }))} className="text-sm flex-1 h-9" includeTransfer />
                   </div>
                   <div className="flex gap-2 justify-end">
                     <Button size="sm" className="h-8" onClick={() => saveEdit(item)} disabled={saving}>
@@ -265,7 +240,7 @@ export default function EditInvoiceItemsModal({ items: initialItems, onClose, on
                     <p className="text-sm font-medium truncate">{item.description}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       {item.category && (
-                        <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{categoryLabel(item.category)}</Badge>
+                        <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{item.category}</Badge>
                       )}
                       {item.competencia && (
                         <span className="text-xs text-muted-foreground">Comp: {item.competencia.slice(0, 7)}</span>

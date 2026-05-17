@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Plus } from 'lucide-react';
+import { useCategories } from '@/hooks/useCategories';
+import NewCategoryModal from '@/components/categories/NewCategoryModal';
 
 const CATEGORY_COLORS = {
   alimentacao: 'bg-orange-100 text-orange-700',
@@ -17,58 +19,82 @@ const CATEGORY_COLORS = {
   outros: 'bg-slate-100 text-slate-700',
 };
 
-export function CategorySelect({ value, onChange, placeholder = 'Selecionar categoria', includeTransfer = false, className = '' }) {
-  const { data: categories = [], isLoading } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => base44.entities.Category.list('-created_date', 100),
-  });
+export function CategorySelect({
+  value,
+  onChange,
+  placeholder = 'Selecionar categoria',
+  includeTransfer = false,
+  allowNone = true,
+  valueKey = 'slug',
+  className = '',
+}) {
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const { categories, roots, getChildren, isLoading } = useCategories();
 
-  const roots = categories.filter(c => !c.parent_id && c.active !== false);
-  const getChildren = (parentId) => categories.filter(c => c.parent_id === parentId && c.active !== false);
+  const activeCategories = categories.filter(c => c.active !== false);
+  const selectedCategory = activeCategories.find(c => String(c[valueKey]) === String(value));
 
-  const getCategoryLabel = (slug) => {
-    const cat = categories.find(c => c.slug === slug);
-    return cat?.name || slug;
+  const emitChange = (nextValue) => {
+    if (nextValue === '__new_category__') {
+      setShowNewCategory(true);
+      return;
+    }
+    if (nextValue === '_none') {
+      onChange('', null);
+      return;
+    }
+    const category = activeCategories.find(c => String(c[valueKey]) === String(nextValue));
+    onChange(nextValue, category || null);
   };
 
-  const selectedCategory = categories.find(c => c.slug === value);
+  const handleCreated = (category) => {
+    setShowNewCategory(false);
+    onChange(category[valueKey], category);
+  };
 
   return (
-    <Select value={value} onValueChange={onChange} disabled={isLoading}>
-      <SelectTrigger className={className}>
-        <SelectValue placeholder={placeholder} />
-        {selectedCategory && (
-          <Badge 
-            className={`ml-2 text-xs border-0 ${CATEGORY_COLORS[selectedCategory.slug] || CATEGORY_COLORS.outros}`}
-          >
-            {selectedCategory.name}
-          </Badge>
-        )}
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={null}>Nenhuma</SelectItem>
-        {roots.map((cat) => {
-          const children = getChildren(cat.id);
-          return (
-            <div key={cat.id}>
-              <SelectItem value={cat.slug} className="font-semibold">
-                {cat.name}
-              </SelectItem>
-              {children.map((child) => (
-                <SelectItem key={child.id} value={child.slug} className="ml-4">
-                  → {child.name}
+    <>
+      <Select value={value || '_none'} onValueChange={emitChange} disabled={isLoading}>
+        <SelectTrigger className={className}>
+          <SelectValue placeholder={placeholder} />
+          {selectedCategory && (
+            <Badge className={`ml-2 text-xs border-0 ${CATEGORY_COLORS[selectedCategory.slug] || CATEGORY_COLORS.outros}`}>
+              {selectedCategory.name}
+            </Badge>
+          )}
+        </SelectTrigger>
+        <SelectContent>
+          {allowNone && <SelectItem value="_none">Nenhuma</SelectItem>}
+          {roots.map((cat) => {
+            const children = getChildren(cat.id);
+            return (
+              <div key={cat.id}>
+                <SelectItem value={String(cat[valueKey])} className="font-semibold">
+                  {cat.name}
                 </SelectItem>
-              ))}
-            </div>
-          );
-        })}
-        {includeTransfer && (
-          <SelectItem value="transferencia_liquidacao" className="font-semibold">
-            💳 Transferência / Liquidação
+                {children.map((child) => (
+                  <SelectItem key={child.id} value={String(child[valueKey])} className="ml-4">
+                    → {child.name}
+                  </SelectItem>
+                ))}
+              </div>
+            );
+          })}
+          {includeTransfer && (
+            <SelectItem value="transferencia_liquidacao" className="font-semibold">
+              Transferência / Liquidação
+            </SelectItem>
+          )}
+          <SelectItem value="__new_category__" className="border-t mt-1 pt-2 font-semibold text-primary">
+            <Plus className="w-4 h-4 mr-2 inline" /> Nova categoria
           </SelectItem>
-        )}
-      </SelectContent>
-    </Select>
+        </SelectContent>
+      </Select>
+
+      {showNewCategory && (
+        <NewCategoryModal onClose={() => setShowNewCategory(false)} onSaved={handleCreated} />
+      )}
+    </>
   );
 }
 

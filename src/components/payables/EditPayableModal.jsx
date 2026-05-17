@@ -5,18 +5,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CategorySelect } from '@/components/ui/category-select';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { getFifthBusinessDay } from '@/lib/businessDayCalculator';
-
-const CATEGORY_LABELS = {
-  alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
-  saude: 'Saúde', educacao: 'Educação', lazer: 'Lazer', vestuario: 'Vestuário',
-  servicos: 'Serviços', impostos: 'Impostos', outros: 'Outros',
-};
 
 export default function EditPayableModal({ payable, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -162,16 +156,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
 
           <div>
             <Label>Categoria</Label>
-            <Select value={form.category} onValueChange={v => set('category', v)}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Selecionar" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CategorySelect value={form.category} onChange={(value) => set('category', value)} className="mt-1" />
           </div>
 
           <div>

@@ -386,7 +386,7 @@ export default function Payables() {
         />
       )}
       
-      {editingRecurrence && <RecurrenceFormModal recurrence={editingRecurrence} onClose={() => setEditingRecurrence(null)} onSaved={() => { setEditingRecurrence(null); queryClient.invalidateQueries(); }} />}
+{editingRecurrence && <RecurrenceFormModal initial={editingRecurrence} onClose={() => setEditingRecurrence(null)} onSaved={() => { setEditingRecurrence(null); queryClient.invalidateQueries(); }} />}
     </div>
   );
 }

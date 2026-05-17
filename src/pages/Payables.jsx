@@ -78,7 +78,7 @@ function RecurrencesTab({ onEdit }) {
       <Card className="border-0 shadow-sm font-sora bg-white">
         <CardContent className="p-0">
           <div className="divide-y divide-slate-100">
-            {isLoading && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Carregando moldes...</p>}
+            {isLoading && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Carregando fixas...</p>}
             {!isLoading && recurrences.map(r => (
               <div key={r.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${r.active === false ? 'opacity-40 bg-slate-50/50' : 'hover:bg-slate-50/50'}`}>
                 <div className={`w-1.5 h-11 rounded-full flex-shrink-0 ${r.active === false ? 'bg-slate-300' : 'bg-blue-400'}`} />

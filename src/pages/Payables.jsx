@@ -40,13 +40,11 @@ function RecurrencesTab({ onEdit }) {
     queryFn: () => base44.entities.Recurrence.list('-created_date', 100),
   });
 
-  // MUTAÇÃO: DELETAR DEFINITIVO (Lixeira)
   const deleteMutation = useMutation({
     mutationFn: async (recurrence) => {
       const payables = await base44.entities.Payable.list('-due_date', 500);
       const linkedPayables = payables.filter(p => p.recurrence_id === recurrence.id);
       
-      // Conduta de proteção: Apaga os pendentes e desvincula os já pagos
       for (const p of linkedPayables) {
         if (p.status !== 'paid') {
           await base44.entities.Payable.delete(p.id);
@@ -55,7 +53,6 @@ function RecurrencesTab({ onEdit }) {
         }
       }
       
-      // Deleta definitivamente do banco de dados
       await base44.entities.Recurrence.delete(recurrence.id);
     },
     onSuccess: () => { 
@@ -66,7 +63,6 @@ function RecurrencesTab({ onEdit }) {
     },
   });
 
-  // MUTAÇÃO: INATIVAR/ATIVAR (Toggle)
   const toggleMutation = useMutation({
     mutationFn: ({ id, active }) => base44.entities.Recurrence.update(id, { active }),
     onSuccess: () => {
@@ -163,7 +159,8 @@ export default function Payables() {
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filterStatus, setFilterStatus] = useState('open'); 
-  const [filterBy, setFilterBy] = useState('competencia'); 
+  // CORREÇÃO: Filtro padrão alterado para Vencimento (due_date)
+  const [filterBy, setFilterBy] = useState('due_date'); 
   const queryClient = useQueryClient();
 
   const listFilter = activeTab === 'fixas' ? 'FIXAS' : activeTab === 'parceladas' ? 'PARCELADAS' : activeTab === 'avulsas' ? 'AVULSAS' : 'TODAS';
@@ -191,26 +188,22 @@ export default function Payables() {
 
   const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
 
-  // MUTAÇÃO: Atualização Inteligente (Regra de Vencimento)
   const updatePayableMutation = useMutation({
     mutationFn: async ({ payable, updatedData }) => {
       const isVencido = isPast(new Date(payable.due_date)) && !isToday(new Date(payable.due_date));
       
       if (payable.recurrence_id) {
-        // Regra: Sempre atualiza a raiz (Garante os meses futuros)
         await base44.entities.Recurrence.update(payable.recurrence_id, {
           amount: updatedData.amount,
           description: updatedData.description,
         });
 
-        // Regra: Se NÃO venceu, atualiza o do mês atual também
         if (!isVencido) {
           await base44.entities.Payable.update(payable.id, updatedData);
         } else {
           toast.info('Vencido. Alteração aplicada apenas para os próximos meses.');
         }
       } else {
-        // Se for avulsa comum, atualiza normal
         await base44.entities.Payable.update(payable.id, updatedData);
       }
     },
@@ -222,13 +215,10 @@ export default function Payables() {
     }
   });
 
-  // MUTAÇÃO: Exclusão com proteção ao passado (Lista Mensal)
   const deletePayableMutation = useMutation({
     mutationFn: async ({ payable, deleteAllFutures }) => {
       if (deleteAllFutures && payable.recurrence_id) {
-        // Desativa a conta raiz em vez de deletar para manter o passado
         await base44.entities.Recurrence.update(payable.recurrence_id, { active: false });
-        // Limpa apenas pendentes do mês atual e futuros
         const payables = await base44.entities.Payable.list('-due_date', 500);
         const toDelete = payables.filter(p => 
           p.recurrence_id === payable.recurrence_id && 
@@ -359,11 +349,18 @@ export default function Payables() {
                         ) : (
                           <>
                             <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => setEditingPayable(p)}><Edit2 className="w-4 h-4" /></Button>
+                            
+                            {/* CORREÇÃO: Botão explícito de PAGAR na listagem */}
                             {status !== 'paid' ? (
-                              <Button variant="ghost" size="icon" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" onClick={() => setConfirmingPayable(p)}><CheckCircle2 className="w-5 h-5" /></Button>
+                              <Button variant="outline" size="sm" className="h-8 px-2 text-xs font-bold text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={() => setConfirmingPayable(p)}>
+                                <CheckCircle2 className="w-4 h-4 mr-1" /> PAGAR
+                              </Button>
                             ) : (
-                              <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-500 hover:bg-amber-50" onClick={() => undoPaymentMutation.mutate(p)} disabled={undoPaymentMutation.isPending}><Undo2 className={`w-5 h-5 ${undoPaymentMutation.isPending ? 'animate-spin' : ''}`} /></Button>
+                              <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-500 hover:bg-amber-50" onClick={() => undoPaymentMutation.mutate(p)} disabled={undoPaymentMutation.isPending} title="Desfazer pagamento">
+                                <Undo2 className={`w-5 h-5 ${undoPaymentMutation.isPending ? 'animate-spin' : ''}`} />
+                              </Button>
                             )}
+
                             <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingPayable(p)}><Trash2 className="w-4 h-4" /></Button>
                           </>
                         )}
@@ -377,7 +374,6 @@ export default function Payables() {
         </>
       )}
 
-      {/* CONFIRMAÇÃO DE DELEÇÃO COM FILTRO PROTEGIDO */}
       <AlertDialog open={!!deletingPayable} onOpenChange={() => setDeletingPayable(null)}>
         <AlertDialogContent className="font-sora">
           <AlertDialogHeader>

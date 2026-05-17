@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2, Undo2, Repeat, Layers, Receipt, RefreshCw, ToggleLeft, ToggleRight, Pencil } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2, Undo2, Repeat, Layers, Settings } from 'lucide-react';
 import { format, isPast, isToday, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -28,32 +28,15 @@ const CATEGORY_LABELS = {
   saude: 'Saúde', educacao: 'Educação', lazer: 'Lazer', vestuario: 'Vestuário',
   servicos: 'Serviços', impostos: 'Impostos', outros: 'Outros', transferencia_liquidacao: 'Liquidação Fatura'
 };
-const CATEGORY_COLORS = {
-  moradia: 'bg-blue-100 text-blue-700', alimentacao: 'bg-orange-100 text-orange-700',
-  transferencia_liquidacao: 'bg-slate-200 text-slate-700', outros: 'bg-slate-100 text-slate-700',
-};
 
-// ---- Aba de Recorrências ----
+// ---- Aba de Recorrências (O Gerenciador de "Moldes") ----
 function RecurrencesTab() {
   const [showForm, setShowForm] = useState(false);
-  const [editingRecurrence, setEditingRecurrence] = useState(null);
-  const [deletingRecurrence, setDeletingRecurrence] = useState(null);
-  const [regeneratingRecurrence, setRegeneratingRecurrence] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: recurrences = [], isLoading } = useQuery({
     queryKey: ['recurrences'],
     queryFn: () => base44.entities.Recurrence.list('-created_date', 100),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (recurrence) => {
-      const payables = await base44.entities.Payable.list('-due_date', 500);
-      const toDelete = payables.filter(p => p.recurrence_id === recurrence.id || p.description === recurrence.description);
-      for (const p of toDelete) await base44.entities.Payable.delete(p.id);
-      await base44.entities.Recurrence.delete(recurrence.id);
-    },
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Recorrência removida'); },
   });
 
   const toggleMutation = useMutation({
@@ -62,38 +45,50 @@ function RecurrencesTab() {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground font-bold uppercase">{recurrences.filter(r => r.active !== false).length} ativas</p>
-        <Button size="sm" onClick={() => setShowForm(true)} className="font-bold">
-          <Plus className="w-4 h-4 mr-1" /> Nova Fixa
+    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+      <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
+        <p className="text-sm text-slate-500 font-bold uppercase ml-2">
+          {recurrences.filter(r => r.active !== false).length} Contas Fixas Ativas
+        </p>
+        <Button size="sm" onClick={() => setShowForm(true)} className="font-bold bg-primary">
+          <Plus className="w-4 h-4 mr-1" /> NOVA FIXA (MOLDE)
         </Button>
       </div>
-      <Card className="border-0 shadow-sm font-sora">
+
+      <Card className="border-0 shadow-sm font-sora bg-white">
         <CardContent className="p-0">
-          <div className="divide-y divide-border">
-            {isLoading && <p className="p-6 text-center text-sm text-muted-foreground">Carregando...</p>}
+          <div className="divide-y divide-slate-100">
+            {isLoading && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Carregando moldes...</p>}
             {!isLoading && recurrences.filter(r => r.active !== false).map(r => (
-              <div key={r.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
-                <div className="w-1.5 h-10 rounded-full flex-shrink-0 bg-primary/40" />
+              <div key={r.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors">
+                <div className="w-1.5 h-11 rounded-full flex-shrink-0 bg-blue-400" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold truncate uppercase">{r.description}</p>
-                  <span className="text-xs text-muted-foreground font-bold">DIA {r.due_day}</span>
+                  <p className="text-sm font-bold text-slate-800 uppercase tracking-tight">{r.description}</p>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">VENCE TODO DIA {r.due_day}</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-red-500">-{fmt(r.amount)}</p>
+                <div className="text-right flex-shrink-0 mr-4">
+                  <p className="text-sm font-black text-slate-900">{fmt(r.amount)}</p>
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                    MOLDE ATIVO
+                  </span>
                 </div>
               </div>
             ))}
+            {!isLoading && recurrences.filter(r => r.active !== false).length === 0 && (
+              <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhuma conta fixa cadastrada</p>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {showForm && <RecurrenceFormModal onClose={() => setShowForm(false)} onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); }} />}
     </div>
   );
 }
 
-// ---- Página principal ----
+// ---- Página Principal ----
 export default function Payables() {
+  const [viewMode, setViewMode] = useState('mensal'); // 'mensal' ou 'gerenciar_fixas'
   const [activeTab, setActiveTab] = useState('todas');
   const [showForm, setShowForm] = useState(false);
   const [confirmingPayable, setConfirmingPayable] = useState(null);
@@ -116,6 +111,7 @@ export default function Payables() {
       status: listStatus,
       sort: filterBy,
     }),
+    enabled: viewMode === 'mensal' // Só busca se estiver na tela de meses
   });
 
   const filtered = payablesResponse?.data?.items || [];
@@ -128,7 +124,6 @@ export default function Payables() {
 
   const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
 
-  // MUTAÇÃO: Estornar Pagamento
   const undoPaymentMutation = useMutation({
     mutationFn: async (p) => {
       if (p.transaction_id) await base44.entities.Transaction.delete(p.transaction_id);
@@ -140,7 +135,6 @@ export default function Payables() {
     },
   });
 
-  // MUTAÇÃO: Deletar Payable
   const deletePayableMutation = useMutation({
     mutationFn: async (p) => {
       return await base44.entities.Payable.delete(p.id);
@@ -154,93 +148,125 @@ export default function Payables() {
 
   return (
     <div className="p-6 space-y-6 font-sora text-slate-800">
+      
+      {/* Header com Toggle de Visão */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Contas a Pagar</h1>
-          <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
-            {filterStatus === 'open' ? `Pendentes · ${fmt(totalFiltered)}` :
-             filterStatus === 'overdue' ? `Vencidas · ${fmt(totalFiltered)}` :
-             `Pagas · ${fmt(totalFiltered)}`}
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            {viewMode === 'mensal' ? 'Contas a Pagar' : 'Gerenciamento de Fixas'}
+          </h1>
+          {viewMode === 'mensal' ? (
+            <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
+              {filterStatus === 'open' ? `Pendentes · ${fmt(totalFiltered)}` :
+               filterStatus === 'overdue' ? `Vencidas · ${fmt(totalFiltered)}` :
+               `Pagas · ${fmt(totalFiltered)}`}
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
+              Edite a raiz dos seus custos de vida
+            </p>
+          )}
         </div>
-        <Button onClick={() => setShowForm(true)} className="bg-primary font-bold h-10 px-6">
-          <Plus className="w-4 h-4 mr-2" /> NOVA DESPESA
-        </Button>
-      </div>
-
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {['todas', 'fixas', 'parceladas', 'avulsas'].map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white shadow text-primary' : 'text-slate-500'}`}>{tab}</button>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        {['open', 'overdue', 'paid'].map(s => (
-          <Button key={s} variant={filterStatus === s ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus(s)} className="text-[10px] font-black uppercase h-7 tracking-tighter">
-            {s === 'open' ? 'Em Aberto' : s === 'overdue' ? 'Vencidas' : 'Pagas'}
+        
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => setViewMode(viewMode === 'mensal' ? 'gerenciar_fixas' : 'mensal')} 
+            className="font-bold h-10 px-4 text-slate-600 border-slate-200"
+          >
+            {viewMode === 'mensal' ? <Settings className="w-4 h-4 mr-2" /> : <ChevronLeft className="w-4 h-4 mr-2" />}
+            {viewMode === 'mensal' ? 'GERENCIAR MOLDES FIXOS' : 'VOLTAR PARA MESES'}
           </Button>
-        ))}
-      </div>
 
-      <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="w-5 h-5" /></Button>
-          <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRight className="w-5 h-5" /></Button>
-        </div>
-        <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl">
-          <Button variant={filterBy === 'due_date' ? 'secondary' : 'ghost'} size="sm" onClick={() => setFilterBy('due_date')} className="text-[9px] font-black h-6 px-3">VENCIMENTO</Button>
-          <Button variant={filterBy === 'competencia' ? 'secondary' : 'ghost'} size="sm" onClick={() => setFilterBy('competencia')} className="text-[9px] font-black h-6 px-3">COMPETÊNCIA</Button>
+          {viewMode === 'mensal' && (
+            <Button onClick={() => setShowForm(true)} className="bg-primary font-bold h-10 px-6">
+              <Plus className="w-4 h-4 mr-2" /> NOVA DESPESA
+            </Button>
+          )}
         </div>
       </div>
 
-      <Card className="border-0 shadow-sm overflow-hidden bg-white">
-        <CardContent className="p-0">
-          <div className="divide-y divide-slate-100">
-            {filtered.length === 0 && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum lançamento encontrado</p>}
-            {filtered.map(p => {
-              const status = getStatus(p);
-              const TypeIcon = p.recurrence_id || p.recurrent ? Repeat : p.installment_group_id ? Layers : null;
-              return (
-                <div key={p.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${p.is_projection ? 'bg-slate-50/60 opacity-60' : 'hover:bg-slate-50/50'}`}>
-                  <div className={`w-1.5 h-11 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-500' : status === 'overdue' ? 'bg-red-500' : 'bg-amber-400'}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 font-bold mb-0.5">
-                      <p className="text-sm truncate text-slate-800 uppercase tracking-tight">{p.description}</p>
-                      {p.is_projection && <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] px-2 font-black uppercase">Projeção</Badge>}
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                        {format(new Date((filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date).includes('T') ? (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) : (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
-                        {p.category && <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-slate-300" /> {CATEGORY_LABELS[p.category] || p.category}</span>}
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0 mr-4">
-                    <p className="text-sm font-black text-slate-900">-{fmt(p.amount)}</p>
-                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${STATUS_COLORS[status] || STATUS_COLORS.pending}`}>
-                      {STATUS_LABELS[status] || status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {!p.is_projection && (
-                      <>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => setEditingPayable(p)}><Edit2 className="w-4 h-4" /></Button>
-                        {status !== 'paid' ? (
-                          <Button variant="ghost" size="icon" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" onClick={() => setConfirmingPayable(p)}><CheckCircle2 className="w-5 h-5" /></Button>
-                        ) : (
-                          <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-500 hover:bg-amber-50" onClick={() => undoPaymentMutation.mutate(p)} disabled={undoPaymentMutation.isPending}><Undo2 className={`w-5 h-5 ${undoPaymentMutation.isPending ? 'animate-spin' : ''}`} /></Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingPayable(p)}><Trash2 className="w-4 h-4" /></Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+      {viewMode === 'gerenciar_fixas' ? (
+        <RecurrencesTab />
+      ) : (
+        <>
+          {/* Controles da Visão Mensal */}
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+            {['todas', 'fixas', 'parceladas', 'avulsas'].map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white shadow text-primary' : 'text-slate-500'}`}>{tab}</button>
+            ))}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* MODAL: Confirmação de Deleção */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {['open', 'overdue', 'paid'].map(s => (
+              <Button key={s} variant={filterStatus === s ? 'secondary' : 'outline'} size="sm" onClick={() => setFilterStatus(s)} className="text-[10px] font-black uppercase h-7 tracking-tighter">
+                {s === 'open' ? 'Em Aberto' : s === 'overdue' ? 'Vencidas' : 'Pagas'}
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="w-5 h-5" /></Button>
+              <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRight className="w-5 h-5" /></Button>
+            </div>
+            <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl">
+              <Button variant={filterBy === 'due_date' ? 'secondary' : 'ghost'} size="sm" onClick={() => setFilterBy('due_date')} className="text-[9px] font-black h-6 px-3">VENCIMENTO</Button>
+              <Button variant={filterBy === 'competencia' ? 'secondary' : 'ghost'} size="sm" onClick={() => setFilterBy('competencia')} className="text-[9px] font-black h-6 px-3">COMPETÊNCIA</Button>
+            </div>
+          </div>
+
+          {/* Lista Mensal */}
+          <Card className="border-0 shadow-sm overflow-hidden bg-white">
+            <CardContent className="p-0">
+              <div className="divide-y divide-slate-100">
+                {filtered.length === 0 && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum lançamento encontrado</p>}
+                {filtered.map(p => {
+                  const status = getStatus(p);
+                  const TypeIcon = p.recurrence_id || p.recurrent ? Repeat : p.installment_group_id ? Layers : null;
+                  return (
+                    <div key={p.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${p.is_projection ? 'bg-slate-50/60 opacity-60' : 'hover:bg-slate-50/50'}`}>
+                      <div className={`w-1.5 h-11 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-500' : status === 'overdue' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 font-bold mb-0.5">
+                          <p className="text-sm truncate text-slate-800 uppercase tracking-tight">{p.description}</p>
+                          {p.is_projection && <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] px-2 font-black uppercase">Projeção</Badge>}
+                        </div>
+                        <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                            {format(new Date((filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date).includes('T') ? (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) : (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
+                            {p.category && <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-slate-300" /> {CATEGORY_LABELS[p.category] || p.category}</span>}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 mr-4">
+                        <p className="text-sm font-black text-slate-900">-{fmt(p.amount)}</p>
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${STATUS_COLORS[status] || STATUS_COLORS.pending}`}>
+                          {STATUS_LABELS[status] || status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!p.is_projection && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => setEditingPayable(p)}><Edit2 className="w-4 h-4" /></Button>
+                            {status !== 'paid' ? (
+                              <Button variant="ghost" size="icon" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" onClick={() => setConfirmingPayable(p)}><CheckCircle2 className="w-5 h-5" /></Button>
+                            ) : (
+                              <Button variant="ghost" size="icon" className="h-9 w-9 text-amber-500 hover:bg-amber-50" onClick={() => undoPaymentMutation.mutate(p)} disabled={undoPaymentMutation.isPending}><Undo2 className={`w-5 h-5 ${undoPaymentMutation.isPending ? 'animate-spin' : ''}`} /></Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingPayable(p)}><Trash2 className="w-4 h-4" /></Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* MODAIS (Renderizados globalmente na tela) */}
       <AlertDialog open={!!deletingPayable} onOpenChange={() => setDeletingPayable(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

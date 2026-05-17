@@ -29,7 +29,7 @@ const CATEGORY_LABELS = {
   servicos: 'Serviços', impostos: 'Impostos', outros: 'Outros', transferencia_liquidacao: 'Liquidação Fatura'
 };
 
-// ---- Aba de Recorrências (Gerenciador de Moldes Raiz) ----
+// ---- Aba de Recorrências (Gerenciador de Contas Fixas Raiz) ----
 function RecurrencesTab({ onEdit }) {
   const [showForm, setShowForm] = useState(false);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
@@ -50,17 +50,19 @@ function RecurrencesTab({ onEdit }) {
       }
     },
     onSuccess: () => { 
-      queryClient.invalidateQueries(); 
+      // Força refresh total das queries relacionadas para limpar a tela
+      queryClient.invalidateQueries({ queryKey: ['recurrences'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-list'] });
       setDeletingRecurrence(null);
-      toast.success('Recorrência desativada e pendências futuras removidas.'); 
+      toast.success('Conta fixa desativada e pendências futuras removidas.'); 
     },
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, active }) => base44.entities.Recurrence.update(id, { active }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['recurrences']);
-      toast.success('Status da recorrência atualizado.');
+      queryClient.invalidateQueries({ queryKey: ['recurrences'] });
+      toast.success('Status da conta fixa atualizado.');
     },
   });
 
@@ -89,7 +91,7 @@ function RecurrencesTab({ onEdit }) {
                 <div className="text-right flex-shrink-0 mr-4">
                   <p className="text-sm font-black text-slate-900">{fmt(r.amount)}</p>
                   <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${r.active === false ? 'bg-slate-100 text-slate-500' : 'bg-blue-100 text-blue-700'}`}>
-                    {r.active === false ? 'INATIVO' : 'MOLDE ATIVO'}
+                    {r.active === false ? 'INATIVA' : 'CONTA ATIVA'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -113,7 +115,7 @@ function RecurrencesTab({ onEdit }) {
       <AlertDialog open={!!deletingRecurrence} onOpenChange={() => setDeletingRecurrence(null)}>
         <AlertDialogContent className="font-sora">
           <AlertDialogHeader>
-            <AlertDialogTitle>Desativar este Molde de Conta Fixa?</AlertDialogTitle>
+            <AlertDialogTitle>Desativar esta Conta Fixa?</AlertDialogTitle>
             <AlertDialogDescription>
               Isto interromperá as projeções futuras. O histórico de contas já pagas no passado será totalmente preservado.
             </AlertDialogDescription>
@@ -177,7 +179,7 @@ export default function Payables() {
       const isVencido = isPast(new Date(payable.due_date)) && !isToday(new Date(payable.due_date));
       
       if (payable.recurrence_id) {
-        // Regra: Sempre atualiza o molde raiz (Garante os meses futuros)
+        // Regra: Sempre atualiza a raiz (Garante os meses futuros)
         await base44.entities.Recurrence.update(payable.recurrence_id, {
           amount: updatedData.amount,
           description: updatedData.description,
@@ -195,7 +197,8 @@ export default function Payables() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: ['payables-list'] });
+      queryClient.invalidateQueries({ queryKey: ['recurrences'] });
       setEditingPayable(null);
       toast.success('Alteração salva.');
     }
@@ -205,7 +208,7 @@ export default function Payables() {
   const deletePayableMutation = useMutation({
     mutationFn: async ({ payable, deleteAllFutures }) => {
       if (deleteAllFutures && payable.recurrence_id) {
-        // Desativa molde raiz
+        // Desativa a conta raiz
         await base44.entities.Recurrence.update(payable.recurrence_id, { active: false });
         // Limpa apenas pendentes do mês atual e futuros
         const payables = await base44.entities.Payable.list('-due_date', 500);
@@ -220,9 +223,11 @@ export default function Payables() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      // Refresh explícito e imediato
+      queryClient.invalidateQueries({ queryKey: ['payables-list'] });
+      queryClient.invalidateQueries({ queryKey: ['recurrences'] });
       setDeletingPayable(null);
-      toast.success('Lançamento atualizado.');
+      toast.success('Lançamento excluído.');
     },
   });
 
@@ -231,7 +236,10 @@ export default function Payables() {
       if (p.transaction_id) await base44.entities.Transaction.delete(p.transaction_id);
       return await base44.entities.Payable.update(p.id, { status: 'pending', transaction_id: null });
     },
-    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Pagamento desfeito.'); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['payables-list'] }); 
+      toast.success('Pagamento desfeito.'); 
+    },
   });
 
   return (
@@ -250,7 +258,7 @@ export default function Payables() {
             </p>
           ) : (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
-              Edite a raiz dos seus custos de vida (Moldes)
+              Edite a raiz dos seus custos de vida
             </p>
           )}
         </div>
@@ -358,7 +366,7 @@ export default function Payables() {
           <AlertDialogHeader>
             <AlertDialogTitle>Como deseja excluir este lançamento?</AlertDialogTitle>
             <AlertDialogDescription>
-              Selecione o escopo da remoção para este item recorrente:
+              Selecione o escopo da remoção para esta conta:
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-2 mt-4">
@@ -386,7 +394,7 @@ export default function Payables() {
         />
       )}
       
-{editingRecurrence && <RecurrenceFormModal initial={editingRecurrence} onClose={() => setEditingRecurrence(null)} onSaved={() => { setEditingRecurrence(null); queryClient.invalidateQueries(); }} />}
+      {editingRecurrence && <RecurrenceFormModal initial={editingRecurrence} onClose={() => setEditingRecurrence(null)} onSaved={() => { setEditingRecurrence(null); queryClient.invalidateQueries(); }} />}
     </div>
   );
 }

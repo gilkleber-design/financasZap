@@ -4,11 +4,11 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2, Undo2, Repeat, Layers, Settings } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Edit2, Undo2, Repeat, Layers, Settings, ToggleLeft, ToggleRight } from 'lucide-react';
 import { format, isPast, isToday, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import ExpenseFormModal from '@/components/payables/ExpenseFormModal';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 import EditPayableModal from '@/components/payables/EditPayableModal';
@@ -29,9 +29,10 @@ const CATEGORY_LABELS = {
   servicos: 'Serviços', impostos: 'Impostos', outros: 'Outros', transferencia_liquidacao: 'Liquidação Fatura'
 };
 
-// ---- Aba de Recorrências (O Gerenciador de "Moldes") ----
-function RecurrencesTab() {
+// ---- Aba de Recorrências (Gerenciador de Moldes Raiz) ----
+function RecurrencesTab({ onEdit }) {
   const [showForm, setShowForm] = useState(false);
+  const [deletingRecurrence, setDeletingRecurrence] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: recurrences = [], isLoading } = useQuery({
@@ -39,9 +40,28 @@ function RecurrencesTab() {
     queryFn: () => base44.entities.Recurrence.list('-created_date', 100),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (recurrence) => {
+      await base44.entities.Recurrence.update(recurrence.id, { active: false });
+      const payables = await base44.entities.Payable.list('-due_date', 500);
+      const toDelete = payables.filter(p => p.recurrence_id === recurrence.id && p.status !== 'paid');
+      for (const p of toDelete) {
+        await base44.entities.Payable.delete(p.id);
+      }
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries(); 
+      setDeletingRecurrence(null);
+      toast.success('Recorrência desativada e pendências futuras removidas.'); 
+    },
+  });
+
   const toggleMutation = useMutation({
     mutationFn: ({ id, active }) => base44.entities.Recurrence.update(id, { active }),
-    onSuccess: () => queryClient.invalidateQueries(['recurrences']),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['recurrences']);
+      toast.success('Status da recorrência atualizado.');
+    },
   });
 
   return (
@@ -59,27 +79,53 @@ function RecurrencesTab() {
         <CardContent className="p-0">
           <div className="divide-y divide-slate-100">
             {isLoading && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Carregando moldes...</p>}
-            {!isLoading && recurrences.filter(r => r.active !== false).map(r => (
-              <div key={r.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors">
-                <div className="w-1.5 h-11 rounded-full flex-shrink-0 bg-blue-400" />
+            {!isLoading && recurrences.map(r => (
+              <div key={r.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${r.active === false ? 'opacity-40 bg-slate-50/50' : 'hover:bg-slate-50/50'}`}>
+                <div className={`w-1.5 h-11 rounded-full flex-shrink-0 ${r.active === false ? 'bg-slate-300' : 'bg-blue-400'}`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800 uppercase tracking-tight">{r.description}</p>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">VENCE TODO DIA {r.due_day}</span>
                 </div>
                 <div className="text-right flex-shrink-0 mr-4">
                   <p className="text-sm font-black text-slate-900">{fmt(r.amount)}</p>
-                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                    MOLDE ATIVO
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${r.active === false ? 'bg-slate-100 text-slate-500' : 'bg-blue-100 text-blue-700'}`}>
+                    {r.active === false ? 'INATIVO' : 'MOLDE ATIVO'}
                   </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => onEdit(r)}><Edit2 className="w-4 h-4" /></Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 text-slate-400 hover:text-primary" 
+                    onClick={() => toggleMutation.mutate({ id: r.id, active: r.active === false })}
+                  >
+                    {r.active === false ? <ToggleLeft className="w-5 h-5 text-slate-400" /> : <ToggleRight className="w-5 h-5 text-primary" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingRecurrence(r)}><Trash2 className="w-4 h-4" /></Button>
                 </div>
               </div>
             ))}
-            {!isLoading && recurrences.filter(r => r.active !== false).length === 0 && (
-              <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhuma conta fixa cadastrada</p>
-            )}
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deletingRecurrence} onOpenChange={() => setDeletingRecurrence(null)}>
+        <AlertDialogContent className="font-sora">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar este Molde de Conta Fixa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isto interromperá as projeções futuras. O histórico de contas já pagas no passado será totalmente preservado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3 mt-4">
+            <AlertDialogCancel className="flex-1 font-bold">CANCELAR</AlertDialogCancel>
+            <Button variant="destructive" className="flex-1 font-bold" onClick={() => deleteMutation.mutate(deletingRecurrence)} disabled={deleteMutation.isPending}>
+              CONFIRMAR
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {showForm && <RecurrenceFormModal onClose={() => setShowForm(false)} onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); }} />}
     </div>
@@ -88,11 +134,12 @@ function RecurrencesTab() {
 
 // ---- Página Principal ----
 export default function Payables() {
-  const [viewMode, setViewMode] = useState('mensal'); // 'mensal' ou 'gerenciar_fixas'
+  const [viewMode, setViewMode] = useState('mensal'); 
   const [activeTab, setActiveTab] = useState('todas');
   const [showForm, setShowForm] = useState(false);
   const [confirmingPayable, setConfirmingPayable] = useState(null);
   const [editingPayable, setEditingPayable] = useState(null);
+  const [editingRecurrence, setEditingRecurrence] = useState(null);
   const [deletingPayable, setDeletingPayable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filterStatus, setFilterStatus] = useState('open'); 
@@ -111,7 +158,7 @@ export default function Payables() {
       status: listStatus,
       sort: filterBy,
     }),
-    enabled: viewMode === 'mensal' // Só busca se estiver na tela de meses
+    enabled: viewMode === 'mensal' 
   });
 
   const filtered = payablesResponse?.data?.items || [];
@@ -124,32 +171,72 @@ export default function Payables() {
 
   const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
 
+  // MUTAÇÃO: Atualização Inteligente (Regra de Vencimento)
+  const updatePayableMutation = useMutation({
+    mutationFn: async ({ payable, updatedData }) => {
+      const isVencido = isPast(new Date(payable.due_date)) && !isToday(new Date(payable.due_date));
+      
+      if (payable.recurrence_id) {
+        // Regra: Sempre atualiza o molde raiz (Garante os meses futuros)
+        await base44.entities.Recurrence.update(payable.recurrence_id, {
+          amount: updatedData.amount,
+          description: updatedData.description,
+        });
+
+        // Regra: Se NÃO venceu, atualiza o do mês atual também
+        if (!isVencido) {
+          await base44.entities.Payable.update(payable.id, updatedData);
+        } else {
+          toast.info('Vencido. Alteração aplicada apenas para os próximos meses.');
+        }
+      } else {
+        // Se for avulsa comum, atualiza normal
+        await base44.entities.Payable.update(payable.id, updatedData);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setEditingPayable(null);
+      toast.success('Alteração salva.');
+    }
+  });
+
+  // MUTAÇÃO: Exclusão com proteção ao passado
+  const deletePayableMutation = useMutation({
+    mutationFn: async ({ payable, deleteAllFutures }) => {
+      if (deleteAllFutures && payable.recurrence_id) {
+        // Desativa molde raiz
+        await base44.entities.Recurrence.update(payable.recurrence_id, { active: false });
+        // Limpa apenas pendentes do mês atual e futuros
+        const payables = await base44.entities.Payable.list('-due_date', 500);
+        const toDelete = payables.filter(p => 
+          p.recurrence_id === payable.recurrence_id && 
+          p.status !== 'paid' && 
+          new Date(p.due_date) >= new Date(payable.due_date)
+        );
+        for (const p of toDelete) await base44.entities.Payable.delete(p.id);
+      } else {
+        await base44.entities.Payable.delete(payable.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setDeletingPayable(null);
+      toast.success('Lançamento atualizado.');
+    },
+  });
+
   const undoPaymentMutation = useMutation({
     mutationFn: async (p) => {
       if (p.transaction_id) await base44.entities.Transaction.delete(p.transaction_id);
       return await base44.entities.Payable.update(p.id, { status: 'pending', transaction_id: null });
     },
-    onSuccess: () => { 
-      queryClient.invalidateQueries(); 
-      toast.success('Pagamento desfeito! A fatura foi reaberta.'); 
-    },
-  });
-
-  const deletePayableMutation = useMutation({
-    mutationFn: async (p) => {
-      return await base44.entities.Payable.delete(p.id);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries();
-      setDeletingPayable(null);
-      toast.success('Lançamento excluído.');
-    },
+    onSuccess: () => { queryClient.invalidateQueries(); toast.success('Pagamento desfeito.'); },
   });
 
   return (
     <div className="p-6 space-y-6 font-sora text-slate-800">
       
-      {/* Header com Toggle de Visão */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -163,7 +250,7 @@ export default function Payables() {
             </p>
           ) : (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
-              Edite a raiz dos seus custos de vida
+              Edite a raiz dos seus custos de vida (Moldes)
             </p>
           )}
         </div>
@@ -187,10 +274,9 @@ export default function Payables() {
       </div>
 
       {viewMode === 'gerenciar_fixas' ? (
-        <RecurrencesTab />
+        <RecurrencesTab onEdit={(r) => setEditingRecurrence(r)} />
       ) : (
         <>
-          {/* Controles da Visão Mensal */}
           <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
             {['todas', 'fixas', 'parceladas', 'avulsas'].map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white shadow text-primary' : 'text-slate-500'}`}>{tab}</button>
@@ -217,14 +303,12 @@ export default function Payables() {
             </div>
           </div>
 
-          {/* Lista Mensal */}
           <Card className="border-0 shadow-sm overflow-hidden bg-white">
             <CardContent className="p-0">
               <div className="divide-y divide-slate-100">
                 {filtered.length === 0 && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum lançamento encontrado</p>}
                 {filtered.map(p => {
                   const status = getStatus(p);
-                  const TypeIcon = p.recurrence_id || p.recurrent ? Repeat : p.installment_group_id ? Layers : null;
                   return (
                     <div key={p.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${p.is_projection ? 'bg-slate-50/60 opacity-60' : 'hover:bg-slate-50/50'}`}>
                       <div className={`w-1.5 h-11 rounded-full flex-shrink-0 ${status === 'paid' ? 'bg-emerald-500' : status === 'overdue' ? 'bg-red-500' : 'bg-amber-400'}`} />
@@ -245,7 +329,9 @@ export default function Payables() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        {!p.is_projection && (
+                        {p.is_projection ? (
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setViewMode('gerenciar_fixas')}><Settings className="w-4 h-4" /></Button>
+                        ) : (
                           <>
                             <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => setEditingPayable(p)}><Edit2 className="w-4 h-4" /></Button>
                             {status !== 'paid' ? (
@@ -266,25 +352,41 @@ export default function Payables() {
         </>
       )}
 
-      {/* MODAIS (Renderizados globalmente na tela) */}
+      {/* CONFIRMAÇÃO DE DELEÇÃO COM FILTRO PROTEGIDO */}
       <AlertDialog open={!!deletingPayable} onOpenChange={() => setDeletingPayable(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="font-sora">
           <AlertDialogHeader>
-            <AlertDialogTitle>Deseja excluir este lançamento?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>Como deseja excluir este lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Selecione o escopo da remoção para este item recorrente:
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex gap-3 mt-4">
-            <AlertDialogCancel className="flex-1 font-bold">CANCELAR</AlertDialogCancel>
-            <Button variant="destructive" className="flex-1 font-bold" onClick={() => deletePayableMutation.mutate(deletingPayable)} disabled={deletePayableMutation.isPending}>
-              {deletePayableMutation.isPending ? 'EXCLUINDO...' : 'EXCLUIR AGORA'}
+          <div className="flex flex-col gap-2 mt-4">
+            <Button variant="outline" className="font-bold justify-start text-slate-700" onClick={() => deletePayableMutation.mutate({ payable: deletingPayable, deleteAllFutures: false })} disabled={deletePayableMutation.isPending}>
+              ❌ EXCLUIR APENAS O MÊS DE {format(currentMonth, 'MMMM', { locale: ptBR }).toUpperCase()}
             </Button>
+            {deletingPayable?.recurrence_id && (
+              <Button variant="destructive" className="font-bold justify-start" onClick={() => deletePayableMutation.mutate({ payable: deletingPayable, deleteAllFutures: true })} disabled={deletePayableMutation.isPending}>
+                ⚠️ EXCLUIR ESTE MÊS E DESATIVAR DAQUI PARA FRENTE (PRESERVA O PASSADO)
+              </Button>
+            )}
+            <AlertDialogCancel className="font-bold mt-2">CANCELAR</AlertDialogCancel>
           </div>
         </AlertDialogContent>
       </AlertDialog>
 
       {showForm && <ExpenseFormModal onClose={() => setShowForm(false)} onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); }} />}
       {confirmingPayable && <ConfirmPayableModal payable={confirmingPayable} onClose={() => { setConfirmingPayable(null); queryClient.invalidateQueries(); }} />}
-      {editingPayable && <EditPayableModal payable={editingPayable} onClose={() => setEditingPayable(null)} onSaved={() => { setEditingPayable(null); queryClient.invalidateQueries(); }} />}
+      
+      {editingPayable && (
+        <EditPayableModal 
+          payable={editingPayable} 
+          onClose={() => setEditingPayable(null)} 
+          onSaved={(data) => updatePayableMutation.mutate({ payable: editingPayable, updatedData: data })} 
+        />
+      )}
+      
+      {editingRecurrence && <RecurrenceFormModal recurrence={editingRecurrence} onClose={() => setEditingRecurrence(null)} onSaved={() => { setEditingRecurrence(null); queryClient.invalidateQueries(); }} />}
     </div>
   );
 }

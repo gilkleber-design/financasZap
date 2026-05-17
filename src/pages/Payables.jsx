@@ -29,7 +29,7 @@ const CATEGORY_LABELS = {
   servicos: 'Serviços', impostos: 'Impostos', outros: 'Outros', transferencia_liquidacao: 'Liquidação Fatura'
 };
 
-// ---- Aba de Recorrências (Gerenciador de Contas Fixas Raiz) ----
+// ---- Aba de Gerenciamento de Contas Fixas Raiz ----
 function RecurrencesTab({ onEdit }) {
   const [showForm, setShowForm] = useState(false);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
@@ -40,24 +40,33 @@ function RecurrencesTab({ onEdit }) {
     queryFn: () => base44.entities.Recurrence.list('-created_date', 100),
   });
 
+  // MUTAÇÃO: DELETAR DEFINITIVO (Lixeira)
   const deleteMutation = useMutation({
     mutationFn: async (recurrence) => {
-      await base44.entities.Recurrence.update(recurrence.id, { active: false });
       const payables = await base44.entities.Payable.list('-due_date', 500);
-      const toDelete = payables.filter(p => p.recurrence_id === recurrence.id && p.status !== 'paid');
-      for (const p of toDelete) {
-        await base44.entities.Payable.delete(p.id);
+      const linkedPayables = payables.filter(p => p.recurrence_id === recurrence.id);
+      
+      // Conduta de proteção: Apaga os pendentes e desvincula os já pagos
+      for (const p of linkedPayables) {
+        if (p.status !== 'paid') {
+          await base44.entities.Payable.delete(p.id);
+        } else {
+          await base44.entities.Payable.update(p.id, { recurrence_id: null });
+        }
       }
+      
+      // Deleta definitivamente do banco de dados
+      await base44.entities.Recurrence.delete(recurrence.id);
     },
     onSuccess: () => { 
-      // Força refresh total das queries relacionadas para limpar a tela
       queryClient.invalidateQueries({ queryKey: ['recurrences'] });
       queryClient.invalidateQueries({ queryKey: ['payables-list'] });
       setDeletingRecurrence(null);
-      toast.success('Conta fixa desativada e pendências futuras removidas.'); 
+      toast.success('Conta fixa excluída permanentemente.'); 
     },
   });
 
+  // MUTAÇÃO: INATIVAR/ATIVAR (Toggle)
   const toggleMutation = useMutation({
     mutationFn: ({ id, active }) => base44.entities.Recurrence.update(id, { active }),
     onSuccess: () => {
@@ -81,6 +90,11 @@ function RecurrencesTab({ onEdit }) {
         <CardContent className="p-0">
           <div className="divide-y divide-slate-100">
             {isLoading && <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Carregando fixas...</p>}
+            
+            {!isLoading && recurrences.length === 0 && (
+              <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhuma conta fixa cadastrada</p>
+            )}
+
             {!isLoading && recurrences.map(r => (
               <div key={r.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${r.active === false ? 'opacity-40 bg-slate-50/50' : 'hover:bg-slate-50/50'}`}>
                 <div className={`w-1.5 h-11 rounded-full flex-shrink-0 ${r.active === false ? 'bg-slate-300' : 'bg-blue-400'}`} />
@@ -95,7 +109,9 @@ function RecurrencesTab({ onEdit }) {
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => onEdit(r)}><Edit2 className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-primary" onClick={() => onEdit(r)}>
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -104,7 +120,9 @@ function RecurrencesTab({ onEdit }) {
                   >
                     {r.active === false ? <ToggleLeft className="w-5 h-5 text-slate-400" /> : <ToggleRight className="w-5 h-5 text-primary" />}
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingRecurrence(r)}><Trash2 className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-300 hover:text-red-500" onClick={() => setDeletingRecurrence(r)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             ))}
@@ -115,15 +133,15 @@ function RecurrencesTab({ onEdit }) {
       <AlertDialog open={!!deletingRecurrence} onOpenChange={() => setDeletingRecurrence(null)}>
         <AlertDialogContent className="font-sora">
           <AlertDialogHeader>
-            <AlertDialogTitle>Desativar esta Conta Fixa?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir esta Conta Fixa?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isto interromperá as projeções futuras. O histórico de contas já pagas no passado será totalmente preservado.
+              A conta será permanentemente removida da tabela de recorrências. Lançamentos pendentes serão apagados, mas lançamentos já pagos no passado serão mantidos intactos no seu histórico.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-3 mt-4">
             <AlertDialogCancel className="flex-1 font-bold">CANCELAR</AlertDialogCancel>
             <Button variant="destructive" className="flex-1 font-bold" onClick={() => deleteMutation.mutate(deletingRecurrence)} disabled={deleteMutation.isPending}>
-              CONFIRMAR
+              EXCLUIR DEFINITIVO
             </Button>
           </div>
         </AlertDialogContent>
@@ -204,11 +222,11 @@ export default function Payables() {
     }
   });
 
-  // MUTAÇÃO: Exclusão com proteção ao passado
+  // MUTAÇÃO: Exclusão com proteção ao passado (Lista Mensal)
   const deletePayableMutation = useMutation({
     mutationFn: async ({ payable, deleteAllFutures }) => {
       if (deleteAllFutures && payable.recurrence_id) {
-        // Desativa a conta raiz
+        // Desativa a conta raiz em vez de deletar para manter o passado
         await base44.entities.Recurrence.update(payable.recurrence_id, { active: false });
         // Limpa apenas pendentes do mês atual e futuros
         const payables = await base44.entities.Payable.list('-due_date', 500);
@@ -223,7 +241,6 @@ export default function Payables() {
       }
     },
     onSuccess: () => {
-      // Refresh explícito e imediato
       queryClient.invalidateQueries({ queryKey: ['payables-list'] });
       queryClient.invalidateQueries({ queryKey: ['recurrences'] });
       setDeletingPayable(null);

@@ -97,7 +97,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
         notes: form.notes || undefined,
       });
 
-      toast.success(expenseType === 'fixa' ? 'Despesa fixa salva como molde.' : 'Despesa criada com sucesso.');
+      toast.success(expenseType === 'fixa' ? 'Despesa fixa salva.' : 'Despesa criada com sucesso.');
       setSaving(false);
       onSaved();
     } catch (err) {

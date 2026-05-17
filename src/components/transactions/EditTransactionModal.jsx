@@ -5,22 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CategorySelect } from '@/components/ui/category-select';
 import { toast } from 'sonner';
-
-const CATEGORIES = [
-  { value: 'alimentacao', label: 'Alimentação' },
-  { value: 'transporte', label: 'Transporte' },
-  { value: 'moradia', label: 'Moradia' },
-  { value: 'saude', label: 'Saúde' },
-  { value: 'educacao', label: 'Educação' },
-  { value: 'lazer', label: 'Lazer' },
-  { value: 'vestuario', label: 'Vestuário' },
-  { value: 'servicos', label: 'Serviços' },
-  { value: 'impostos', label: 'Impostos' },
-  { value: 'salario_clt', label: 'Salário CLT' },
-  { value: 'receita_pj', label: 'Receita PJ' },
-  { value: 'outros', label: 'Outros' },
-];
 
 export default function EditTransactionModal({ transaction, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -88,12 +74,7 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
             </div>
             <div>
               <Label>Categoria</Label>
-              <Select value={form.category} onValueChange={v => set('category', v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <CategorySelect value={form.category} onChange={(value) => set('category', value)} className="mt-1" />
             </div>
             <div>
               <Label>Valor Bruto (R$) *</Label>

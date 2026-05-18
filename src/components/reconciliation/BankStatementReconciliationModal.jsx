@@ -216,9 +216,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [manualMatches, setManualMatches] = useState({});
   const [hideProcessed, setHideProcessed] = useState(false);
   const [parsingPdf, setParsingPdf] = useState(false);
-
-  // Novo estado para controlar o modal de edição rápida do órfão
   const [editingOrphan, setEditingOrphan] = useState(null);
+
+  // Busca a tabela oficial de Categorias
+  const { data: dbCategories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => base44.entities.Category.list('', 500),
+    enabled: open,
+  });
 
   const { data: transactions = [], isLoading: loadingTransactions } = useQuery({
     queryKey: ['transactions'],
@@ -270,7 +275,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       if (manualMatches[row.id]) return { ...row, status: 'manual_match', match: manualMatches[row.id] };
 
-      // Se o usuário resolveu o órfão no modal de Rascunho, o status muda visualmente
       if (row.isDraftResolved) return { ...row, status: 'draft_ready' };
 
       const autoIdx = poolCandidates.findIndex(c => 
@@ -288,11 +292,15 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     });
   }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches]);
 
-  const itemsToProcess = rowsWithState.filter(r => r.status !== 'processed').length;
+  const itemsToProcess = rowsWithState.filter(r => 
+    ['auto_match', 'manual_match', 'draft_ready', 'to_ignore'].includes(r.status)
+  ).length;
 
   const executeBatchMutation = useMutation({
     mutationFn: async () => {
-      const toProcess = rowsWithState.filter(r => r.status !== 'processed');
+      const toProcess = rowsWithState.filter(r => 
+        ['auto_match', 'manual_match', 'draft_ready', 'to_ignore'].includes(r.status)
+      );
 
       for (const row of toProcess) {
         if (row.status === 'to_ignore') {
@@ -307,9 +315,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             notes: 'Ignorado via conciliação em lote',
           });
         } 
-        // Note que o status 'draft_ready' entra no mesmo fluxo de criação do 'orphan', 
-        // pois a linha já foi enriquecida com a categoria e descrição certas pelo modal.
-        else if (row.status === 'orphan' || row.status === 'draft_ready') {
+        else if (row.status === 'draft_ready') {
           await base44.entities.Transaction.create({
             description: row.description,
             amount: row.amount,
@@ -318,7 +324,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             date: row.date,
             source: 'manual',
             reconciled: true,
-            notes: row.status === 'draft_ready' ? 'Criado e Categorizado na Conciliação' : 'Criado via Extrato (Órfão)',
+            notes: 'Criado e Categorizado na Conciliação',
           });
         } 
         else if (row.status === 'auto_match' || row.status === 'manual_match') {
@@ -441,8 +447,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
   const handleSaveDraft = (e) => {
     e.preventDefault();
-    
-    // Trava de segurança para linters/TypeScript
     if (!editingOrphan) return;
 
     const formData = new FormData(e.currentTarget);
@@ -464,7 +468,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const incomeRows = displayRows.filter(r => r.type === 'income').sort((a, b) => a.date.localeCompare(b.date));
   const expenseRows = displayRows.filter(r => r.type === 'expense').sort((a, b) => a.date.localeCompare(b.date));
 
-  const renderRow = (row) => {
+  const renderRow = (row, index) => {
     const isProcessed = row.status === 'processed';
     const isIgnored = row.status === 'to_ignore';
     
@@ -475,6 +479,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     
     return (
       <TableRow key={row.id} className={`${isProcessed || isIgnored ? 'bg-slate-50/50 opacity-50 grayscale' : 'hover:bg-slate-50'} transition-all`}>
+        <TableCell className="w-10 text-center font-bold text-slate-400 text-xs">{index + 1}</TableCell>
         <TableCell className="whitespace-nowrap font-bold text-slate-600 text-xs">{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
         <TableCell className="max-w-[450px] truncate font-bold text-slate-800 text-sm">
           {row.description}
@@ -583,7 +588,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-100/80">
-                      <TableHead colSpan={3} className="border-r text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
+                      <TableHead colSpan={4} className="border-r text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
                         VISÃO DO EXTRATO BANCÁRIO (CSV/PDF)
                       </TableHead>
                       <TableHead colSpan={3} className="text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
@@ -591,6 +596,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                       </TableHead>
                     </TableRow>
                     <TableRow className="text-[11px] uppercase tracking-wider font-bold">
+                      <TableHead className="w-10 text-center">#</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Descrição</TableHead>
                       <TableHead className="border-r text-right">Valor</TableHead>
@@ -602,7 +608,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   <TableBody>
                     {displayRows.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-32 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
+                        <TableCell colSpan={7} className="h-32 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                           Nenhum arquivo processado
                         </TableCell>
                       </TableRow>
@@ -611,22 +617,22 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                         {incomeRows.length > 0 && (
                           <>
                             <TableRow className="bg-slate-100/60 hover:bg-slate-100/60">
-                              <TableCell colSpan={6} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
+                              <TableCell colSpan={7} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
                                 Entradas / Receitas
                               </TableCell>
                             </TableRow>
-                            {incomeRows.map(renderRow)}
+                            {incomeRows.map((row, i) => renderRow(row, i))}
                           </>
                         )}
                         
                         {expenseRows.length > 0 && (
                           <>
                             <TableRow className="bg-slate-100/60 hover:bg-slate-100/60">
-                              <TableCell colSpan={6} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
+                              <TableCell colSpan={7} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
                                 Saídas / Despesas
                               </TableCell>
                             </TableRow>
-                            {expenseRows.map(renderRow)}
+                            {expenseRows.map((row, i) => renderRow(row, incomeRows.length + i))}
                           </>
                         )}
                       </>
@@ -639,7 +645,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Criação Rápida de Lançamento Órfão */}
+      {/* Modal de Criação Rápida com Categorias Nativas */}
       <Dialog open={!!editingOrphan} onOpenChange={(isOpen) => !isOpen && setEditingOrphan(null)}>
         <DialogContent className="sm:max-w-[425px] font-sora">
           <DialogHeader>
@@ -660,14 +666,32 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   <Input disabled value={formatCurrency(editingOrphan.amount)} className="bg-slate-50 font-black text-right" />
                 </div>
               </div>
+              
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">Descrição Final</label>
                 <Input name="description" defaultValue={editingOrphan.description} autoFocus className="font-medium" required />
               </div>
+              
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
-                <Input name="category" defaultValue={editingOrphan.preSelectedCategory || ''} placeholder="Ex: moradia, alimentacao, retiradas..." className="font-medium" required />
+                <select 
+                  name="category" 
+                  defaultValue={editingOrphan.preSelectedCategory || ''} 
+                  className="flex h-10 w-full rounded-md border border-input bg-slate-50 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-medium" 
+                  required
+                >
+                  <option value="" disabled>Selecione uma categoria...</option>
+                  {dbCategories
+                    .filter(c => c.active !== false && c.type === editingOrphan.type)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(cat => (
+                      <option key={cat.slug} value={cat.slug}>
+                        {cat.name}
+                      </option>
+                  ))}
+                </select>
               </div>
+
               <DialogFooter className="pt-4">
                 <Button type="button" variant="outline" onClick={() => setEditingOrphan(null)}>Cancelar</Button>
                 <Button type="submit" className="bg-primary font-bold">Salvar e Preparar</Button>

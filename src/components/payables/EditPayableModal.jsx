@@ -143,7 +143,12 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
 
           <div>
             <Label>Categoria</Label>
-            <CategorySelect value={form.category} onChange={(value) => set('category', value)} className="mt-1" />
+            <CategorySelect
+              value={form.category}
+              onChange={(value) => set('category', value)}
+              allowedTypes={['expense', 'transfer']}
+              className="mt-1"
+            />
           </div>
 
           <div>

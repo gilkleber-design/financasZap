@@ -27,11 +27,15 @@ export function CategorySelect({
   allowNone = true,
   valueKey = 'slug',
   className = '',
+  allowedTypes,
 }) {
   const [showNewCategory, setShowNewCategory] = useState(false);
   const { categories, roots, getChildren, isLoading } = useCategories();
 
-  const activeCategories = categories.filter(c => c.active !== false);
+  const typeFilter = Array.isArray(allowedTypes) && allowedTypes.length > 0 ? allowedTypes : null;
+  const isAllowed = (category) => !typeFilter || typeFilter.includes(category.type || 'expense');
+  const activeCategories = categories.filter(c => c.active !== false && isAllowed(c));
+  const visibleRoots = roots.filter(isAllowed);
   const selectedCategory = activeCategories.find(c => String(c[valueKey]) === String(value));
 
   const emitChange = (nextValue) => {
@@ -65,8 +69,8 @@ export function CategorySelect({
         </SelectTrigger>
         <SelectContent>
           {allowNone && <SelectItem value="_none">Nenhuma</SelectItem>}
-          {roots.map((cat) => {
-            const children = getChildren(cat.id);
+          {visibleRoots.map((cat) => {
+            const children = getChildren(cat.id).filter(isAllowed);
             return (
               <div key={cat.id}>
                 <SelectItem value={String(cat[valueKey])} className="font-semibold">
@@ -92,7 +96,11 @@ export function CategorySelect({
       </Select>
 
       {showNewCategory && (
-        <NewCategoryModal onClose={() => setShowNewCategory(false)} onSaved={handleCreated} />
+        <NewCategoryModal
+          onClose={() => setShowNewCategory(false)}
+          onSaved={handleCreated}
+          defaultType={typeFilter?.[0] || 'expense'}
+        />
       )}
     </>
   );

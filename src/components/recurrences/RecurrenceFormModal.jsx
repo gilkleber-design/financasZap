@@ -28,7 +28,8 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [categorySuggestion, setCategorySuggestion] = useState(null);
   const [suggestingCategory, setSuggestingCategory] = useState(false);
-  const { flatForSelect: categories } = useCategories();
+  const { flatForSelect } = useCategories();
+  const categories = flatForSelect.filter(category => ['expense', 'transfer'].includes(category.type || 'expense'));
   const { origins } = usePaymentOrigins();
   const queryClient = useQueryClient();
 
@@ -202,7 +203,13 @@ export default function RecurrenceFormModal({ initial, onClose, onSaved }) {
 
           <div>
             <Label>Categoria *</Label>
-            <CategorySelect value={form.category} onChange={(value) => { set('category', value); setCategorySuggestion(null); }} className="mt-1" allowNone={false} />
+            <CategorySelect
+              value={form.category}
+              onChange={(value) => { set('category', value); setCategorySuggestion(null); }}
+              allowedTypes={['expense', 'transfer']}
+              className="mt-1"
+              allowNone={false}
+            />
           </div>
           <div>
             <Label>Observações</Label>

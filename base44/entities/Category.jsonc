@@ -10,6 +10,16 @@
       "type": "string",
       "description": "Identificador \u00fanico (ex: alimentacao, moradia)"
     },
+    "type": {
+      "type": "string",
+      "enum": [
+        "expense",
+        "income",
+        "transfer"
+      ],
+      "default": "expense",
+      "description": "Tipo da categoria: despesa, receita ou transfer\u00eancia"
+    },
     "parent_id": {
       "type": "string",
       "description": "ID da categoria pai (para subcategorias). Vazio = categoria raiz."
@@ -29,6 +39,7 @@
   },
   "required": [
     "name",
-    "slug"
+    "slug",
+    "type"
   ]
 }

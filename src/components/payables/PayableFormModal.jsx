@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { CategorySelect } from '@/components/ui/category-select';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { toast } from 'sonner';
 import { useCategories } from '@/hooks/useCategories';
 import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
@@ -37,11 +39,12 @@ export default function PayableFormModal({ onClose, onSaved }) {
   });
 
   const [saving, setSaving] = useState(false);
-  const { flatForSelect } = useCategories();
+  const { flatForSelect, categories: allCategories } = useCategories();
   const { origins } = usePaymentOrigins();
   
   // Garante que usamos as categorias do banco preferencialmente
-  const categories = flatForSelect.length > 0 ? flatForSelect : FALLBACK_CATEGORIES;
+  const categories = flatForSelect.filter(category => ['expense', 'transfer'].includes(category.type || 'expense'));
+  const getCategoryBySlug = (slug) => allCategories.find(category => category.slug === slug);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -158,7 +161,7 @@ export default function PayableFormModal({ onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Valor (R$) *</Label>
-              <Input type="number" value={form.amount} onChange={e => set('amount', e.target.value)} className="mt-1" />
+              <CurrencyInput value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
             </div>
             <div>
               <Label>Vencimento *</Label>
@@ -168,22 +171,16 @@ export default function PayableFormModal({ onClose, onSaved }) {
 
           <div>
             <Label>Categoria</Label>
-            <Select 
-              value={form.category_id ? `cat_${form.category_id}` : form.category} 
-              onValueChange={v => {
-                if (v.startsWith('cat_')) {
-                  set('category_id', v.slice(4));
-                  set('category', '');
-                } else {
-                  set('category', v);
-                  set('category_id', '');
-                }
-              }}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar Categoria" /></SelectTrigger>
-              <SelectContent>
-                {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CategorySelect
+              value={form.category}
+              onChange={(value) => {
+                const category = getCategoryBySlug(value);
+                set('category', value);
+                set('category_id', category?.id || '');
+              }}
+              allowedTypes={['expense', 'transfer']}
+              className="mt-1"
+            />
           </div>
 
           <div>

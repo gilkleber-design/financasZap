@@ -17,6 +17,7 @@ function CategoryForm({ initial, parentId, parentOptions, onSave, onClose }) {
   const [form, setForm] = useState({
     name: initial?.name || '',
     slug: initial?.slug || '',
+    type: initial?.type || 'expense',
     color: initial?.color || DEFAULT_COLORS[0],
     parent_id: initial?.parent_id || parentId || '',
   });
@@ -34,7 +35,7 @@ function CategoryForm({ initial, parentId, parentOptions, onSave, onClose }) {
   };
 
   const handleSave = async () => {
-    if (!form.name || !form.slug) return toast.error('Nome e slug são obrigatórios');
+    if (!form.name || !form.slug || !form.type) return toast.error('Nome, slug e tipo são obrigatórios');
     setSaving(true);
     await onSave({ ...form, parent_id: form.parent_id || null, active: true });
     setSaving(false);
@@ -57,6 +58,17 @@ function CategoryForm({ initial, parentId, parentOptions, onSave, onClose }) {
             <Input value={form.slug} onChange={e => set('slug', e.target.value)} className="mt-1 font-mono text-xs" placeholder="alimentacao" />
             <p className="text-xs text-muted-foreground mt-1">Usado internamente. Não altere após criar.</p>
           </div>
+          <div>
+            <Label>Tipo *</Label>
+            <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v, parent_id: '' }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expense">Despesa</SelectItem>
+                <SelectItem value="income">Receita</SelectItem>
+                <SelectItem value="transfer">Transferência</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {!parentId && (
             <div>
               <Label>Categoria Pai (deixe vazio para raiz)</Label>
@@ -64,7 +76,7 @@ function CategoryForm({ initial, parentId, parentOptions, onSave, onClose }) {
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— Categoria raiz —</SelectItem>
-                  {parentOptions.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  {parentOptions.filter(p => (p.type || 'expense') === form.type).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -155,6 +167,7 @@ export default function CategoryManager() {
               <div className="flex items-center gap-3 px-4 py-3 bg-card">
                 <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: root.color || '#64748b' }} />
                 <span className="text-sm font-semibold flex-1">{root.name}</span>
+                <Badge variant="outline" className="text-xs">{root.type === 'income' ? 'Receita' : root.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
                 <Badge variant="outline" className="text-xs font-mono">{root.slug}</Badge>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="w-7 h-7 text-blue-500"
@@ -179,6 +192,7 @@ export default function CategoryManager() {
                   <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: child.color || root.color || '#64748b' }} />
                   <span className="text-sm flex-1">{child.name}</span>
+                  <Badge variant="outline" className="text-xs">{child.type === 'income' ? 'Receita' : child.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
                   <Badge variant="outline" className="text-xs font-mono">{child.slug}</Badge>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground"

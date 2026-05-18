@@ -33,10 +33,10 @@ export function useCategories() {
    const flatForSelect = [];
    const rootsActive = roots.filter(c => c.active !== false);
    rootsActive.forEach(root => {
-     flatForSelect.push({ value: root.slug, label: root.name, isRoot: true });
+     flatForSelect.push({ value: root.slug, label: root.name, type: root.type || 'expense', isRoot: true });
      const childrenActive = getChildren(root.id).filter(c => c.active !== false);
      childrenActive.forEach(child => {
-       flatForSelect.push({ value: child.slug, label: child.name, isChild: true });
+       flatForSelect.push({ value: child.slug, label: child.name, type: child.type || root.type || 'expense', isChild: true });
      });
    });
 

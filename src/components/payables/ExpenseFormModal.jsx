@@ -147,7 +147,12 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           {/* Categoria */}
           <div>
             <Label>Categoria</Label>
-            <CategorySelect value={form.category} onChange={(value) => set('category', value)} className="mt-1" />
+            <CategorySelect
+              value={form.category}
+              onChange={(value) => set('category', value)}
+              allowedTypes={['expense', 'transfer']}
+              className="mt-1"
+            />
           </div>
 
           {/* Origem do Pagamento */}

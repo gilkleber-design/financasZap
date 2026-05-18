@@ -93,7 +93,7 @@ export default function Settings() {
 
 
   return (
-    <div className="p-6 space-y-4 max-w-2xl pb-32 font-sora hidden">
+    <div className="p-6 space-y-4 max-w-2xl pb-32 font-sora">
      <header className="mb-6">
        <h1 className="text-2xl font-bold">Configurações</h1>
        <p className="text-muted-foreground text-sm">Gerenciamento do Workspace</p>

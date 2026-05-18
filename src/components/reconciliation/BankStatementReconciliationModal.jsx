@@ -191,29 +191,6 @@ function parseCsv(text) {
   return postProcessCsv(rawRows);
 }
 
-function candidateDate(candidate) {
-  if (candidate.kind === 'payable') return candidate.due_date;
-  if (candidate.kind === 'receivable') return candidate.due_date;
-  return candidate.date;
-}
-
-function isDateNear(statementDate, targetDate) {
-  if (!statementDate || !targetDate) return false;
-  try {
-    const sDate = String(statementDate).substring(0, 10);
-    const tDate = String(targetDate).substring(0, 10);
-    return Math.abs(differenceInCalendarDays(parseISO(sDate), parseISO(tDate))) <= 4;
-  } catch (e) {
-    return false;
-  }
-}
-
-function buildCandidateLabel(candidate) {
-  const date = candidateDate(candidate);
-  const typeLabel = candidate.kind === 'payable' ? 'A Pagar' : candidate.kind === 'receivable' ? 'A Receber' : 'Transação';
-  return `${typeLabel} • ${candidate.description} • ${formatCurrency(candidate.amount)} • ${date ? format(parseISO(date.substring(0, 10)), 'dd/MM/yyyy') : 'sem data'}`;
-}
-
 export default function BankStatementReconciliationModal({ open, onOpenChange }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
@@ -221,6 +198,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [statementRows, setStatementRows] = useState([]);
   const [ignoredRows, setIgnoredRows] = useState({});
   const [manualMatches, setManualMatches] = useState({});
+  const [hideProcessed, setHideProcessed] = useState(false); // NOVO: Toggle
 
   const { data: transactions = [], isLoading: loadingTransactions } = useQuery({
     queryKey: ['transactions'],
@@ -261,7 +239,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       const processedIdx = poolReconciled.findIndex(t => 
         matchesBankAmount(t, row.amount) &&
-        isDateNear(t.date, row.date)
+        Math.abs(differenceInCalendarDays(parseISO(t.date), parseISO(row.date))) <= 4
       );
 
       if (processedIdx !== -1) {
@@ -274,7 +252,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       const autoIdx = poolCandidates.findIndex(c => 
         matchesBankAmount(c, row.amount) &&
-        isDateNear(candidateDate(c), row.date)
+        Math.abs(differenceInCalendarDays(parseISO(c.date || c.due_date), parseISO(row.date))) <= 4
       );
 
       if (autoIdx !== -1) {
@@ -287,35 +265,25 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     });
   }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches]);
 
-  const itemsToProcess = rowsWithState.filter(r => r.status !== 'processed').length;
+  // Aplica o filtro de ocultar processados
+  const visibleRows = hideProcessed 
+    ? rowsWithState.filter(r => r.status !== 'processed' && r.status !== 'to_ignore') 
+    : rowsWithState;
 
   const executeBatchMutation = useMutation({
     mutationFn: async () => {
-      const toProcess = rowsWithState.filter(r => r.status !== 'processed');
+      const toProcess = rowsWithState.filter(r => r.status !== 'processed' && r.status !== 'to_ignore');
 
       for (const row of toProcess) {
-        if (row.status === 'to_ignore') {
-          await base44.entities.Transaction.create({
-            description: row.description,
-            amount: row.amount,
-            type: 'ignored',
-            category: 'ignored',
-            date: row.date,
-            source: 'manual',
-            reconciled: true,
-            notes: 'Ignorado via conciliação em lote',
-          });
-        } 
-        else if (row.status === 'orphan') {
+        if (row.status === 'orphan') {
           await base44.entities.Transaction.create({
             description: row.description,
             amount: row.amount,
             type: row.type,
-            category: row.preSelectedCategory || undefined,
             date: row.date,
             source: 'manual',
             reconciled: true,
-            notes: row.preSelectedCategory ? 'Agrupado via importação' : 'Criado via Extrato (Órfão)',
+            notes: 'Criado via Extrato (Órfão)',
           });
         } 
         else if (row.status === 'auto_match' || row.status === 'manual_match') {
@@ -337,7 +305,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               source: 'manual',
               payable_id: row.match.id,
               reconciled: true,
-              notes: 'Pagamento de despesa conciliado em lote',
+              notes: 'Pagamento conciliado em lote',
             });
             await base44.entities.Payable.update(row.match.id, {
               amount: row.amount, 
@@ -369,13 +337,12 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['payables'] });
-      queryClient.invalidateQueries({ queryKey: ['payables-list'] });
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
       toast.success('Auditoria concluída com sucesso!');
       handleClose(false);
     },
     onError: () => {
-      toast.error('Erro na execução em lote. Tente novamente.');
+      toast.error('Erro na execução em lote.');
     }
   });
 
@@ -410,101 +377,80 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     });
   };
 
-  const isLoading = loadingTransactions || loadingPayables || loadingReceivables;
-  
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="flex flex-col max-h-[90vh] max-w-7xl p-0 font-sora">
         <DialogHeader className="border-b px-6 py-5 bg-slate-50 shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-            <FileUp className="h-5 w-5 text-primary" />
-            Mesa de Conciliação em Lote
-          </DialogTitle>
-          <DialogDescription className="text-sm font-medium">
-            O valor e o tipo do extrato bancário dão a palavra final. Nada é salvo no banco até você mandar executar.
-          </DialogDescription>
+          <DialogTitle>Mesa de Conciliação em Lote</DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50/30">
-          <div className="p-6 space-y-4">
-            <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-center md:justify-between shadow-sm sticky top-0 z-10">
-              <div className="flex flex-1 items-center gap-3">
-                <Input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
-                {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => executeBatchMutation.mutate()}
-                  disabled={itemsToProcess === 0 || executeBatchMutation.isPending}
-                  className="w-full md:w-auto font-bold bg-primary px-8"
-                >
-                  {executeBatchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-                  EXECUTAR CONCILIAÇÃO ({itemsToProcess} ITENS)
-                </Button>
-              </div>
-            </div>
+        <div className="flex flex-col gap-2 p-4">
+           <div className="flex items-center gap-2">
+            <Input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileChange} />
+            <Button variant="outline" onClick={() => setHideProcessed(!hideProcessed)}>
+                {hideProcessed ? "Mostrar Tudo" : "Ocultar Processados"}
+            </Button>
+           </div>
+        </div>
 
-            <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-100/80">
-                    <TableHead colSpan={3} className="border-r text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
-                      VISÃO DO EXTRATO BANCÁRIO (CSV)
-                    </TableHead>
-                    <TableHead colSpan={3} className="text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
-                      DIAGNÓSTICO E REVISÃO
-                    </TableHead>
+        <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50/30 p-6">
+          <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Vínculo</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleRows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>{row.description}</TableCell>
+                    <TableCell>{formatCurrency(row.amount)}</TableCell>
+                    <TableCell>{row.match?.description || '---'}</TableCell>
+                    <TableCell>
+                        <Badge>{row.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" onClick={() => toggleIgnore(row.id)}>
+                        {ignoredRows[row.id] ? <Undo2 /> : <EyeOff />}
+                      </Button>
+                      {row.status === 'orphan' && (
+                        <Popover>
+                          <PopoverTrigger><Search /></PopoverTrigger>
+                          <PopoverContent className="w-[400px]">
+                            <Command>
+                              <CommandInput />
+                              {/* O scroll está resolvido aqui com max-h e overflow */}
+                              <CommandList className="max-h-[300px] overflow-y-auto">
+                                <CommandGroup>
+                                  {candidates.map(c => (
+                                    <CommandItem key={c.id} onSelect={() => setManualMatches({...manualMatches, [row.id]: c})}>
+                                      {c.description}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    </TableCell>
                   </TableRow>
-                  <TableRow className="text-[11px] uppercase tracking-wider font-bold">
-                    <TableHead>Data</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="border-r text-right">Valor</TableHead>
-                    <TableHead>Correspondência Encontrada</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rowsWithState.map((row) => {
-                    const isProcessed = row.status === 'processed';
-                    const isIgnored = row.status === 'to_ignore';
-                    
-                    return (
-                      <TableRow key={row.id} className={`${isProcessed || isIgnored ? 'bg-slate-50/50 opacity-50 grayscale' : 'hover:bg-slate-50'} transition-all`}>
-                        <TableCell className="whitespace-nowrap font-bold text-slate-600 text-xs">{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
-                        <TableCell className="max-w-[280px] truncate font-bold text-slate-800 text-sm">
-                          {row.description}
-                        </TableCell>
-                        <TableCell className="border-r text-right font-black text-sm">{formatCurrency(row.amount)}</TableCell>
-                        <TableCell className="max-w-[360px]">
-                          {row.match ? (
-                            <div className="space-y-1">
-                              <p className={`truncate text-sm font-bold ${isProcessed ? 'text-slate-500' : 'text-slate-700'}`}>{row.match.description}</p>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] font-bold text-slate-400 uppercase">Nenhum vínculo</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className="bg-slate-100 text-slate-500 border-none font-bold uppercase text-[9px]">{row.status}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                             {!isProcessed && (
-                               <Button size="sm" variant="ghost" onClick={() => toggleIgnore(row.id)}>
-                                 {isIgnored ? <Undo2 className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                               </Button>
-                             )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </div>
+
+        <DialogFooter className="p-4 border-t">
+          <Button onClick={() => executeBatchMutation.mutate()}>EXECUTAR CONCILIAÇÃO</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parse, parseISO, isValid, differenceInCalendarDays, startOfDay } from 'date-fns';
-import { Check, FileUp, Link2, Loader2, Plus, Search, AlertCircle, XCircle } from 'lucide-react';
+import { Check, FileUp, Link2, Loader2, Search, AlertCircle, EyeOff, Undo2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-// Função de normalização super agressiva (tira acentos e caracteres especiais para não falhar na leitura)
 const normalize = (value) => {
   return String(value || '')
     .trim()
@@ -100,7 +99,6 @@ function postProcessCsv(rows) {
   let latestRentabDate = '';
 
   rows.forEach((row) => {
-    // Agrupa todos os RENTAB.INVEST FACILCRED* do Bradesco
     if (row.description.toUpperCase().includes('RENTAB.INVEST FACILCRED*')) {
       const val = row.type === 'income' ? row.amount : -row.amount;
       rentabSum += val;
@@ -125,14 +123,12 @@ function postProcessCsv(rows) {
   return processed.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// NOVO PARSER INTELIGENTE (Preparado para Bradesco e CSVs Brasileiros)
 function parseCsv(text) {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length < 2) return [];
 
   const delimiter = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ',';
 
-  // 1. Achar a linha verdadeira de Cabeçalho (Ignora metadados do Bradesco no topo)
   let headerLineIndex = 0;
   for (let i = 0; i < Math.min(5, lines.length); i++) {
     const cols = splitCsvLine(lines[i], delimiter).map(normalize);
@@ -146,8 +142,6 @@ function parseCsv(text) {
   
   const dateIndex = headers.findIndex(h => h.includes('data') || h.includes('date'));
   const descriptionIndex = headers.findIndex(h => h.includes('hist') || h.includes('desc') || h.includes('memo') || h.includes('lancamento'));
-  
-  // 2. Detecção inteligente de colunas de Valores
   const creditIndex = headers.findIndex(h => h.includes('credito') || h.includes('dito') || h.includes('entrada')); 
   const debitIndex = headers.findIndex(h => h.includes('debito') || h.includes('bito') || h.includes('saida'));
   const amountIndex = headers.findIndex(h => h === 'valor' || h === 'amount' || h.includes('quantia'));
@@ -160,7 +154,6 @@ function parseCsv(text) {
     let amount = 0;
     let type = 'expense';
 
-    // Se o banco tem colunas duplas (Bradesco, BB, Itaú)
     if (creditIndex >= 0 && debitIndex >= 0 && creditIndex !== debitIndex) {
       const creditVal = parseAmount(columns[creditIndex]);
       const debitVal = parseAmount(columns[debitIndex]);
@@ -172,10 +165,9 @@ function parseCsv(text) {
         amount = debitVal;
         type = 'expense';
       } else {
-        return null; // Linha inútil (saldo zerado)
+        return null;
       }
     } 
-    // Se o banco tem coluna única (Nubank, Inter)
     else {
       const valCol = amountIndex >= 0 ? columns[amountIndex] : columns[2];
       const parsedVal = parseAmount(valCol);
@@ -204,10 +196,6 @@ function candidateDate(candidate) {
   return candidate.kind === 'payable' ? candidate.due_date : candidate.date;
 }
 
-function candidateType(candidate) {
-  return candidate.kind === 'payable' ? 'expense' : candidate.type;
-}
-
 function isDateNear(statementDate, targetDate) {
   if (!statementDate || !targetDate) return false;
   return Math.abs(differenceInCalendarDays(startOfDay(parseISO(statementDate)), startOfDay(parseISO(targetDate)))) <= 2;
@@ -222,13 +210,14 @@ function buildCandidateLabel(candidate) {
 export default function BankStatementReconciliationModal({ open, onOpenChange }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
+  
   const [statementRows, setStatementRows] = useState([]);
+  const [ignoredRows, setIgnoredRows] = useState({});
   const [manualMatches, setManualMatches] = useState({});
-  const [confirmedRows, setConfirmedRows] = useState({});
 
   const { data: transactions = [], isLoading: loadingTransactions } = useQuery({
     queryKey: ['transactions'],
-    queryFn: () => base44.entities.Transaction.list('-date', 500),
+    queryFn: () => base44.entities.Transaction.list('-date', 1000), // Traz tudo para checar "Já Processado"
     enabled: open,
   });
 
@@ -238,94 +227,137 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     enabled: open,
   });
 
-  const candidates = useMemo(() => {
-    const pendingPayables = payables
-      .filter((payable) => ['pending', 'provisioned'].includes(payable.status || 'pending'))
-      .map((payable) => ({ ...payable, kind: 'payable' }));
-
-    const unreconciledTransactions = transactions
-      .filter((transaction) => transaction.reconciled !== true)
-      .map((transaction) => ({ ...transaction, kind: 'transaction' }));
-
-    return [...pendingPayables, ...unreconciledTransactions];
-  }, [payables, transactions]);
-
-  const rowsWithMatches = useMemo(() => statementRows.map((row) => {
-    const manualMatch = manualMatches[row.id];
-    const automaticMatch = candidates.find((candidate) => (
-      toCents(candidate.amount) === toCents(row.amount)
-      && candidateType(candidate) === row.type
-      && isDateNear(row.date, candidateDate(candidate))
-    ));
-
-    const finalMatch = manualMatch || automaticMatch || null;
-    const hasValueDivergence = finalMatch && toCents(finalMatch.amount) !== toCents(row.amount);
+  // Divisão das listas para o motor de cruzamento
+  const { candidates, reconciledTransactions } = useMemo(() => {
+    const reconciled = transactions.filter(t => t.reconciled === true).map(t => ({ ...t, kind: 'transaction' }));
+    const pendingTransactions = transactions.filter(t => t.reconciled !== true).map(t => ({ ...t, kind: 'transaction' }));
+    const pendingPayables = payables.filter(p => ['pending', 'provisioned'].includes(p.status || 'pending')).map(p => ({ ...p, kind: 'payable' }));
 
     return {
-      ...row,
-      match: finalMatch,
-      matchSource: manualMatch ? 'manual' : automaticMatch ? 'auto' : null,
-      hasValueDivergence,
+      reconciledTransactions: reconciled,
+      candidates: [...pendingPayables, ...pendingTransactions]
     };
-  }), [statementRows, candidates, manualMatches]);
+  }, [payables, transactions]);
 
-  const automaticMatchesCount = rowsWithMatches.filter((row) => row.matchSource === 'auto' && !confirmedRows[row.id]).length;
+  // Motor de Estados em Lote (Greedy Pool Algorithm)
+  const rowsWithState = useMemo(() => {
+    const poolReconciled = [...reconciledTransactions];
+    const poolCandidates = [...candidates];
 
-  const reconcileMutation = useMutation({
-    mutationFn: async (row) => {
-      if (!row.match) {
-        await base44.entities.Transaction.create({
-          description: row.description,
-          amount: row.amount,
-          type: row.type,
-          date: row.date,
-          category: row.preSelectedCategory || undefined,
-          source: 'manual',
-          reconciled: true,
-          notes: row.preSelectedCategory ? 'Agrupado via importação de extrato' : 'Criado via Extrato (Órfão)',
-        });
-        return row.id;
+    return statementRows.map((row) => {
+      // 1. Checa se o usuário mandou ignorar ativamente agora
+      if (ignoredRows[row.id]) {
+        return { ...row, status: 'to_ignore' };
       }
 
-      if (row.match.kind === 'transaction') {
-        await base44.entities.Transaction.update(row.match.id, {
-          amount: row.amount, 
-          date: row.date,    
-          reconciled: true,
-          notes: row.match.notes || 'Conciliado com extrato',
-        });
-        return row.id;
+      // 2. Checa Bloqueio (Já Processado no Banco)
+      const processedIdx = poolReconciled.findIndex(t => 
+        toCents(t.amount) === toCents(row.amount) &&
+        isDateNear(t.date, row.date) &&
+        (t.type === row.type || t.type === 'ignored') // O banco atesta a entrada/saída ou se foi ignorado no passado
+      );
+
+      if (processedIdx !== -1) {
+        const match = poolReconciled[processedIdx];
+        poolReconciled.splice(processedIdx, 1); // Consome do pool para não duplicar match
+        return { ...row, status: 'processed', match };
       }
 
-      const transaction = await base44.entities.Transaction.create({
-        description: row.description || row.match.description,
-        amount: row.amount,
-        type: 'expense',
-        category: row.match.category,
-        date: row.date,
-        source: 'manual',
-        payable_id: row.match.id,
-        reconciled: true,
-        notes: 'Pagamento conciliado com extrato',
-      });
+      // 3. Checa Match Manual
+      if (manualMatches[row.id]) {
+        return { ...row, status: 'manual_match', match: manualMatches[row.id] };
+      }
 
-      await base44.entities.Payable.update(row.match.id, {
-        amount: row.amount, 
-        status: 'paid',
-        transaction_id: transaction.id,
-      });
+      // 4. Checa Match Automático (Ignora o Tipo, foca no Valor e Data)
+      const autoIdx = poolCandidates.findIndex(c => 
+        toCents(c.amount) === toCents(row.amount) &&
+        isDateNear(candidateDate(c), row.date)
+      );
 
-      return row.id;
+      if (autoIdx !== -1) {
+        const match = poolCandidates[autoIdx];
+        poolCandidates.splice(autoIdx, 1);
+        return { ...row, status: 'auto_match', match };
+      }
+
+      // 5. Órfão (Novo lançamento)
+      return { ...row, status: 'orphan' };
+    });
+  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches]);
+
+  const itemsToProcess = rowsWithState.filter(r => r.status !== 'processed').length;
+
+  const executeBatchMutation = useMutation({
+    mutationFn: async () => {
+      const toProcess = rowsWithState.filter(r => r.status !== 'processed');
+
+      for (const row of toProcess) {
+        // Ação 1: Ignorar e arquivar
+        if (row.status === 'to_ignore') {
+          await base44.entities.Transaction.create({
+            description: row.description,
+            amount: row.amount,
+            type: 'ignored',
+            category: 'ignored',
+            date: row.date,
+            source: 'manual',
+            reconciled: true,
+            notes: 'Ignorado na conciliação em lote',
+          });
+        } 
+        // Ação 2: Criar novo órfão
+        else if (row.status === 'orphan') {
+          await base44.entities.Transaction.create({
+            description: row.description,
+            amount: row.amount,
+            type: row.type,
+            category: row.preSelectedCategory || undefined,
+            date: row.date,
+            source: 'manual',
+            reconciled: true,
+            notes: row.preSelectedCategory ? 'Agrupado via importação' : 'Criado via Extrato (Órfão)',
+          });
+        } 
+        // Ação 3: Vincular e Forçar a "Verdade do Banco"
+        else if (row.status === 'auto_match' || row.status === 'manual_match') {
+          if (row.match.kind === 'transaction') {
+            await base44.entities.Transaction.update(row.match.id, {
+              amount: row.amount, 
+              date: row.date,    
+              type: row.type, // FORÇA O TIPO (Cura lançamentos cadastrados errado)
+              reconciled: true,
+              notes: row.match.notes || 'Conciliado com extrato',
+            });
+          } else if (row.match.kind === 'payable') {
+            const transaction = await base44.entities.Transaction.create({
+              description: row.description || row.match.description,
+              amount: row.amount,
+              type: row.type, // Receitas ou Despesas
+              category: row.match.category,
+              date: row.date,
+              source: 'manual',
+              payable_id: row.match.id,
+              reconciled: true,
+              notes: 'Pagamento conciliado em lote',
+            });
+            await base44.entities.Payable.update(row.match.id, {
+              amount: row.amount, 
+              status: 'paid',
+              transaction_id: transaction.id,
+            });
+          }
+        }
+      }
     },
-    onSuccess: (rowId) => {
-      setConfirmedRows((previous) => ({ ...previous, [rowId]: true }));
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['payables'] });
       queryClient.invalidateQueries({ queryKey: ['payables-list'] });
-      toast.success('Lançamento conciliado.');
+      toast.success('Auditoria concluída e caixa atualizado!');
+      handleClose(false);
     },
     onError: () => {
-      toast.error('Erro ao conciliar. Tente novamente.');
+      toast.error('Ocorreu um erro no processamento em lote. Tente novamente.');
     }
   });
 
@@ -337,140 +369,134 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     reader.onload = (loadEvent) => {
       setStatementRows(parseCsv(loadEvent.target.result || ''));
       setManualMatches({});
-      setConfirmedRows({});
+      setIgnoredRows({});
     };
-    // Leitura em padrão ISO resolve os bugs de acentuação do Windows-1252 dos bancos
     reader.readAsText(file, 'ISO-8859-1');
-  };
-
-  const confirmAllAutomatic = async () => {
-    const rows = rowsWithMatches.filter((row) => row.matchSource === 'auto' && !confirmedRows[row.id]);
-    for (const row of rows) await reconcileMutation.mutateAsync(row);
-    toast.success('Matches automáticos processados.');
   };
 
   const handleClose = (nextOpen) => {
     if (!nextOpen) {
       setStatementRows([]);
       setManualMatches({});
-      setConfirmedRows({});
+      setIgnoredRows({});
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
     onOpenChange?.(nextOpen);
   };
 
+  const toggleIgnore = (rowId) => {
+    setIgnoredRows(prev => {
+      const next = { ...prev };
+      if (next[rowId]) delete next[rowId];
+      else next[rowId] = true;
+      return next;
+    });
+  };
+
   const isLoading = loadingTransactions || loadingPayables;
 
-  const incomeRows = rowsWithMatches.filter(r => r.type === 'income');
-  const expenseRows = rowsWithMatches.filter(r => r.type === 'expense');
+  const incomeRows = rowsWithState.filter(r => r.type === 'income');
+  const expenseRows = rowsWithState.filter(r => r.type === 'expense');
 
-  const RowComponent = ({ row }) => (
-    <TableRow key={row.id} className={`${confirmedRows[row.id] ? 'bg-emerald-50/50 opacity-60' : 'hover:bg-slate-50'} transition-all`}>
-      <TableCell className="whitespace-nowrap font-bold text-slate-600 text-xs">{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
-      <TableCell className="max-w-[280px] truncate font-bold text-slate-800 text-sm">
-        {row.description}
-        {row.preSelectedCategory && (
-          <Badge variant="outline" className="ml-2 text-[9px] text-slate-400 uppercase">Consolidado</Badge>
-        )}
-      </TableCell>
-      <TableCell className="border-r text-right font-black text-sm">{formatCurrency(row.amount)}</TableCell>
-      
-      <TableCell className="max-w-[360px]">
-        {row.match ? (
-          <div className="space-y-1">
-            <p className="truncate text-sm font-bold text-slate-700">{row.match.description}</p>
-            <div className="flex items-center gap-2">
-              <Badge className="bg-slate-100 text-slate-600 border-none text-[9px] px-1.5 uppercase font-bold">
-                {row.match.kind === 'payable' ? 'CONTA' : 'TRANSAÇÃO'}
-              </Badge>
-              <span className={`text-xs font-bold ${row.hasValueDivergence ? 'text-amber-600 line-through' : 'text-slate-500'}`}>
-                {formatCurrency(row.match.amount)}
-              </span>
+  const RowComponent = ({ row }) => {
+    const isProcessed = row.status === 'processed';
+    const isIgnored = row.status === 'to_ignore';
+
+    return (
+      <TableRow key={row.id} className={`${isProcessed || isIgnored ? 'bg-slate-50/50 opacity-50 grayscale' : 'hover:bg-slate-50'} transition-all`}>
+        <TableCell className="whitespace-nowrap font-bold text-slate-600 text-xs">{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
+        <TableCell className="max-w-[280px] truncate font-bold text-slate-800 text-sm">
+          {row.description}
+          {row.preSelectedCategory && <Badge variant="outline" className="ml-2 text-[9px] text-slate-400 uppercase">Consolidado</Badge>}
+        </TableCell>
+        <TableCell className="border-r text-right font-black text-sm">{formatCurrency(row.amount)}</TableCell>
+        
+        <TableCell className="max-w-[360px]">
+          {row.match ? (
+            <div className="space-y-1">
+              <p className={`truncate text-sm font-bold ${isProcessed ? 'text-slate-500' : 'text-slate-700'}`}>{row.match.description}</p>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-slate-100 text-slate-600 border-none text-[9px] px-1.5 uppercase font-bold">
+                  {row.match.kind === 'payable' ? 'CONTA' : 'TRANSAÇÃO'}
+                </Badge>
+                <span className={`text-xs font-bold ${row.match.type !== row.type && !isProcessed ? 'text-amber-600' : 'text-slate-500'}`}>
+                  {formatCurrency(row.match.amount)}
+                </span>
+              </div>
+              {row.match.type !== row.type && !isProcessed && (
+                <p className="text-[10px] font-bold text-amber-600 flex items-center mt-1">
+                  <AlertCircle className="w-3 h-3 mr-1" /> O Tipo será forçado para o do Extrato.
+                </p>
+              )}
             </div>
-            {row.hasValueDivergence && !confirmedRows[row.id] && (
-              <p className="text-[10px] font-bold text-amber-600 flex items-center mt-1">
-                <AlertCircle className="w-3 h-3 mr-1" />
-                O valor será ajustado.
-              </p>
-            )}
-          </div>
-        ) : (
-          <span className="text-[11px] font-bold text-slate-400 uppercase">Não encontrada</span>
-        )}
-      </TableCell>
-      
-      <TableCell>
-        {confirmedRows[row.id] ? (
-          <Badge className="bg-emerald-100 text-emerald-700 border-none font-bold uppercase text-[9px]">CONCILIADO</Badge>
-        ) : row.matchSource === 'auto' ? (
-          <Badge className="bg-blue-100 text-blue-700 border-none font-bold uppercase text-[9px]">MATCH AUTO</Badge>
-        ) : row.matchSource === 'manual' ? (
-          <Badge className="bg-purple-100 text-purple-700 border-none font-bold uppercase text-[9px]">VÍNCULO MANUAL</Badge>
-        ) : (
-          <Badge className="bg-slate-100 text-slate-500 border-none font-bold uppercase text-[9px]">ÓRFÃO</Badge>
-        )}
-      </TableCell>
-      
-      <TableCell className="text-right">
-        <div className="flex justify-end gap-2">
-          {!confirmedRows[row.id] && row.match && (
-            <Button size="sm" onClick={() => reconcileMutation.mutate(row)} disabled={reconcileMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 font-bold h-8 text-xs">
-              <Check className="h-4 w-4 mr-1" /> CONCILIAR
-            </Button>
+          ) : (
+            <span className="text-[11px] font-bold text-slate-400 uppercase">Nenhum vínculo</span>
           )}
-
-          {!confirmedRows[row.id] && !row.match && (
-            <Button size="sm" variant="outline" onClick={() => reconcileMutation.mutate(row)} disabled={reconcileMutation.isPending} className="font-bold text-slate-600 h-8 text-xs">
-              <Plus className="h-4 w-4 mr-1" /> CRIAR NOVO
-            </Button>
-          )}
-
-          {!confirmedRows[row.id] && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-primary">
-                  <Search className="h-4 w-4" />
+        </TableCell>
+        
+        <TableCell>
+          {row.status === 'processed' && <Badge className="bg-slate-200 text-slate-600 border-none font-bold uppercase text-[9px]">JÁ PROCESSADO</Badge>}
+          {row.status === 'to_ignore' && <Badge className="bg-red-100 text-red-700 border-none font-bold uppercase text-[9px]">A IGNORAR</Badge>}
+          {row.status === 'auto_match' && <Badge className="bg-amber-100 text-amber-700 border-none font-bold uppercase text-[9px]">SUGESTÃO</Badge>}
+          {row.status === 'manual_match' && <Badge className="bg-purple-100 text-purple-700 border-none font-bold uppercase text-[9px]">VÍNCULO MANUAL</Badge>}
+          {row.status === 'orphan' && <Badge className="bg-slate-100 text-slate-500 border-none font-bold uppercase text-[9px]">NOVO (ÓRFÃO)</Badge>}
+        </TableCell>
+        
+        <TableCell className="text-right">
+          <div className="flex justify-end gap-2">
+            {!isProcessed && (
+              <>
+                <Button size="sm" variant={isIgnored ? "secondary" : "ghost"} onClick={() => toggleIgnore(row.id)} className={`h-8 px-2 ${isIgnored ? 'text-red-600 font-bold' : 'text-slate-400 hover:text-red-500'}`}>
+                  {isIgnored ? <Undo2 className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4" />}
+                  {isIgnored ? "RESTAURAR" : ""}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-[420px] p-0 font-sora">
-                <Command>
-                  <div className="flex items-center border-b px-3">
-                    <Search className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
-                    <CommandInput placeholder="Buscar transação no sistema..." className="text-sm font-medium" />
-                  </div>
-                  <CommandList>
-                    <CommandEmpty className="py-6 text-center text-sm font-medium text-slate-500">Sem resultados.</CommandEmpty>
-                    <CommandGroup heading={<span className="text-xs font-bold text-slate-400 uppercase tracking-widest">PENDENTES DE CONCILIAÇÃO</span>}>
-                      {candidates
-                        .filter(c => candidateType(c) === row.type)
-                        .map((candidate) => (
-                        <CommandItem
-                          key={`${candidate.kind}-${candidate.id}`}
-                          value={buildCandidateLabel(candidate)}
-                          onSelect={() => setManualMatches((previous) => ({ ...previous, [row.id]: candidate }))}
-                          className="cursor-pointer"
-                        >
-                          <div className="flex w-full items-center justify-between gap-3 py-1">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-bold text-slate-800">{candidate.description}</p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{candidate.kind === 'payable' ? 'CONTA' : 'TRANSAÇÃO'}</p>
-                            </div>
-                            <span className="shrink-0 text-sm font-black text-slate-900">{formatCurrency(candidate.amount)}</span>
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
 
-          {confirmedRows[row.id] && <Check className="h-5 w-5 text-emerald-500 mr-2" />}
-        </div>
-      </TableCell>
-    </TableRow>
-  );
+                {!isIgnored && !row.match && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="outline" className="h-8 px-2 text-slate-600 font-bold text-xs">
+                        <Search className="h-4 w-4 mr-1" /> VINCULAR
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-[420px] p-0 font-sora">
+                      <Command>
+                        <div className="flex items-center border-b px-3">
+                          <Search className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
+                          <CommandInput placeholder="Buscar transação (sem filtro de tipo)..." className="text-sm font-medium" />
+                        </div>
+                        <CommandList>
+                          <CommandEmpty className="py-6 text-center text-sm font-medium text-slate-500">Sem resultados.</CommandEmpty>
+                          <CommandGroup heading={<span className="text-xs font-bold text-slate-400 uppercase tracking-widest">PENDENTES NO SISTEMA</span>}>
+                            {candidates.map((candidate) => (
+                              <CommandItem
+                                key={`${candidate.kind}-${candidate.id}`}
+                                value={buildCandidateLabel(candidate)}
+                                onSelect={() => setManualMatches((previous) => ({ ...previous, [row.id]: candidate }))}
+                                className="cursor-pointer"
+                              >
+                                <div className="flex w-full items-center justify-between gap-3 py-1">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold text-slate-800">{candidate.description}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{candidate.kind === 'payable' ? 'CONTA' : 'TRANSAÇÃO'}</p>
+                                  </div>
+                                  <span className="shrink-0 text-sm font-black text-slate-900">{formatCurrency(candidate.amount)}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </>
+            )}
+            {isProcessed && <Check className="h-5 w-5 text-slate-400 mr-2" />}
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -479,27 +505,29 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         <DialogHeader className="border-b px-6 py-5 bg-slate-50 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
             <FileUp className="h-5 w-5 text-primary" />
-            Conciliação de Extrato Bancário
+            Mesa de Conciliação em Lote
           </DialogTitle>
           <DialogDescription className="text-sm font-medium">
-            O valor do extrato importado será considerado a "Verdade Absoluta" e sobrescreverá qualquer previsão no sistema.
+            O valor e o tipo do extrato bancário sobrescrevem o sistema. Nada é salvo sem a sua execução.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
-          <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-center md:justify-between shadow-sm">
+          <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-center md:justify-between shadow-sm sticky top-0 z-10">
             <div className="flex flex-1 items-center gap-3">
               <Input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
               {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
-            <Button
-              onClick={confirmAllAutomatic}
-              disabled={automaticMatchesCount === 0 || reconcileMutation.isPending}
-              className="w-full md:w-auto font-bold bg-primary"
-            >
-              {reconcileMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-              CONFIRMAR TODOS OS AUTOMÁTICOS ({automaticMatchesCount})
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => executeBatchMutation.mutate()}
+                disabled={itemsToProcess === 0 || executeBatchMutation.isPending}
+                className="w-full md:w-auto font-bold bg-primary px-8"
+              >
+                {executeBatchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                EXECUTAR CONCILIAÇÃO ({itemsToProcess} ITENS)
+              </Button>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
@@ -510,7 +538,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                     VISÃO DO EXTRATO BANCÁRIO (CSV)
                   </TableHead>
                   <TableHead colSpan={3} className="text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
-                    MATCH NO SISTEMA E AÇÃO
+                    DIAGNÓSTICO E REVISÃO
                   </TableHead>
                 </TableRow>
                 <TableRow className="text-[11px] uppercase tracking-wider font-bold">
@@ -523,7 +551,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rowsWithMatches.length === 0 ? (
+                {rowsWithState.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-32 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                       Nenhum arquivo processado
@@ -558,10 +586,6 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             </Table>
           </div>
         </div>
-
-        <DialogFooter className="border-t px-6 py-4 bg-slate-50 shrink-0">
-          <Button variant="outline" onClick={() => handleClose(false)} className="font-bold w-full md:w-auto">FECHAR</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

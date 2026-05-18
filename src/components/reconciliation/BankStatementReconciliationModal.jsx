@@ -48,6 +48,13 @@ const normalizeToLetters = (value) => {
 const toCents = (value) => Math.round(Math.abs(Number(value) || 0) * 100);
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
 
+function matchesBankAmount(record, bankAmount) {
+  const bankCents = toCents(bankAmount);
+  return [record.amount, record.net_amount]
+    .filter((value) => value !== undefined && value !== null)
+    .some((value) => toCents(value) === bankCents);
+}
+
 function splitCsvLine(line, delimiter) {
   const result = [];
   let current = '';
@@ -253,7 +260,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       if (ignoredRows[row.id]) return { ...row, status: 'to_ignore' };
 
       const processedIdx = poolReconciled.findIndex(t => 
-        toCents(t.amount) === toCents(row.amount) &&
+        matchesBankAmount(t, row.amount) &&
         isDateNear(t.date, row.date)
       );
 
@@ -266,7 +273,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       if (manualMatches[row.id]) return { ...row, status: 'manual_match', match: manualMatches[row.id] };
 
       const autoIdx = poolCandidates.findIndex(c => 
-        toCents(c.amount) === toCents(row.amount) &&
+        matchesBankAmount(c, row.amount) &&
         isDateNear(candidateDate(c), row.date)
       );
 
@@ -340,7 +347,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
           } else if (row.match.kind === 'receivable') {
             const transaction = await base44.entities.Transaction.create({
               description: row.description || row.match.description,
-              amount: row.amount,
+              amount: row.match.amount || row.amount,
+              net_amount: row.amount,
               type: row.type, 
               category: row.match.category,
               date: row.date,
@@ -350,8 +358,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               notes: 'Receita conciliada em lote',
             });
             await base44.entities.Receivable.update(row.match.id, {
-              amount: row.amount, 
-              status: 'paid',
+              net_amount: row.amount, 
+              status: 'received',
               transaction_id: transaction.id,
             });
           }

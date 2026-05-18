@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Trash2, CheckCircle2, Pencil } from 'lucide-react';
+import { Plus, Search, Trash2, CheckCircle2, Pencil, FileUp } from 'lucide-react';
 import EditTransactionModal from '@/components/transactions/EditTransactionModal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import TransactionFormModal from '@/components/transactions/TransactionFormModal';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import BankStatementReconciliationModal from '@/components/reconciliation/BankStatementReconciliationModal';
 
 const CATEGORY_LABELS = {
   alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
@@ -30,6 +31,7 @@ export default function Transactions() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [openReconciliation, setOpenReconciliation] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: transactions = [], isLoading } = useQuery({
@@ -54,15 +56,21 @@ export default function Transactions() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-sora font-bold">Lançamentos</h1>
-          <p className="text-muted-foreground text-sm mt-1">{transactions.length} lançamentos no total</p>
-        </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Novo
-        </Button>
-      </div>
+         <div>
+           <h1 className="text-2xl font-sora font-bold">Lançamentos</h1>
+           <p className="text-muted-foreground text-sm mt-1">{transactions.length} lançamentos no total</p>
+         </div>
+         <div className="flex gap-2">
+           <Button variant="outline" onClick={() => setOpenReconciliation(true)}>
+             <FileUp className="w-4 h-4 mr-2" />
+             Conciliar Extrato
+           </Button>
+           <Button onClick={() => setShowForm(true)}>
+             <Plus className="w-4 h-4 mr-2" />
+             Novo
+           </Button>
+         </div>
+       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
@@ -152,24 +160,29 @@ export default function Transactions() {
       )}
 
       {deletingTx && (
-        <AlertDialog open onOpenChange={() => setDeletingTx(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
-              <AlertDialogDescription>
-                "{deletingTx.description}" — {deletingTx.date ? format(new Date(deletingTx.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}
-                {deletingTx.reconciled && <span className="block mt-1 text-amber-600 font-medium">⚠️ Este lançamento está conciliado com uma conta. A conciliação será desfeita.</span>}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="flex gap-2">
-              <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
-              <Button variant="destructive" className="flex-1" onClick={() => deleteMutation.mutate(deletingTx.id)} disabled={deleteMutation.isPending}>
-                {deleteMutation.isPending ? 'Removendo...' : 'Excluir'}
-              </Button>
-            </div>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+         <AlertDialog open onOpenChange={() => setDeletingTx(null)}>
+           <AlertDialogContent>
+             <AlertDialogHeader>
+               <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+               <AlertDialogDescription>
+                 "{deletingTx.description}" — {deletingTx.date ? format(new Date(deletingTx.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}
+                 {deletingTx.reconciled && <span className="block mt-1 text-amber-600 font-medium">⚠️ Este lançamento está conciliado com uma conta. A conciliação será desfeita.</span>}
+               </AlertDialogDescription>
+             </AlertDialogHeader>
+             <div className="flex gap-2">
+               <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
+               <Button variant="destructive" className="flex-1" onClick={() => deleteMutation.mutate(deletingTx.id)} disabled={deleteMutation.isPending}>
+                 {deleteMutation.isPending ? 'Removendo...' : 'Excluir'}
+               </Button>
+             </div>
+           </AlertDialogContent>
+         </AlertDialog>
+       )}
+
+      <BankStatementReconciliationModal 
+        open={openReconciliation} 
+        onOpenChange={setOpenReconciliation} 
+      />
     </div>
   );
 }

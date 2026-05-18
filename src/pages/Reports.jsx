@@ -27,7 +27,6 @@ export default function Reports() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
     queryFn: () => base44.entities.Transaction.list('-date', 500),
@@ -48,15 +47,39 @@ export default function Reports() {
     setDrawerOpen(true);
   };
 
-  // Filtrar payables pelo mês selecionado
-  const mStart = startOfMonth(currentMonth);
-  const mEnd = endOfMonth(currentMonth);
+  // ---- LÓGICA DE AUDITORIA (JUNÇÃO DE DADOS) ----
   const selectedMonthStr = format(currentMonth, 'yyyy-MM');
   
+  // 1. Pega as contas planejadas (Payables) do mês
   const filteredPayables = payables.filter(p => {
-    const payableMonth = format(new Date(p.due_date), 'yyyy-MM');
+    // Para auditoria financeira, o ideal é sempre olhar a competência. Se não tiver, cai pro vencimento.
+    const payableMonth = format(new Date(p.competencia || p.due_date), 'yyyy-MM');
     return payableMonth === selectedMonthStr;
   });
+
+  // 2. Pega os gastos instantâneos (WhatsApp/Transactions órfãs) do mês
+  const orphanTransactions = transactions.filter(t => 
+    t.type === 'expense' && 
+    !t.payable_id && 
+    format(new Date(t.date), 'yyyy-MM') === selectedMonthStr
+  );
+
+  // 3. Converte a transação órfã no formato que o componente de Auditoria entende
+  const mappedOrphans = orphanTransactions.map(t => ({
+    id: t.id,
+    description: `${t.description} (Avulsa)`,
+    amount: t.amount,
+    due_date: t.date,
+    competencia: t.date,
+    category: t.category,
+    status: 'paid', // Gastos instantâneos já estão pagos por natureza
+    transaction_id: t.id,
+    is_orphan: true 
+  }));
+
+  // 4. Une tudo na lista final da auditoria
+  const auditData = [...filteredPayables, ...mappedOrphans];
+  // -----------------------------------------------
 
   // Last 6 months data (current year only)
   const currentYear = new Date().getFullYear();
@@ -76,9 +99,8 @@ export default function Reports() {
   });
 
   // Category breakdown current month (current year only)
-  const now = new Date();
-  const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
-  const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
+  const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
 
   const expenseByCategory = monthTx
@@ -226,7 +248,7 @@ export default function Reports() {
 
           </div>
           <AuditReportAccordion 
-             payables={filteredPayables} 
+             payables={auditData} 
              onRowClick={handlePayableClick} 
              categories={categories}
            />

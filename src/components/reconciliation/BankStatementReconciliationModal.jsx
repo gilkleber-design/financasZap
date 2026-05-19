@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { format, parse, parseISO, isValid, differenceInCalendarDays } from 'date-fns';
-import { Check, FileUp, Loader2, Search, EyeOff, Undo2, Eye, PlusCircle, Pencil } from 'lucide-react';
+import { format, parse, parseISO, isValid, differenceInCalendarDays, addMonths } from 'date-fns';
+import { Check, FileUp, Loader2, Search, EyeOff, Undo2, Eye, PlusCircle, Pencil, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -217,8 +217,19 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [hideProcessed, setHideProcessed] = useState(false);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [editingOrphan, setEditingOrphan] = useState(null);
+  
+  // Novos Estados (Motor e Segurança)
+  const [recurrenceType, setRecurrenceType] = useState('single');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [showOtherAccounts, setShowOtherAccounts] = useState(false);
 
-  // Busca a tabela oficial de Categorias
+  // Queries
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => base44.entities.Account.list(),
+    enabled: open,
+  });
+
   const { data: dbCategories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: () => base44.entities.Category.list('', 500),
@@ -244,57 +255,103 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   });
 
   const { candidates, reconciledTransactions } = useMemo(() => {
-    const reconciled = transactions.filter(t => t.reconciled === true).map(t => ({ ...t, kind: 'transaction' }));
-    const pendingTransactions = transactions.filter(t => t.reconciled !== true).map(t => ({ ...t, kind: 'transaction' }));
-    const pendingPayables = payables.filter(p => ['pending', 'provisioned'].includes(p.status || 'pending')).map(p => ({ ...p, kind: 'payable' }));
-    const pendingReceivables = receivables.filter(r => ['pending', 'provisioned'].includes(r.status || 'pending')).map(r => ({ ...r, kind: 'receivable' }));
+    if (!selectedAccountId) return { reconciledTransactions: [], candidates: [] };
+
+    const isOwner = (item) => item.account_id === selectedAccountId;
+
+    const reconciled = transactions
+      .filter(t => t.reconciled === true && (isOwner(t) || showOtherAccounts))
+      .map(t => ({ ...t, kind: 'transaction' }));
+      
+    const pendingTransactions = transactions
+      .filter(t => t.reconciled !== true && (isOwner(t) || showOtherAccounts))
+      .map(t => ({ ...t, kind: 'transaction' }));
+      
+    const pendingPayables = payables
+      .filter(p => ['pending', 'provisioned'].includes(p.status || 'pending') && (isOwner(p) || showOtherAccounts))
+      .map(p => ({ ...p, kind: 'payable' }));
+      
+    const pendingReceivables = receivables
+      .filter(r => ['pending', 'provisioned'].includes(r.status || 'pending') && (isOwner(r) || showOtherAccounts))
+      .map(r => ({ ...r, kind: 'receivable' }));
 
     return { 
       reconciledTransactions: reconciled, 
       candidates: [...pendingPayables, ...pendingReceivables, ...pendingTransactions] 
     };
-  }, [payables, receivables, transactions]);
+  }, [payables, receivables, transactions, selectedAccountId, showOtherAccounts]);
 
   const rowsWithState = useMemo(() => {
+    if (!selectedAccountId) return [];
+    
     const poolReconciled = [...reconciledTransactions];
     const poolCandidates = [...candidates];
 
     return statementRows.map((row) => {
       if (ignoredRows[row.id]) return { ...row, status: 'to_ignore' };
 
-      const processedIdx = poolReconciled.findIndex(t => 
-        matchesBankAmount(t, row.amount) &&
-        isDateNear(t.date, row.date)
-      );
-
+      // 1. Busca Match Exato na Conta Selecionada
+      const processedIdx = poolReconciled.findIndex(t => t.account_id === selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
       if (processedIdx !== -1) {
         const match = poolReconciled[processedIdx];
         poolReconciled.splice(processedIdx, 1); 
         return { ...row, status: 'processed', match };
       }
 
-      if (manualMatches[row.id]) return { ...row, status: 'manual_match', match: manualMatches[row.id] };
+      // 2. Busca Quarentena (Conta Errada) nos Processados
+      if (showOtherAccounts) {
+        const foreignProcessedIdx = poolReconciled.findIndex(t => t.account_id !== selectedAccountId && matchesBankAmount(t, row.amount) && isDateNear(t.date, row.date));
+        if (foreignProcessedIdx !== -1) {
+          const match = poolReconciled[foreignProcessedIdx];
+          return { ...row, status: 'foreign_match', match };
+        }
+      }
 
+      if (manualMatches[row.id]) return { ...row, status: 'manual_match', match: manualMatches[row.id] };
       if (row.isDraftResolved) return { ...row, status: 'draft_ready' };
 
-      const autoIdx = poolCandidates.findIndex(c => 
-        matchesBankAmount(c, row.amount) &&
-        isDateNear(candidateDate(c), row.date)
-      );
-
+      // 3. Busca Match Exato nos Candidatos Pendentes
+      const autoIdx = poolCandidates.findIndex(c => c.account_id === selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
       if (autoIdx !== -1) {
         const match = poolCandidates[autoIdx];
         poolCandidates.splice(autoIdx, 1);
         return { ...row, status: 'auto_match', match };
       }
 
+      // 4. Busca Quarentena (Conta Errada) nos Candidatos
+      if (showOtherAccounts) {
+        const foreignAutoIdx = poolCandidates.findIndex(c => c.account_id !== selectedAccountId && matchesBankAmount(c, row.amount) && isDateNear(candidateDate(c), row.date));
+        if (foreignAutoIdx !== -1) {
+          const match = poolCandidates[foreignAutoIdx];
+          return { ...row, status: 'foreign_match', match };
+        }
+      }
+
       return { ...row, status: 'orphan' };
     });
-  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches]);
+  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches, selectedAccountId, showOtherAccounts]);
 
   const itemsToProcess = rowsWithState.filter(r => 
     ['auto_match', 'manual_match', 'draft_ready', 'to_ignore'].includes(r.status)
   ).length;
+
+  const handleReclassify = async (match) => {
+    if (window.confirm("Este lançamento pertence a outra conta. Mover para a conta atual selecionada?")) {
+      try {
+        if (match.kind === 'transaction') {
+          await base44.entities.Transaction.update(match.id, { account_id: selectedAccountId });
+        } else if (match.kind === 'payable') {
+          await base44.entities.Payable.update(match.id, { account_id: selectedAccountId });
+        } else if (match.kind === 'receivable') {
+          await base44.entities.Receivable.update(match.id, { account_id: selectedAccountId });
+        }
+        queryClient.invalidateQueries();
+        toast.success("Lançamento reclassificado. Atualizando mesa...");
+      } catch (e) {
+        toast.error("Erro ao reclassificar.");
+      }
+    }
+  };
 
   const executeBatchMutation = useMutation({
     mutationFn: async () => {
@@ -313,11 +370,37 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             source: 'manual',
             reconciled: true,
             notes: 'Ignorado via conciliação em lote',
+            account_id: selectedAccountId,
           });
         } 
         else if (row.status === 'draft_ready') {
-          await base44.entities.Transaction.create({
-            description: row.description,
+          const isInstallment = row.recurrence === 'installment';
+          const isFixed = row.recurrence === 'fixed';
+          const isExpense = row.type === 'expense';
+          const EntityProvider = isExpense ? base44.entities.Payable : base44.entities.Receivable;
+          
+          const baseDesc = row.description;
+          const currentDesc = isInstallment ? `${baseDesc} (1/${row.installmentsCount})` : baseDesc;
+
+          const parentPayload = {
+            description: currentDesc,
+            category: row.preSelectedCategory || undefined,
+            due_date: row.date,
+            status: isExpense ? 'paid' : 'received',
+            account_id: selectedAccountId,
+          };
+          
+          if (isExpense) {
+            parentPayload.amount = row.amount;
+          } else {
+            parentPayload.amount = row.amount;
+            parentPayload.net_amount = row.amount;
+          }
+          
+          const parentEntity = await EntityProvider.create(parentPayload);
+
+          const transactionPayload = {
+            description: currentDesc,
             amount: row.amount,
             type: row.type,
             category: row.preSelectedCategory || undefined,
@@ -325,7 +408,41 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             source: 'manual',
             reconciled: true,
             notes: 'Criado e Categorizado na Conciliação',
+            account_id: selectedAccountId,
+          };
+          
+          if (!isExpense) transactionPayload.net_amount = row.amount;
+          if (isExpense) transactionPayload.payable_id = parentEntity.id;
+          else transactionPayload.receivable_id = parentEntity.id;
+
+          const transaction = await base44.entities.Transaction.create(transactionPayload);
+
+          await EntityProvider.update(parentEntity.id, {
+            transaction_id: transaction.id,
+            ...(isFixed && { recurrent: true })
           });
+
+          if (isInstallment && row.installmentsCount > 1) {
+            const startAt = (Number(row.currentInstallment) || 1) + 1; 
+            for (let i = startAt; i <= row.installmentsCount; i++) {
+              const nextDate = addMonths(parseISO(row.date), i - Number(row.currentInstallment || 1));
+              const futurePayload = {
+                description: `${baseDesc} (${i}/${row.installmentsCount})`,
+                category: row.preSelectedCategory || undefined,
+                due_date: format(nextDate, 'yyyy-MM-dd'),
+                status: 'pending',
+                account_id: selectedAccountId,
+              };
+              
+              if (isExpense) {
+                futurePayload.amount = row.amount;
+              } else {
+                futurePayload.amount = row.amount;
+                futurePayload.net_amount = row.amount;
+              }
+              await EntityProvider.create(futurePayload);
+            }
+          }
         } 
         else if (row.status === 'auto_match' || row.status === 'manual_match') {
           if (row.match.kind === 'transaction') {
@@ -334,6 +451,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               date: row.date,    
               type: row.type, 
               reconciled: true,
+              account_id: selectedAccountId,
               notes: row.match.notes || 'Conciliado com extrato',
             });
           } else if (row.match.kind === 'payable') {
@@ -346,11 +464,13 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               source: 'manual',
               payable_id: row.match.id,
               reconciled: true,
+              account_id: selectedAccountId,
               notes: 'Pagamento de despesa conciliado em lote',
             });
             await base44.entities.Payable.update(row.match.id, {
               amount: row.amount, 
               status: 'paid',
+              account_id: selectedAccountId,
               transaction_id: transaction.id,
             });
           } else if (row.match.kind === 'receivable') {
@@ -364,11 +484,13 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               source: 'manual',
               receivable_id: row.match.id,
               reconciled: true,
+              account_id: selectedAccountId,
               notes: 'Receita conciliada em lote',
             });
             await base44.entities.Receivable.update(row.match.id, {
               net_amount: row.amount, 
               status: 'received',
+              account_id: selectedAccountId,
               transaction_id: transaction.id,
             });
           }
@@ -452,10 +574,20 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     const formData = new FormData(e.currentTarget);
     const category = String(formData.get('category') || '');
     const description = String(formData.get('description') || '');
+    const installments = Number(formData.get('installments')) || 1;
+    const currentInst = Number(formData.get('currentInstallment')) || 1;
 
     setStatementRows(prev => prev.map(r => 
       r.id === editingOrphan.id 
-        ? { ...r, description, preSelectedCategory: category, isDraftResolved: true } 
+        ? { 
+            ...r, 
+            description, 
+            preSelectedCategory: category, 
+            recurrence: recurrenceType,
+            installmentsCount: installments,
+            currentInstallment: currentInst,
+            isDraftResolved: true 
+          } 
         : r
     ));
     setEditingOrphan(null);
@@ -471,11 +603,13 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const renderRow = (row, index) => {
     const isProcessed = row.status === 'processed';
     const isIgnored = row.status === 'to_ignore';
+    const isForeign = row.status === 'foreign_match';
     
     let badgeClass = "bg-slate-100 text-slate-500";
     if (row.status === 'auto_match' || row.status === 'manual_match') badgeClass = "bg-green-100 text-green-700";
     if (row.status === 'orphan') badgeClass = "bg-red-100 text-red-700";
     if (row.status === 'draft_ready') badgeClass = "bg-blue-100 text-blue-700";
+    if (isForeign) badgeClass = "bg-orange-100 text-orange-700";
     
     return (
       <TableRow key={row.id} className={`${isProcessed || isIgnored ? 'bg-slate-50/50 opacity-50 grayscale' : 'hover:bg-slate-50'} transition-all`}>
@@ -483,6 +617,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         <TableCell className="whitespace-nowrap font-bold text-slate-600 text-xs">{format(parseISO(row.date), 'dd/MM/yyyy')}</TableCell>
         <TableCell className="max-w-[450px] truncate font-bold text-slate-800 text-sm">
           {row.description}
+          {row.status === 'draft_ready' && row.recurrence === 'installment' && <span className="ml-2 text-[10px] text-blue-500">({row.installmentsCount} parcelas)</span>}
+          {row.status === 'draft_ready' && row.recurrence === 'fixed' && <span className="ml-2 text-[10px] text-blue-500">(Fixo)</span>}
         </TableCell>
         <TableCell className="border-r text-right font-black text-sm">{formatCurrency(row.amount)}</TableCell>
         <TableCell className="max-w-[500px]">
@@ -499,7 +635,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               {row.status === 'processed' ? 'Já Salvo no Banco' : 
                row.status === 'auto_match' || row.status === 'manual_match' ? 'Conciliado - Match' :
                row.status === 'draft_ready' ? 'Pronto p/ Criar' :
-               row.status === 'to_ignore' ? 'Ignorado' : 'Órfão'}
+               row.status === 'to_ignore' ? 'Ignorado' : 
+               isForeign ? 'Em Outra Conta' : 'Órfão'}
           </Badge>
         </TableCell>
         <TableCell className="text-right">
@@ -507,9 +644,16 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
               <Button size="sm" variant="ghost" onClick={() => toggleIgnore(row.id)}>
                   {row.status === 'to_ignore' ? <Undo2 className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </Button>
+              
+              {isForeign && (
+                <Button size="sm" variant="destructive" className="text-xs" onClick={() => handleReclassify(row.match)}>
+                  Reclassificar
+                </Button>
+              )}
+
               {(row.status === 'orphan' || row.status === 'draft_ready') && (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => setEditingOrphan(row)} className="text-blue-600 hover:text-blue-700">
+                    <Button size="sm" variant="outline" onClick={() => { setEditingOrphan(row); setRecurrenceType(row.recurrence || 'single'); }} className="text-blue-600 hover:text-blue-700">
                         {row.status === 'draft_ready' ? <Pencil className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
                     </Button>
                     <Popover>
@@ -562,11 +706,31 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
           <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50/30">
             <div className="p-6 space-y-4">
+              
+              {/* HEADER DE CONTROLES: Conta, Arquivo e Executar */}
               <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-center md:justify-between shadow-sm sticky top-0 z-10">
                 <div className="flex flex-1 items-center gap-3">
-                  <Input ref={fileInputRef} type="file" accept=".csv,text/csv,application/pdf,.pdf" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
+                  <select 
+                    className="flex h-10 rounded-md border border-input bg-slate-50 px-3 py-2 text-sm font-bold min-w-[200px]"
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                  >
+                    <option value="">1. Selecione a Conta...</option>
+                    {accounts.filter(a => a.type === 'checking').map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+
+                  <Input disabled={!selectedAccountId} ref={fileInputRef} type="file" accept=".csv,text/csv,application/pdf,.pdf" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
+                  
                   {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                   {parsingPdf && <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Processando PDF...</span>}
+                  
+                  <Button variant="outline" onClick={() => setShowOtherAccounts(!showOtherAccounts)} className={showOtherAccounts ? "bg-orange-50 text-orange-600 border-orange-200" : ""}>
+                      <RefreshCcw className="w-4 h-4 mr-2" />
+                      {showOtherAccounts ? "Esconder Quarentena" : "Buscar em Outras Contas"}
+                  </Button>
+                  
                   <Button variant="outline" onClick={() => setHideProcessed(!hideProcessed)}>
                       {hideProcessed ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}
                       {hideProcessed ? "Mostrar Processados" : "Ocultar Processados"}
@@ -575,7 +739,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 <div className="flex gap-2">
                   <Button
                     onClick={() => executeBatchMutation.mutate()}
-                    disabled={itemsToProcess === 0 || executeBatchMutation.isPending}
+                    disabled={itemsToProcess === 0 || executeBatchMutation.isPending || !selectedAccountId}
                     className="w-full md:w-auto font-bold bg-primary px-8"
                   >
                     {executeBatchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
@@ -584,68 +748,76 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-white shadow-sm overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-100/80">
-                      <TableHead colSpan={4} className="border-r text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
-                        VISÃO DO EXTRATO BANCÁRIO (CSV/PDF)
-                      </TableHead>
-                      <TableHead colSpan={3} className="text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
-                        DIAGNÓSTICO E REVISÃO
-                      </TableHead>
-                    </TableRow>
-                    <TableRow className="text-[11px] uppercase tracking-wider font-bold">
-                      <TableHead className="w-10 text-center">#</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="border-r text-right">Valor</TableHead>
-                      <TableHead>Correspondência Encontrada</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {displayRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-32 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
-                          Nenhum arquivo processado
-                        </TableCell>
+              {!selectedAccountId && statementRows.length > 0 && (
+                <div className="flex items-center justify-center p-12 text-slate-400 border rounded-xl bg-white border-dashed">
+                  <AlertTriangle className="mr-2" /> Selecione a conta bancária no topo para liberar a auditoria.
+                </div>
+              )}
+
+              {selectedAccountId && (
+                <div className="rounded-xl border bg-white shadow-sm overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-100/80">
+                        <TableHead colSpan={4} className="border-r text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
+                          VISÃO DO EXTRATO BANCÁRIO (CSV/PDF)
+                        </TableHead>
+                        <TableHead colSpan={3} className="text-center font-black uppercase text-[10px] tracking-widest text-slate-500">
+                          DIAGNÓSTICO E REVISÃO
+                        </TableHead>
                       </TableRow>
-                    ) : (
-                      <>
-                        {incomeRows.length > 0 && (
-                          <>
-                            <TableRow className="bg-slate-100/60 hover:bg-slate-100/60">
-                              <TableCell colSpan={7} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
-                                Entradas / Receitas
-                              </TableCell>
-                            </TableRow>
-                            {incomeRows.map((row, i) => renderRow(row, i))}
-                          </>
-                        )}
-                        
-                        {expenseRows.length > 0 && (
-                          <>
-                            <TableRow className="bg-slate-100/60 hover:bg-slate-100/60">
-                              <TableCell colSpan={7} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
-                                Saídas / Despesas
-                              </TableCell>
-                            </TableRow>
-                            {expenseRows.map((row, i) => renderRow(row, incomeRows.length + i))}
-                          </>
-                        )}
-                      </>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                      <TableRow className="text-[11px] uppercase tracking-wider font-bold">
+                        <TableHead className="w-10 text-center">#</TableHead>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead className="border-r text-right">Valor</TableHead>
+                        <TableHead>Correspondência Encontrada</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {displayRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-32 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
+                            Nenhum arquivo processado
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {incomeRows.length > 0 && (
+                            <>
+                              <TableRow className="bg-slate-100/60 hover:bg-slate-100/60">
+                                <TableCell colSpan={7} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
+                                  Entradas / Receitas
+                                </TableCell>
+                              </TableRow>
+                              {incomeRows.map((row, i) => renderRow(row, i))}
+                            </>
+                          )}
+                          
+                          {expenseRows.length > 0 && (
+                            <>
+                              <TableRow className="bg-slate-100/60 hover:bg-slate-100/60">
+                                <TableCell colSpan={7} className="text-center font-black uppercase text-[11px] tracking-widest text-slate-600 py-3">
+                                  Saídas / Despesas
+                                </TableCell>
+                              </TableRow>
+                              {expenseRows.map((row, i) => renderRow(row, incomeRows.length + i))}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Criação Rápida com Categorias Nativas */}
+      {/* Modal de Criação Rápida com Categorias Nativas e Recorrência */}
       <Dialog open={!!editingOrphan} onOpenChange={(isOpen) => !isOpen && setEditingOrphan(null)}>
         <DialogContent className="sm:max-w-[425px] font-sora">
           <DialogHeader>
@@ -691,6 +863,32 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   ))}
                 </select>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Tipo de Lançamento</label>
+                <select 
+                  value={recurrenceType}
+                  onChange={(e) => setRecurrenceType(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-slate-50 px-3 py-2 text-sm font-medium" 
+                >
+                  <option value="single">Avulso (Apenas este mês)</option>
+                  <option value="fixed">Fixo (Repete todo mês)</option>
+                  <option value="installment">Parcelado (Fixo com fim)</option>
+                </select>
+              </div>
+
+              {recurrenceType === 'installment' && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Parcela Atual</label>
+                    <Input type="number" name="currentInstallment" defaultValue={editingOrphan.currentInstallment || 1} min="1" className="font-medium" required />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Total</label>
+                    <Input type="number" name="installments" defaultValue={editingOrphan.installmentsCount || 2} min="2" className="font-medium" required />
+                  </div>
+                </div>
+              )}
 
               <DialogFooter className="pt-4">
                 <Button type="button" variant="outline" onClick={() => setEditingOrphan(null)}>Cancelar</Button>

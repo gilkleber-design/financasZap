@@ -121,13 +121,43 @@ Extraia e retorne em JSON:
   };
 
   const handleSave = async (data) => {
-    await base44.entities.Transaction.create(data);
-
-    if (data.payable_id) {
-      await base44.entities.Payable.update(data.payable_id, { status: 'paid', transaction_id: null });
+    let finalTxData = { ...data, reconciled: false };
+    
+    // Proibido transações órfãs: Criar Payable/Receivable se não houver match
+    if (finalTxData._create_provision) {
+      delete finalTxData._create_provision;
+      if (finalTxData.type === 'income') {
+        const rec = await base44.entities.Receivable.create({
+          description: finalTxData.description,
+          amount: finalTxData.amount,
+          net_amount: finalTxData.net_amount || finalTxData.amount,
+          due_date: finalTxData.date,
+          status: 'received',
+          account_id: finalTxData.account_id
+        });
+        finalTxData.receivable_id = rec.id;
+      } else {
+        const pay = await base44.entities.Payable.create({
+          description: finalTxData.description,
+          amount: finalTxData.amount,
+          due_date: finalTxData.date,
+          status: 'paid',
+          account_id: finalTxData.account_id,
+          origin_id: finalTxData.account_id || finalTxData.card_id,
+          origin_type: finalTxData.account_id ? 'account' : 'card',
+          category: finalTxData.category
+        });
+        finalTxData.payable_id = pay.id;
+      }
     }
-    if (data.receivable_id) {
-      await base44.entities.Receivable.update(data.receivable_id, { status: 'received', transaction_id: null });
+    
+    const tx = await base44.entities.Transaction.create(finalTxData);
+
+    if (finalTxData.payable_id) {
+      await base44.entities.Payable.update(finalTxData.payable_id, { status: 'paid', transaction_id: tx.id });
+    }
+    if (finalTxData.receivable_id) {
+      await base44.entities.Receivable.update(finalTxData.receivable_id, { status: 'received', transaction_id: tx.id });
     }
 
     queryClient.invalidateQueries();

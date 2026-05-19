@@ -56,6 +56,14 @@
       ],
       "description": "Canal de entrada"
     },
+    "account_id": {
+      "type": "string",
+      "description": "ID da conta banc\u00e1ria relacionada ao lan\u00e7amento"
+    },
+    "card_id": {
+      "type": "string",
+      "description": "ID do cart\u00e3o de cr\u00e9dito/d\u00e9bito relacionado ao lan\u00e7amento"
+    },
     "income_source_id": {
       "type": "string",
       "description": "Refer\u00eancia \u00e0 fonte de renda (se receita)"

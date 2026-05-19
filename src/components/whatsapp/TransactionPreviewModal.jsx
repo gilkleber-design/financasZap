@@ -94,7 +94,7 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
   }, [form.description, form.type]);
 
   const confirmReconcile = () => {
-    set('reconciled', true);
+    set('reconciled', false); // Mantém false para passar na mesa de conciliação depois
     if (reconcileSuggestion.entityType === 'receivable') set('receivable_id', reconcileSuggestion.item.id);
     if (reconcileSuggestion.entityType === 'payable') set('payable_id', reconcileSuggestion.item.id);
     setReconcileDecided(true);
@@ -109,19 +109,28 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
   };
 
   const handleSave = () => {
+    if (!paymentMethod) return;
     const finalData = { ...form };
-    if (paymentMethod) finalData.notes = `${finalData.notes ? finalData.notes + ' | ' : ''}Pagamento: ${paymentMethod}`;
+    
+    const isAccount = paymentMethod.startsWith('account:');
+    const isCard = paymentMethod.startsWith('card:');
+    const originId = paymentMethod.split(':')[1];
+    
+    if (isAccount) finalData.account_id = originId;
+    if (isCard) finalData.card_id = originId;
+    
+    if (!finalData.payable_id && !finalData.receivable_id) {
+      finalData._create_provision = true;
+    }
+    
+    if (paymentMethod) finalData.notes = `${finalData.notes ? finalData.notes + ' | ' : ''}Pagamento/Recebimento: ID ${originId}`;
     onSave(finalData);
   };
 
-  // Monta opções de pagamento
+  // Monta opções de pagamento com IDs estritos para evitar órfãos de origem
   const paymentOptions = [
-    'Dinheiro', 'Pix',
-    ...accounts.filter(a => a.active !== false && (a.type === 'corrente' || a.type === 'digital')).map(a => `${a.name}${a.bank ? ` - ${a.bank}` : ''}`),
-    ...cards.filter(c => c.active !== false && (c.type === 'credit' || c.type === 'both')).map(c => `Cartão Crédito - ${c.name}`),
-    ...cards.filter(c => c.active !== false && (c.type === 'debit' || c.type === 'both')).map(c => `Cartão Débito - ${c.name}`),
-    ...accounts.filter(a => a.active !== false && a.type === 'poupanca').map(a => `Poupança - ${a.name}`),
-    'Boleto', 'Outro',
+    ...accounts.filter(a => a.active !== false).map(a => ({ id: `account:${a.id}`, label: `🏦 Conta - ${a.name}${a.bank ? ` (${a.bank})` : ''}` })),
+    ...cards.filter(c => c.active !== false).map(c => ({ id: `card:${c.id}`, label: `💳 Cartão - ${c.name}` }))
   ];
 
   const entityLabel = reconcileSuggestion?.entityType === 'receivable' ? 'conta a receber' : 'conta a pagar';
@@ -276,13 +285,13 @@ export default function TransactionPreviewModal({ data, incomeSources, payables,
 
         {/* Forma de pagamento */}
         <div>
-          <Label className="text-xs">Forma de Pagamento *</Label>
+          <Label className="text-xs">Origem (Conta/Cartão) *</Label>
           <Select value={paymentMethod} onValueChange={setPaymentMethod}>
             <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Selecione como foi pago/recebido..." />
+              <SelectValue placeholder="Selecione a origem de pagamento/recebimento..." />
             </SelectTrigger>
             <SelectContent>
-              {paymentOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+              {paymentOptions.map(opt => <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

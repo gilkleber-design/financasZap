@@ -26,7 +26,7 @@ function hasSimilarity(a, b) {
 export default function TransactionFormModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     description: '', amount: '', net_amount: '', type: 'expense',
-    category: '', date: format(new Date(), 'yyyy-MM-dd'), tax_rate: '', member: 'eu', source: 'manual',
+    category: '', date: format(new Date(), 'yyyy-MM-dd'), tax_rate: '', member: 'eu', source: 'manual', origin: '',
   });
   const [saving, setSaving] = useState(false);
   const [matchSuggestion, setMatchSuggestion] = useState(null); // { item, entityType }
@@ -41,6 +41,16 @@ export default function TransactionFormModal({ onClose, onSaved }) {
   const { data: payables = [] } = useQuery({
     queryKey: ['payables'],
     queryFn: () => base44.entities.Payable.list('-due_date', 100),
+  });
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => base44.entities.Account.list('', 100),
+  });
+
+  const { data: cards = [] } = useQuery({
+    queryKey: ['cards'],
+    queryFn: () => base44.entities.Card.list('', 100),
   });
 
   const findMatch = (description, type) => {
@@ -72,20 +82,57 @@ export default function TransactionFormModal({ onClose, onSaved }) {
     const amount = parseFloat(form.amount);
     const netAmount = form.type === 'income' && taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
 
+    if (!form.origin) {
+      toast.error('Selecione uma conta ou cartão de origem');
+      return;
+    }
+    const isAccount = form.origin.startsWith('account:');
+    const isCard = form.origin.startsWith('card:');
+    const originId = form.origin.split(':')[1];
+
     const txData = {
       ...form, amount, net_amount: parseFloat(form.net_amount) || netAmount,
       tax_rate: taxRate || undefined, tax_amount: taxRate > 0 ? amount * taxRate / 100 : undefined,
     };
+    delete txData.origin;
+    if (isAccount) txData.account_id = originId;
+    if (isCard) txData.card_id = originId;
 
+    let finalTxData = { ...txData, reconciled: false };
+    
     if (reconcileWith) {
-      txData.reconciled = true;
-      if (reconcileWith.entityType === 'receivable') txData.receivable_id = reconcileWith.item.id;
-      if (reconcileWith.entityType === 'payable') txData.payable_id = reconcileWith.item.id;
+      if (reconcileWith.entityType === 'receivable') finalTxData.receivable_id = reconcileWith.item.id;
+      if (reconcileWith.entityType === 'payable') finalTxData.payable_id = reconcileWith.item.id;
+    } else {
+      // Proibido transações órfãs: Criar Payable/Receivable se não houver match
+      if (form.type === 'income') {
+        const rec = await base44.entities.Receivable.create({
+          description: form.description,
+          amount: txData.amount,
+          net_amount: txData.net_amount || txData.amount,
+          due_date: form.date,
+          status: 'received',
+          account_id: txData.account_id
+        });
+        finalTxData.receivable_id = rec.id;
+      } else {
+        const pay = await base44.entities.Payable.create({
+          description: form.description,
+          amount: txData.amount,
+          due_date: form.date,
+          status: 'paid',
+          account_id: txData.account_id,
+          origin_id: txData.account_id || txData.card_id,
+          origin_type: txData.account_id ? 'account' : 'card',
+          category: txData.category
+        });
+        finalTxData.payable_id = pay.id;
+      }
     }
 
-    const tx = await base44.entities.Transaction.create(txData);
+    const tx = await base44.entities.Transaction.create(finalTxData);
 
-    // Atualiza status do item conciliado
+    // Atualiza status do item conciliado ou recém criado
     if (reconcileWith) {
       if (reconcileWith.entityType === 'receivable') {
         await base44.entities.Receivable.update(reconcileWith.item.id, { status: 'received', transaction_id: tx.id });
@@ -94,7 +141,12 @@ export default function TransactionFormModal({ onClose, onSaved }) {
       }
       toast.success('Lançamento criado e conciliado!');
     } else {
-      toast.success('Lançamento criado!');
+      if (form.type === 'income') {
+        await base44.entities.Receivable.update(finalTxData.receivable_id, { transaction_id: tx.id });
+      } else {
+        await base44.entities.Payable.update(finalTxData.payable_id, { transaction_id: tx.id });
+      }
+      toast.success('Lançamento criado e provisionado automaticamente!');
     }
 
     setSaving(false);
@@ -201,6 +253,24 @@ export default function TransactionFormModal({ onClose, onSaved }) {
             <div>
               <Label>Data *</Label>
               <Input type="date" value={form.date} onChange={e => set('date', e.target.value)} className="mt-1" />
+            </div>
+            <div className="col-span-2">
+              <Label>Origem (Conta/Cartão) *</Label>
+              <Select value={form.origin} onValueChange={v => set('origin', v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a origem..." /></SelectTrigger>
+                <SelectContent>
+                  {accounts.filter(a => a.active !== false).map(a => (
+                    <SelectItem key={`account:${a.id}`} value={`account:${a.id}`}>
+                      🏦 {a.name} {a.bank ? `(${a.bank})` : ''}
+                    </SelectItem>
+                  ))}
+                  {cards.filter(c => c.active !== false).map(c => (
+                    <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>
+                      💳 {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {form.type === 'income' && (
               <>

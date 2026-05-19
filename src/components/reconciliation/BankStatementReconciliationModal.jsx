@@ -734,8 +734,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             <div className="p-6 space-y-4">
               
               {/* HEADER DE CONTROLES: Conta, Arquivo e Executar */}
-              <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-center md:justify-between shadow-sm sticky top-0 z-10">
-                <div className="flex flex-1 items-center gap-3">
+              <div className="flex flex-col gap-4 rounded-xl border bg-white p-4 xl:flex-row xl:items-center xl:justify-between shadow-sm sticky top-0 z-10">
+                <div className="flex flex-1 flex-wrap items-center gap-3">
                   <select 
                     className="flex h-10 rounded-md border border-input bg-slate-50 px-3 py-2 text-sm font-bold min-w-[200px]"
                     value={selectedAccountId}
@@ -753,10 +753,10 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                     })}
                   </select>
 
-                  <Input disabled={!selectedAccountId} ref={fileInputRef} type="file" accept=".csv,text/csv,application/pdf,.pdf" onChange={handleFileChange} className="max-w-md bg-slate-50 cursor-pointer font-bold" />
+                  <Input disabled={!selectedAccountId || parsingPdf || isLoading} ref={fileInputRef} type="file" accept=".csv,text/csv,application/pdf,.pdf" onChange={handleFileChange} className="max-w-md w-full sm:w-auto bg-slate-50 cursor-pointer font-bold" />
                   
-                  {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                  {parsingPdf && <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Processando PDF...</span>}
+                  {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
+                  {parsingPdf && <span className="text-xs font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap shrink-0">Processando PDF...</span>}
                   
                   <Button variant="outline" onClick={() => setShowOtherAccounts(!showOtherAccounts)} className={showOtherAccounts ? "bg-orange-50 text-orange-600 border-orange-200" : ""}>
                       <RefreshCcw className="w-4 h-4 mr-2" />

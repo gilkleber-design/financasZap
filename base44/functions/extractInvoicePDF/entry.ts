@@ -22,8 +22,9 @@ function normalizePdfText(text) {
     .replace(/\n{3,}/g, '\n\n');
 }
 
+import * as pdfjsModule from 'npm:pdfjs-dist@3.11.174/legacy/build/pdf.js';
+
 async function extractTextFromPDF(buffer) {
-  const pdfjsModule = await import('npm:pdfjs-dist@3.11.174/legacy/build/pdf.js');
   const pdfjsLib = pdfjsModule.default || pdfjsModule;
   const loadingTask = pdfjsLib.getDocument({
     data: buffer,

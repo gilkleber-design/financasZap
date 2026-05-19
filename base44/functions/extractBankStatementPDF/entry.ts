@@ -49,8 +49,9 @@ async function getPayload(req) {
   return { buffer: new Uint8Array(await response.arrayBuffer()), debug: !!body.debug };
 }
 
+import * as pdfjsModule from 'npm:pdfjs-dist@3.11.174/legacy/build/pdf.js';
+
 async function extractRowsFromPdf(buffer) {
-  const pdfjsModule = await import('npm:pdfjs-dist@3.11.174/legacy/build/pdf.js');
   const pdfjsLib = pdfjsModule.default || pdfjsModule;
   const pdf = await pdfjsLib.getDocument({
     data: buffer,

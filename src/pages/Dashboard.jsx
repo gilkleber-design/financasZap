@@ -227,7 +227,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* KPI Cards Row */}
+      {/* KPI Cards Row (CORRIGIDO PARA EVITAR QUEBRA DE LINHA EM NÚMEROS GRANDES) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         {kpiCards.map((card, index) => {
           const Icon = card.icon;
@@ -235,14 +235,14 @@ export default function DashboardPage() {
 
           if (card.customBg && card.color === 'emerald') {
             return (
-              <div key={index} className="rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-5 flex gap-4 items-start shadow-sm">
-                <div className="p-3 bg-white dark:bg-emerald-900 rounded-2xl border border-emerald-100">
+              <div key={index} className="rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-5 flex gap-4 items-start shadow-sm min-w-0">
+                <div className="p-3 bg-white dark:bg-emerald-900 rounded-2xl border border-emerald-100 shrink-0">
                   <Icon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <div className="flex-1 space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{card.title}</p>
-                  <p className="text-2xl lg:text-3xl font-bold text-slate-950 dark:text-white">{valueText}</p>
-                  <p className="text-[11px] text-muted-foreground">{card.subtitle}</p>
+                <div className="flex-1 space-y-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
+                  <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap truncate">{valueText}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{card.subtitle}</p>
                 </div>
               </div>
             );
@@ -250,38 +250,39 @@ export default function DashboardPage() {
 
           if (card.urgent) {
             return (
-              <div key={index} className="rounded-3xl border-2 border-rose-200 bg-rose-50 dark:bg-rose-950/30 p-5 flex gap-4 items-start shadow-sm relative">
+              <div key={index} className="rounded-3xl border-2 border-rose-200 bg-rose-50 dark:bg-rose-950/30 p-5 flex gap-4 items-start shadow-sm relative min-w-0">
                 <Icon className="w-5 h-5 text-rose-500 absolute top-4 right-4" />
-                <div className="p-3 bg-white dark:bg-rose-900 rounded-2xl border border-rose-100">
+                <div className="p-3 bg-white dark:bg-rose-900 rounded-2xl border border-rose-100 shrink-0">
                   <Icon className="w-6 h-6 text-rose-600 dark:text-rose-400" />
                 </div>
-                <div className="flex-1 space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{card.title}</p>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-2xl lg:text-3xl font-bold text-slate-950 dark:text-white">{card.count} <span className="text-base font-normal">receitas vencidas</span></p>
+                <div className="flex-1 space-y-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap">{card.count}</p>
+                    <span className="text-sm font-medium text-slate-950 dark:text-white whitespace-nowrap">receitas vencidas</span>
                   </div>
-                  <p className="text-lg font-semibold text-slate-950 dark:text-white">{valueText}</p>
-                  <p className="text-[11px] text-muted-foreground">urgentes para os próximos 7 dias</p>
+                  <p className="text-lg font-semibold text-slate-950 dark:text-white whitespace-nowrap truncate">{valueText}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">urgentes para os próximos 7 dias</p>
                 </div>
               </div>
             );
           }
 
           return (
-            <div key={index} className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col gap-4 items-start shadow-sm relative">
+            <div key={index} className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col gap-4 items-start shadow-sm relative min-w-0">
               <button className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><MoreHorizontal className="w-5 h-5" /></button>
-              <div className="flex gap-4 items-start">
-                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100">
+              <div className="flex gap-4 items-start w-full">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 shrink-0">
                   <Icon className={`w-6 h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
                 </div>
-                <div className="flex-1 space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{card.title}</p>
+                <div className="flex-1 space-y-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
                   {card.title.includes('Saúde') ? (
-                    <p className={`text-2xl font-bold ${card.value >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{card.value >= 0 ? '+' : ''}{valueText}</p>
+                    <p className={`text-xl lg:text-2xl xl:text-3xl font-bold whitespace-nowrap truncate ${card.value >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{card.value >= 0 ? '+' : ''}{valueText}</p>
                   ) : (
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl lg:text-3xl font-bold text-slate-950 dark:text-white">{valueText}</p>
-                      <span className="text-slate-400">/ <CurrencyText value={card.target} /></span>
+                    <div className="flex flex-wrap items-baseline gap-1.5 w-full">
+                      <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap">{valueText}</p>
+                      <span className="text-sm text-slate-400 whitespace-nowrap">/ <CurrencyText value={card.target} /></span>
                     </div>
                   )}
                 </div>

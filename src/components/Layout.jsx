@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X, CreditCard, LogOut, UserCircle } from 'lucide-react';
+import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, MessageSquare, TrendingUp, Settings, Wallet, CalendarDays, Building2, Menu, X, CreditCard, LogOut, UserCircle, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -12,6 +12,7 @@ const navItems = [
   { path: '/contas-pagar', label: 'A Pagar', icon: ArrowDownCircle },
   { path: '/contas-receber', label: 'A Receber', icon: ArrowUpCircle },
   { path: '/faturas-cartao', label: 'Faturas Cartão', icon: CreditCard },
+  { path: '/planejamento', label: 'Planejamento', icon: Target },
   { path: '/relatorios', label: 'Relatórios', icon: TrendingUp },
   { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
   { path: '/configuracoes', label: 'Configurações', icon: Settings },

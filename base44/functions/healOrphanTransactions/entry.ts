@@ -9,58 +9,42 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    console.log('Iniciando varredura de órfãos...');
+    console.log('Iniciando auditoria de regra pétrea (Conta/Cartão obrigatórios)...');
 
-    const transactions = await base44.asServiceRole.entities.Transaction.filter({ type: 'expense' }, '-date', 500);
-    const payables = await base44.asServiceRole.entities.Payable.list('-created_date', 500);
-    const payableTransactionIds = new Set(
-      payables
-        .filter((payable) => payable.transaction_id)
-        .map((payable) => payable.transaction_id)
-    );
+    // Busca as últimas 1000 transações
+    const transactions = await base44.asServiceRole.entities.Transaction.list('-date', 1000);
+    
+    // Transação inválida = não tem account_id E não tem card_id
+    const invalidTransactions = transactions.filter((t) => !t.account_id && !t.card_id);
 
-    const orphans = transactions.filter((transaction) => {
-      const hasPayableId = !!transaction.payable_id;
-      const hasPayableBacklink = payableTransactionIds.has(transaction.id);
-      return !hasPayableId && !hasPayableBacklink;
-    });
-
-    console.log(`Encontrados ${orphans.length} focos de infecção. Iniciando sutura...`);
+    console.log(`Encontradas ${invalidTransactions.length} transações violando a regra pétrea.`);
 
     let fixCount = 0;
     const fixed = [];
 
-    for (const row of orphans) {
-      const payable = await base44.asServiceRole.entities.Payable.create({
-        description: row.description,
-        amount: row.amount,
-        category: row.category || 'outros',
-        due_date: row.date,
-        status: 'paid',
-        recurrent: false,
-        transaction_id: row.id,
-        notes: 'Criado automaticamente para corrigir transaction órfã',
-      });
-
+    // Tenta atribuir a uma "Conta Genérica" ou pelo menos alerta nos "notes"
+    for (const row of invalidTransactions) {
+      // Como não sabemos de onde saiu, vamos adicionar uma anotação severa
+      // No mundo real, você poderia forçar para uma "Conta de Ajuste" aqui.
+      const newNotes = row.notes ? `${row.notes} | [ALERTA] Violação de Regra Pétrea: Sem Origem` : '[ALERTA] Violação de Regra Pétrea: Sem Origem';
+      
       await base44.asServiceRole.entities.Transaction.update(row.id, {
-        payable_id: payable.id,
-        reconciled: true,
+        notes: newNotes
       });
 
       fixCount++;
       fixed.push({
         transaction_id: row.id,
-        payable_id: payable.id,
         description: row.description,
         amount: row.amount,
         date: row.date,
       });
-      console.log(`[+] Resolvido: ${row.description} - R$ ${row.amount}`);
+      console.log(`[!] Alerta registrado em: ${row.description} - R$ ${row.amount}`);
     }
 
     return Response.json({
-      message: `Limpeza concluída. ${fixCount} transações corrigidas.`,
-      fixed,
+      message: `Auditoria concluída. ${fixCount} transações sem origem detectadas e alertadas.`,
+      flagged: fixed,
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

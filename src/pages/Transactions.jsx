@@ -31,6 +31,7 @@ export default function Transactions() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [filterCreatedBy, setFilterCreatedBy] = useState('all');
   const [openReconciliation, setOpenReconciliation] = useState(false);
   const queryClient = useQueryClient();
 
@@ -46,13 +47,16 @@ export default function Transactions() {
     onSuccess: () => { queryClient.invalidateQueries(); toast.success('Lançamento removido'); setDeletingTx(null); },
   });
 
+  const uniqueUsers = [...new Set(transactions.map(t => t.created_by).filter(Boolean))];
+
   const currentYear = new Date().getFullYear();
   const filtered = transactions.filter(t => {
     const matchSearch = !search || t.description?.toLowerCase().includes(search.toLowerCase());
     const matchType = filterType === 'all' || t.type === filterType;
     const matchCat = filterCategory === 'all' || t.category === filterCategory;
+    const matchCreatedBy = filterCreatedBy === 'all' || t.created_by === filterCreatedBy;
     const matchYear = t.date && new Date(t.date).getFullYear() === currentYear;
-    return matchSearch && matchType && matchCat && matchYear;
+    return matchSearch && matchType && matchCat && matchCreatedBy && matchYear;
   });
 
   return (
@@ -94,6 +98,15 @@ export default function Transactions() {
             <SelectItem value="all">Todas as categorias</SelectItem>
             {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
               <SelectItem key={v} value={v}>{l}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterCreatedBy} onValueChange={setFilterCreatedBy}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Usuário" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os usuários</SelectItem>
+            {uniqueUsers.map(user => (
+              <SelectItem key={user} value={user}>{user.split('@')[0]}</SelectItem>
             ))}
           </SelectContent>
         </Select>

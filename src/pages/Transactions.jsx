@@ -114,7 +114,7 @@ export default function Transactions() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium truncate">{tx.description}</p>
-                    {tx.reconciled && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
+                    {tx.status === 'conciliated' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs text-muted-foreground">
@@ -168,7 +168,7 @@ export default function Transactions() {
                <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
                <AlertDialogDescription>
                  "{deletingTx.description}" — {deletingTx.date ? format(new Date(deletingTx.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}
-                 {deletingTx.reconciled && <span className="block mt-1 text-amber-600 font-medium">⚠️ Este lançamento está conciliado com uma conta. A conciliação será desfeita.</span>}
+                 {deletingTx.status === 'conciliated' && <span className="block mt-1 text-amber-600 font-medium">⚠️ Este lançamento está conciliado com uma conta. A conciliação será desfeita.</span>}
                </AlertDialogDescription>
              </AlertDialogHeader>
              <div className="flex gap-2">

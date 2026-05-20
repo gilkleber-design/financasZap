@@ -282,11 +282,11 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     const isOwner = (item) => getRecordAccountId(item) === selectedAccountId;
 
     const reconciled = transactions
-      .filter(t => t.reconciled === true && (isOwner(t) || showOtherAccounts))
+      .filter(t => t.status === 'conciliated' && (isOwner(t) || showOtherAccounts))
       .map(t => ({ ...t, kind: 'transaction' }));
       
     const pendingTransactions = transactions
-      .filter(t => t.reconciled !== true && (isOwner(t) || showOtherAccounts))
+      .filter(t => t.status !== 'conciliated' && (isOwner(t) || showOtherAccounts))
       .map(t => ({ ...t, kind: 'transaction' }));
       
     const pendingPayables = payables
@@ -382,7 +382,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             category: 'ignored',
             date: row.date,
             source: 'manual',
-            reconciled: true,
+            reconciled: false,
+            status: 'ignored',
             notes: 'Ignorado via conciliação em lote',
             account_id: selectedAccountId,
           });
@@ -397,6 +398,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             date: row.date,
             source: 'manual',
             reconciled: true,
+            status: 'conciliated',
             notes: 'Criado e Categorizado na Conciliação',
             account_id: selectedAccountId,
           });
@@ -407,6 +409,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
             if (match.kind === 'transaction') {
               await base44.entities.Transaction.update(match.id, {
                 reconciled: true,
+                status: 'conciliated',
                 account_id: selectedAccountId,
                 notes: match.notes ? match.notes + ' | Conciliado com extrato' : 'Conciliado com extrato',
               });
@@ -420,6 +423,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 source: 'manual',
                 payable_id: match.id,
                 reconciled: true,
+                status: 'conciliated',
                 account_id: selectedAccountId,
                 notes: 'Pagamento conciliado na mesa',
               });
@@ -438,6 +442,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 source: 'manual',
                 receivable_id: match.id,
                 reconciled: true,
+                status: 'conciliated',
                 account_id: selectedAccountId,
                 notes: 'Recebimento conciliado na mesa',
               });

@@ -59,7 +59,7 @@ export default function TransactionFormModal({ onClose, onSaved }) {
     if (isCard) txData.card_id = originId;
 
     // Pipeline único: registra apenas a transação.
-    const finalTxData = { ...txData, reconciled: false };
+    const finalTxData = { ...txData, reconciled: false, status: 'registered' };
     await base44.entities.Transaction.create(finalTxData);
 
     toast.success('Lançamento salvo!');

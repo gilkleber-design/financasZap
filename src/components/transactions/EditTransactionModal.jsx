@@ -18,7 +18,6 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
     category: transaction.category || '',
     date: transaction.date || '',
     tax_rate: transaction.tax_rate || '',
-    member: transaction.member || 'eu',
     notes: transaction.notes || '',
   });
   const [saving, setSaving] = useState(false);
@@ -42,7 +41,6 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
       date: form.date,
       tax_rate: taxRate || undefined,
       tax_amount: taxRate > 0 ? amount * taxRate / 100 : undefined,
-      member: form.member,
       notes: form.notes || undefined,
     });
 
@@ -85,17 +83,7 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
               <Label>Data *</Label>
               <Input type="date" value={form.date} onChange={e => set('date', e.target.value)} className="mt-1" />
             </div>
-            <div>
-              <Label>Membro</Label>
-              <Select value={form.member} onValueChange={v => set('member', v)}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="eu">Eu</SelectItem>
-                  <SelectItem value="conjuge">Cônjuge</SelectItem>
-                  <SelectItem value="familia">Família</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
             {form.type === 'income' && (
               <div>
                 <Label>Alíquota Imposto (%)</Label>

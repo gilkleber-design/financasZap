@@ -111,16 +111,6 @@
     "notes": {
       "type": "string",
       "description": "Observa\u00e7\u00f5es"
-    },
-    "member": {
-      "type": "string",
-      "enum": [
-        "eu",
-        "conjuge",
-        "familia"
-      ],
-      "default": "eu",
-      "description": "Membro da fam\u00edlia"
     }
   },
   "required": [

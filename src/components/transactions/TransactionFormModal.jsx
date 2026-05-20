@@ -19,7 +19,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 export default function TransactionFormModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     description: '', amount: '', net_amount: '', type: 'expense',
-    category: '', date: format(new Date(), 'yyyy-MM-dd'), tax_rate: '', member: 'eu', source: 'manual', origin: '',
+    category: '', date: format(new Date(), 'yyyy-MM-dd'), tax_rate: '', source: 'manual', origin: '',
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -124,17 +124,7 @@ export default function TransactionFormModal({ onClose, onSaved }) {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Membro</Label>
-              <Select value={form.member} onValueChange={v => set('member', v)}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="eu">Eu</SelectItem>
-                  <SelectItem value="conjuge">Cônjuge</SelectItem>
-                  <SelectItem value="familia">Família</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
             {form.type === 'income' && (
               <div>
                 <Label>Alíquota Imposto (%)</Label>

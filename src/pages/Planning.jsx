@@ -82,8 +82,14 @@ export default function Planning() {
 
     const expenseCategories = categories.filter(c => c.type === 'expense' && c.active !== false);
 
+    // Cálculo do total planejado somando os valores em tempo real dos inputs
+    const totalPlanned = expenseCategories.reduce((acc, cat) => {
+        return acc + (parseFloat(localBudgets[cat.id]) || 0);
+    }, 0);
+
     return (
         <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+            {/* Header da Página */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-sora font-bold text-foreground flex items-center gap-2">
@@ -106,6 +112,23 @@ export default function Planning() {
                 </div>
             </div>
 
+            {/* Total do Planejamento - AGORA NO TOPO */}
+            <div className="flex flex-col sm:flex-row items-center justify-between p-5 bg-primary/10 border border-primary/20 rounded-xl shadow-sm gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                        <Target className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                        <p className="font-bold text-foreground">Total Planejado</p>
+                        <p className="text-xs text-muted-foreground">Soma de todas as metas do mês</p>
+                    </div>
+                </div>
+                <div className="text-2xl font-sora font-bold text-primary">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPlanned)}
+                </div>
+            </div>
+
+            {/* Card com Detalhes das Categorias */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-3 border-b gap-4">
                     <CardTitle className="text-lg">Orçamento Mensal</CardTitle>
@@ -168,6 +191,7 @@ export default function Planning() {
                     )}
                 </CardContent>
             </Card>
+
         </div>
     );
 }

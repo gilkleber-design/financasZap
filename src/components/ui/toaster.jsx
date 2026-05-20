@@ -1,4 +1,4 @@
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/components/ui/use-toast.js";
 import {
   Toast,
   ToastClose,
@@ -30,4 +30,4 @@ export function Toaster() {
       <ToastViewport />
     </ToastProvider>
   );
-} 
+}

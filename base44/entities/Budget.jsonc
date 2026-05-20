@@ -1,0 +1,28 @@
+{
+  "name": "Budget",
+  "type": "object",
+  "properties": {
+    "category_id": {
+      "type": "string",
+      "description": "ID da categoria"
+    },
+    "month": {
+      "type": "number",
+      "description": "M\u00eas de refer\u00eancia (1 a 12)"
+    },
+    "year": {
+      "type": "number",
+      "description": "Ano de refer\u00eancia"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Valor limite planejado"
+    }
+  },
+  "required": [
+    "category_id",
+    "month",
+    "year",
+    "amount"
+  ]
+}

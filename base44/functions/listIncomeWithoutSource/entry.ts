@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
     
     const incomeWithoutSource = allTransactions
       .filter(t => t.type === 'income' && (!t.income_source_id || t.income_source_id === ''))
-      .map(t => `${t.date} - ${t.description} - R$ ${t.amount}`);
+      .map(t => ({ id: t.id, desc: `${t.date} - ${t.description} - R$ ${t.amount}` }));
 
     return Response.json({ 
       total: incomeWithoutSource.length,

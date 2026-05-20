@@ -17,6 +17,7 @@ import Hospitals from '@/pages/Hospitals';
 import CalendarPage from '@/pages/CalendarPage';
 import CardInvoices from '@/pages/CardInvoices';
 import Planning from '@/pages/Planning';
+import LinkHub from '@/pages/LinkHub';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -52,6 +53,7 @@ const AuthenticatedApp = () => {
         <Route path="/calendario" element={<CalendarPage />} />
         <Route path="/faturas-cartao" element={<CardInvoices />} />
         <Route path="/planejamento" element={<Planning />} />
+        <Route path="/hub-amarracao" element={<LinkHub />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

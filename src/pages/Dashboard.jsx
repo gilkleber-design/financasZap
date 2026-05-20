@@ -114,20 +114,22 @@ export default function DashboardPage() {
     queryFn: () => base44.entities.Receivable.list('due_date', 500),
   });
 
-  // --- LÓGICA DE NEGÓCIO ---
+  // --- LÓGICA DE NEGÓCIO BLINDADA ---
   const stats = useMemo(() => {
-    // Transações válidas
+    // 1. FILTRO MESTRE: Só entra dinheiro e gasto real (Validado ou Conciliado)
     const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
     const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
     
-    // KPI 1: Saldo Real em Conta (Todas as transações até hoje)
+    // KPI 1: Saldo Real em Conta (Histórico completo validado)
     const realIncomeTotal = validTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realExpenseTotal = validTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realBalance = realIncomeTotal - realExpenseTotal;
 
-    // KPI 2: Meta de Receitas (Mês)
+    // KPI 2: Meta de Receitas (Mês Corrente)
+    // Usando monthTransactions (que já está filtrado para só transações validadas)
     const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-    const targetIncome = budgets.filter(b => categories.find(c => c.id === b.category_id)?.type === 'income').reduce((acc, b) => acc + parseFloat(b.amount || 0), 0) || (monthIncome + 1); // Evitar div/0 se não houver meta
+    const currentMonthReceivables = receivables.filter(r => r.due_date >= monthStart && r.due_date <= monthEnd);
+    const targetIncome = currentMonthReceivables.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0) || (monthIncome + 1);
     const incomePercentage = Math.min((monthIncome / targetIncome) * 100, 100);
 
     // KPI 3: Saúde do Orçamento (Projetada)
@@ -135,6 +137,7 @@ export default function DashboardPage() {
     const pendingPayablesMonth = payables.filter(p => p.status === 'pending' && p.due_date >= monthStart && p.due_date <= monthEnd);
     
     const projectedIncome = monthIncome + pendingReceivablesMonth.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
+    // Usando monthTransactions (garantindo que despesas "pending" não afetem o cálculo realizado)
     const monthExpense = monthTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const projectedExpense = monthExpense + pendingPayablesMonth.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
     
@@ -153,6 +156,7 @@ export default function DashboardPage() {
       .filter(c => c.type === type)
       .map(cat => {
         const meta = budgets.find(b => b.category_id === cat.id)?.amount || 0;
+        // monthTransactions já está limpo
         const realizado = monthTransactions.filter(t => t.category_id === cat.id).reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
         const pendentes = type === 'expense' ? pendingPayablesMonth : pendingReceivablesMonth;
         const comprometido = pendentes.filter(p => p.category_id === cat.id).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
@@ -227,7 +231,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* KPI Cards Row (CORRIGIDO PARA EVITAR QUEBRA DE LINHA EM NÚMEROS GRANDES) */}
+      {/* KPI Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         {kpiCards.map((card, index) => {
           const Icon = card.icon;
@@ -406,7 +410,7 @@ const SidebarTable = ({ data, type, urgent }) => {
   }
 
   return (
-    <div>
+    <div className="w-full">
        <div className={`grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground ${urgent && "border-l-4 border-rose-500"}`}>
         <span>Data</span>
         <span>Descrição</span>

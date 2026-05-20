@@ -88,7 +88,11 @@ export default function LinkHub() {
         if (edits.payable_id !== undefined) {
           updateTx.payable_id = edits.payable_id === 'none' ? null : edits.payable_id;
           if (originalTx.payable_id && originalTx.payable_id !== edits.payable_id) {
-            await base44.entities.Payable.update(originalTx.payable_id, { status: 'pending', transaction_id: null });
+            if (edits.payable_id === 'none') {
+              await base44.entities.Payable.delete(originalTx.payable_id);
+            } else {
+              await base44.entities.Payable.update(originalTx.payable_id, { status: 'pending', transaction_id: null });
+            }
           }
           if (edits.payable_id !== 'none') {
             await base44.entities.Payable.update(edits.payable_id, { status: 'paid', transaction_id: txId });
@@ -98,7 +102,11 @@ export default function LinkHub() {
         if (edits.receivable_id !== undefined) {
           updateTx.receivable_id = edits.receivable_id === 'none' ? null : edits.receivable_id;
           if (originalTx.receivable_id && originalTx.receivable_id !== edits.receivable_id) {
-            await base44.entities.Receivable.update(originalTx.receivable_id, { status: 'pending', transaction_id: null });
+            if (edits.receivable_id === 'none') {
+              await base44.entities.Receivable.delete(originalTx.receivable_id);
+            } else {
+              await base44.entities.Receivable.update(originalTx.receivable_id, { status: 'pending', transaction_id: null });
+            }
           }
           if (edits.receivable_id !== 'none') {
             await base44.entities.Receivable.update(edits.receivable_id, { status: 'received', transaction_id: txId });

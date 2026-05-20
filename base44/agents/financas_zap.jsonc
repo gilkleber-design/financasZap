@@ -44,5 +44,9 @@
     "scope": "both",
     "instructions": null
   },
+  "context_files": [],
+  "app_user_connector_configs": [],
+  "telegram_greeting": "",
+  "line_greeting": "",
   "name": "financas_zap"
 }

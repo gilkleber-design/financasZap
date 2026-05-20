@@ -8,29 +8,29 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Link2 } from 'lucide-react';
+import { Link2, Filter } from 'lucide-react';
 
 const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
 export default function LinkHub() {
   const queryClient = useQueryClient();
+  const [selectedUser, setSelectedUser] = useState('all');
 
   const { data: transactions = [], isLoading: isLoadingTransactions } = useQuery({
-    queryKey: ['unlinkedTransactions'],
+    queryKey: ['allTransactionsLinkHub'],
     queryFn: async () => {
-      const allTransactions = await base44.entities.Transaction.list('-created_date', 500);
-      return allTransactions.filter(tx => !tx.payable_id && !tx.receivable_id);
+      return await base44.entities.Transaction.list('-date', 2000);
     },
   });
 
   const { data: payables = [], isLoading: isLoadingPayables } = useQuery({
-    queryKey: ['pendingPayables'],
-    queryFn: () => base44.entities.Payable.filter({ status: 'pending' }, '-due_date', 500),
+    queryKey: ['allPayablesLinkHub'],
+    queryFn: () => base44.entities.Payable.list('-due_date', 2000),
   });
 
   const { data: receivables = [], isLoading: isLoadingReceivables } = useQuery({
-    queryKey: ['pendingReceivables'],
-    queryFn: () => base44.entities.Receivable.filter({ status: 'pending' }, '-due_date', 500),
+    queryKey: ['allReceivablesLinkHub'],
+    queryFn: () => base44.entities.Receivable.list('-due_date', 2000),
   });
 
   const linkMutation = useMutation({
@@ -38,27 +38,29 @@ export default function LinkHub() {
       // Update Transaction
       const updateTransactionPayload = {
         status: 'registered', 
-        reconciled: true, 
+        reconciled: linkEntityId !== 'none', 
       };
       if (linkEntityType === 'payable') {
-        updateTransactionPayload.payable_id = linkEntityId;
+        updateTransactionPayload.payable_id = linkEntityId === 'none' ? null : linkEntityId;
       } else if (linkEntityType === 'receivable') {
-        updateTransactionPayload.receivable_id = linkEntityId;
+        updateTransactionPayload.receivable_id = linkEntityId === 'none' ? null : linkEntityId;
       }
       await base44.entities.Transaction.update(transactionId, updateTransactionPayload);
 
       // Update Payable/Receivable status
-      if (linkEntityType === 'payable') {
-        await base44.entities.Payable.update(linkEntityId, { status: 'paid', transaction_id: transactionId });
-      } else if (linkEntityType === 'receivable') {
-        await base44.entities.Receivable.update(linkEntityId, { status: 'received', transaction_id: transactionId });
+      if (linkEntityId !== 'none') {
+        if (linkEntityType === 'payable') {
+          await base44.entities.Payable.update(linkEntityId, { status: 'paid', transaction_id: transactionId });
+        } else if (linkEntityType === 'receivable') {
+          await base44.entities.Receivable.update(linkEntityId, { status: 'received', transaction_id: transactionId });
+        }
       }
       return true;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['unlinkedTransactions']);
-      queryClient.invalidateQueries(['pendingPayables']);
-      queryClient.invalidateQueries(['pendingReceivables']);
+      queryClient.invalidateQueries(['allTransactionsLinkHub']);
+      queryClient.invalidateQueries(['allPayablesLinkHub']);
+      queryClient.invalidateQueries(['allReceivablesLinkHub']);
       toast.success('Lançamento vinculado com sucesso!');
     },
     onError: (error) => {
@@ -66,7 +68,10 @@ export default function LinkHub() {
     },
   });
 
-  const groupedByUser = transactions.reduce((acc, tx) => {
+  const uniqueUsers = Array.from(new Set(transactions.map(tx => tx.created_by || 'unknown')));
+  const filteredTransactions = selectedUser === 'all' ? transactions : transactions.filter(tx => (tx.created_by || 'unknown') === selectedUser);
+
+  const groupedByUser = filteredTransactions.reduce((acc, tx) => {
     const userEmail = tx.created_by || 'unknown'; 
     if (!acc[userEmail]) {
       acc[userEmail] = { expenses: [], incomes: [] };
@@ -87,7 +92,26 @@ export default function LinkHub() {
         <Link2 className="w-6 h-6 text-primary" />
         Hub de Amarração Financeira
       </h1>
-      <p className="text-muted-foreground text-sm">Vincule transações soltas a contas a pagar e receber pendentes.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <p className="text-muted-foreground text-sm">Avalie e vincule TODAS as transações lançadas aos compromissos do sistema.</p>
+        
+        {!allLoading && uniqueUsers.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <Select value={selectedUser} onValueChange={setSelectedUser}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filtrar por Usuário" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Usuários</SelectItem>
+                {uniqueUsers.map(u => (
+                  <SelectItem key={u} value={u}>{u.split('@')[0]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
 
       {allLoading && (
         <div className="flex justify-center items-center h-40">
@@ -128,18 +152,19 @@ export default function LinkHub() {
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
                           <Select
+                            value={tx.payable_id || "none"}
                             onValueChange={(payableId) => {
                               linkMutation.mutate({ transactionId: tx.id, linkEntityType: 'payable', linkEntityId: payableId });
                             }}
                           >
-                            <SelectTrigger className="w-full sm:w-[250px]">
+                            <SelectTrigger className="w-full sm:w-[350px]">
                               <SelectValue placeholder="Vincular a Pagar..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {payables.length === 0 && <SelectItem value="none" disabled>Nenhuma conta a pagar pendente</SelectItem>}
+                              <SelectItem value="none">Não vinculado</SelectItem>
                               {payables.map(p => (
                                 <SelectItem key={p.id} value={p.id}>
-                                  {p.description} ({formatCurrency(p.amount)})
+                                  {p.description} - {formatCurrency(p.amount)} ({p.status})
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -166,18 +191,19 @@ export default function LinkHub() {
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
                           <Select
+                            value={tx.receivable_id || "none"}
                             onValueChange={(receivableId) => {
                               linkMutation.mutate({ transactionId: tx.id, linkEntityType: 'receivable', linkEntityId: receivableId });
                             }}
                           >
-                            <SelectTrigger className="w-full sm:w-[250px]">
+                            <SelectTrigger className="w-full sm:w-[350px]">
                               <SelectValue placeholder="Vincular a Receber..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {receivables.length === 0 && <SelectItem value="none" disabled>Nenhuma conta a receber pendente</SelectItem>}
+                              <SelectItem value="none">Não vinculado</SelectItem>
                               {receivables.map(r => (
                                 <SelectItem key={r.id} value={r.id}>
-                                  {r.description} ({formatCurrency(r.amount)})
+                                  {r.description} - {formatCurrency(r.amount)} ({r.status})
                                 </SelectItem>
                               ))}
                             </SelectContent>

@@ -136,8 +136,9 @@ export default function LinkHub() {
     onError: (err) => toast.error('Erro: ' + err.message)
   });
 
-  const uniqueUsers = Array.from(new Set(transactions.map(tx => tx.created_by || 'unknown')));
-  const filteredTransactions = selectedUser === 'all' ? transactions : transactions.filter(tx => (tx.created_by || 'unknown') === selectedUser);
+  const transactionsNeedingLinks = transactions.filter(tx => !tx.status || tx.status === '');
+  const uniqueUsers = Array.from(new Set(transactionsNeedingLinks.map(tx => tx.created_by || 'unknown')));
+  const filteredTransactions = selectedUser === 'all' ? transactionsNeedingLinks : transactionsNeedingLinks.filter(tx => (tx.created_by || 'unknown') === selectedUser);
 
   const groupedByUser = filteredTransactions.reduce((acc, tx) => {
     const userEmail = tx.created_by || 'unknown'; 

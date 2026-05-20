@@ -12,10 +12,13 @@ import { Link2, Filter, Save } from 'lucide-react';
 
 const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
+import { useCallback } from 'react';
+
 export default function LinkHub() {
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState('all');
   const [pendingEdits, setPendingEdits] = useState({});
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
   const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: () => base44.entities.Account.list() });
   const { data: cards = [] } = useQuery({ queryKey: ['cards'], queryFn: () => base44.entities.Card.list() });
@@ -37,7 +40,13 @@ export default function LinkHub() {
     queryFn: () => base44.entities.Receivable.list('-due_date', 2000),
   });
 
-  const handleEdit = (txId, field, value) => setPendingEdits(prev => ({ ...prev, [txId]: { ...prev[txId], [field]: value } }));
+  const handleEdit = useCallback((txId, field, value) => {
+    setPendingEdits(prev => {
+      const updated = { ...prev, [txId]: { ...prev[txId], [field]: value } };
+      setHasPendingChanges(Object.keys(updated).length > 0);
+      return updated;
+    });
+  }, []);
 
   const handleLinkChange = (tx, type, value) => {
     if (value === 'remove') {
@@ -144,7 +153,6 @@ export default function LinkHub() {
   }, {});
 
   const allLoading = isLoadingTransactions || isLoadingPayables || isLoadingReceivables;
-  const hasPendingChanges = Object.keys(pendingEdits).length > 0;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">

@@ -1,4 +1,4 @@
-import { useToast } from "@/components/ui/use-toast.js";
+import { useToast } from "@/components/ui/use-toast";
 import {
   Toast,
   ToastClose,

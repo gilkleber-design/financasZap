@@ -70,8 +70,18 @@ export default function Settings() {
 
 
   const upsertCard = useMutation({
-    mutationFn: (data) => editingCardId ? base44.entities.Card.update(editingCardId, data) : base44.entities.Card.create(data),
-    onSuccess: () => {queryClient.invalidateQueries();setEditingCardId(null);setShowNewCard(false);setCardForm({ name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '', is_additional: false, principal_card_id: '', assigned_user_id: '' });toast.success('Cartão salvo!');}
+    mutationFn: (data) => {
+      const payload = { ...data };
+      if (payload.closing_day) payload.closing_day = Number(payload.closing_day);
+      else delete payload.closing_day;
+      
+      if (payload.due_day) payload.due_day = Number(payload.due_day);
+      else delete payload.due_day;
+
+      return editingCardId ? base44.entities.Card.update(editingCardId, payload) : base44.entities.Card.create(payload);
+    },
+    onSuccess: () => {queryClient.invalidateQueries();setEditingCardId(null);setShowNewCard(false);setCardForm({ name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '', is_additional: false, principal_card_id: '', assigned_user_id: '' });toast.success('Cartão salvo!');},
+    onError: (err) => { toast.error('Erro ao salvar cartão: ' + err.message); }
   });
 
 

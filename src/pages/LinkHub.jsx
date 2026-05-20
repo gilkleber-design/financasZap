@@ -74,42 +74,42 @@ export default function LinkHub() {
 
         if (edits.origin !== undefined) {
           if (edits.origin === 'none') {
-            updateTx.account_id = null;
-            updateTx.card_id = null;
+            updateTx.account_id = "";
+            updateTx.card_id = "";
           } else if (edits.origin.startsWith('account_')) {
             updateTx.account_id = edits.origin.replace('account_', '');
-            updateTx.card_id = null;
+            updateTx.card_id = "";
           } else if (edits.origin.startsWith('card_')) {
             updateTx.card_id = edits.origin.replace('card_', '');
-            updateTx.account_id = null;
+            updateTx.account_id = "";
           }
         }
 
         if (edits.payable_id !== undefined) {
-          updateTx.payable_id = edits.payable_id === 'none' ? null : edits.payable_id;
+          updateTx.payable_id = edits.payable_id === 'none' ? "" : edits.payable_id;
           if (originalTx.payable_id && originalTx.payable_id !== edits.payable_id) {
             if (edits.payable_id === 'none') {
-              await base44.entities.Payable.delete(originalTx.payable_id);
+              try { await base44.entities.Payable.delete(originalTx.payable_id); } catch(e) { console.error(e) }
             } else {
-              await base44.entities.Payable.update(originalTx.payable_id, { status: 'pending', transaction_id: null });
+              try { await base44.entities.Payable.update(originalTx.payable_id, { status: 'pending', transaction_id: "" }); } catch(e) {}
             }
           }
           if (edits.payable_id !== 'none') {
-            await base44.entities.Payable.update(edits.payable_id, { status: 'paid', transaction_id: txId });
+            try { await base44.entities.Payable.update(edits.payable_id, { status: 'paid', transaction_id: txId }); } catch(e) {}
           }
         }
 
         if (edits.receivable_id !== undefined) {
-          updateTx.receivable_id = edits.receivable_id === 'none' ? null : edits.receivable_id;
+          updateTx.receivable_id = edits.receivable_id === 'none' ? "" : edits.receivable_id;
           if (originalTx.receivable_id && originalTx.receivable_id !== edits.receivable_id) {
             if (edits.receivable_id === 'none') {
-              await base44.entities.Receivable.delete(originalTx.receivable_id);
+              try { await base44.entities.Receivable.delete(originalTx.receivable_id); } catch(e) { console.error(e) }
             } else {
-              await base44.entities.Receivable.update(originalTx.receivable_id, { status: 'pending', transaction_id: null });
+              try { await base44.entities.Receivable.update(originalTx.receivable_id, { status: 'pending', transaction_id: "" }); } catch(e) {}
             }
           }
           if (edits.receivable_id !== 'none') {
-            await base44.entities.Receivable.update(edits.receivable_id, { status: 'received', transaction_id: txId });
+            try { await base44.entities.Receivable.update(edits.receivable_id, { status: 'received', transaction_id: txId }); } catch(e) {}
           }
         }
 

@@ -10,6 +10,7 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import AuditReportAccordion from '@/components/reports/AuditReportAccordion';
 import PayableDetailDrawer from '@/components/reports/PayableDetailDrawer';
+import ConsolidatedReportModal from '@/components/reports/ConsolidatedReportModal';
 
 const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16'];
 
@@ -26,6 +27,7 @@ export default function Reports() {
   const [selectedPayable, setSelectedPayable] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [consolidatedModalOpen, setConsolidatedModalOpen] = useState(false);
 
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
@@ -131,9 +133,14 @@ export default function Reports() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
-        <p className="text-muted-foreground text-sm mt-1">Visão financeira completa</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
+          <p className="text-muted-foreground text-sm mt-1">Visão financeira completa</p>
+        </div>
+        <Button onClick={() => setConsolidatedModalOpen(true)}>
+          Relatório Consolidado
+        </Button>
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
@@ -256,6 +263,7 @@ export default function Reports() {
       </Tabs>
 
       <PayableDetailDrawer open={drawerOpen} onOpenChange={setDrawerOpen} payable={selectedPayable} />
+      <ConsolidatedReportModal open={consolidatedModalOpen} onOpenChange={setConsolidatedModalOpen} currentMonth={currentMonth} />
     </div>
   );
 }

@@ -42,8 +42,12 @@ Deno.serve(async (req) => {
         if (conciliate_id) {
             if (safeType === 'income') {
                 txData.receivable_id = conciliate_id;
+                const recs = await base44.entities.Receivable.filter({ id: conciliate_id });
+                if (recs && recs.length > 0) txData.description = recs[0].description;
             } else {
                 txData.payable_id = conciliate_id;
+                const pays = await base44.entities.Payable.filter({ id: conciliate_id });
+                if (pays && pays.length > 0) txData.description = pays[0].description;
             }
         }
 

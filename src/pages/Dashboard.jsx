@@ -114,7 +114,7 @@ export default function DashboardPage() {
 
   // --- LÓGICA DE NEGÓCIO BLINDADA ---
   const stats = useMemo(() => {
-    // Busca segura com optional chaining para evitar crash se alguma categoria não tiver nome
+    // Busca segura com optional chaining
     const catFaturaCartao = categories.find(c => 
       c?.name?.toLowerCase()?.includes('faturas de cartão') || 
       c?.name?.toLowerCase()?.includes('fatura de cartão')
@@ -168,11 +168,11 @@ export default function DashboardPage() {
     const expenseStats = mapCategoryStats('expense');
     const incomeStats = mapCategoryStats('income');
 
-    // KPI 3: Saúde do Orçamento
-    const totalBudget = budgets.reduce((acc, b) => acc + parseFloat(b.amount || 0), 0);
+    // KPI 3: Saúde do Orçamento (Apenas categorias de Despesa)
+    const totalExpenseBudget = expenseStats.reduce((acc, c) => acc + c.meta, 0);
     const totalExpenseProjected = expenseStats.reduce((acc, c) => acc + c.totalUsage, 0);
-    const budgetBalance = totalBudget - totalExpenseProjected;
-    const healthPercent = totalBudget > 0 ? Math.max(0, Math.min((budgetBalance / totalBudget) * 100, 100)) : 0;
+    const budgetBalance = totalExpenseBudget - totalExpenseProjected;
+    const healthPercent = totalExpenseBudget > 0 ? Math.max(0, Math.min((budgetBalance / totalExpenseBudget) * 100, 100)) : 0;
 
     return {
       realBalance,

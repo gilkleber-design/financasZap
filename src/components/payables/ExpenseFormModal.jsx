@@ -10,7 +10,7 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { toast } from 'sonner';
 import { usePaymentOrigins } from '@/hooks/usePaymentOrigins';
 import { useCategories } from '@/hooks/useCategories';
-import { format } from 'date-fns';
+import { format, addMonths } from 'date-fns';
 
 const getTodayString = () => {
   const now = new Date();
@@ -112,8 +112,11 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const installmentsToGenerate = expenseType === 'parcelada' && form.installment_count && form.installment_number
     ? parseInt(form.installment_count) - parseInt(form.installment_number) + 1
     : 0;
-  const installmentAmt = expenseType === 'parcelada' && form.installment_total_amount && form.installment_count
-    ? (parseFloat(form.installment_total_amount) / parseInt(form.installment_count))
+  const installmentAmt = expenseType === 'parcelada' && form.installment_count
+    ? (form.installment_total_amount ? parseFloat(form.installment_total_amount) / parseInt(form.installment_count) : parseFloat(form.amount || 0))
+    : null;
+  const firstGeneratedDate = expenseType === 'parcelada' && form.due_date && form.installment_number
+    ? format(addMonths(new Date(form.due_date + 'T12:00:00'), parseInt(form.installment_number) - 1), 'dd/MM/yyyy')
     : null;
 
   return (
@@ -255,9 +258,10 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
                   <Input tabIndex={10} type="number" min={1} value={form.installment_number} onChange={e => set('installment_number', e.target.value)} className="mt-1 text-sm" placeholder="1" />
                 </div>
               </div>
-              {installmentsToGenerate > 0 && installmentAmt && (
-                <p className="text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1">
-                  Serão geradas <strong>{installmentsToGenerate}</strong> parcelas de <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(installmentAmt)}</strong>
+              {installmentsToGenerate > 0 && installmentAmt > 0 && (
+                <p className="text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1 leading-relaxed">
+                  Serão geradas <strong>{installmentsToGenerate}</strong> parcelas de <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(installmentAmt)}</strong>.<br />
+                  A parcela {form.installment_number}/{form.installment_count} terá vencimento em <strong>{firstGeneratedDate}</strong>.
                 </p>
               )}
             </div>

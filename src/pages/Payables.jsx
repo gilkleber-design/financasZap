@@ -359,7 +359,7 @@ export default function Payables() {
   });
 
   const deletePayableMutation = useMutation({
-    mutationFn: async ({ payable, deleteAllFutures }) => {
+    mutationFn: async ({ payable, deleteAllFutures, deleteAllGroup }) => {
       if (deleteAllFutures && payable.recurrence_id) {
         await base44.entities.Recurrence.update(payable.recurrence_id, {
           active: false,
@@ -372,6 +372,29 @@ export default function Payables() {
             p.recurrence_id === payable.recurrence_id &&
             p.status !== 'paid' &&
             new Date(p.due_date) >= new Date(payable.due_date)
+        );
+
+        for (const p of toDelete) {
+          await base44.entities.Payable.delete(p.id);
+        }
+      } else if (deleteAllFutures && payable.installment_group_id) {
+        const payables = await base44.entities.Payable.list('-due_date', 500);
+        const toDelete = payables.filter(
+          (p) =>
+            p.installment_group_id === payable.installment_group_id &&
+            p.status !== 'paid' &&
+            new Date(p.due_date) >= new Date(payable.due_date)
+        );
+
+        for (const p of toDelete) {
+          await base44.entities.Payable.delete(p.id);
+        }
+      } else if (deleteAllGroup && payable.installment_group_id) {
+        const payables = await base44.entities.Payable.list('-due_date', 500);
+        const toDelete = payables.filter(
+          (p) =>
+            p.installment_group_id === payable.installment_group_id &&
+            p.status !== 'paid'
         );
 
         for (const p of toDelete) {
@@ -740,10 +763,10 @@ export default function Payables() {
               {format(currentMonth, 'MMMM', { locale: ptBR }).toUpperCase()}
             </Button>
 
-            {deletingPayable?.recurrence_id && (
+            {(deletingPayable?.recurrence_id || deletingPayable?.installment_group_id) && (
               <Button
                 variant="destructive"
-                className="font-bold justify-start"
+                className="font-bold justify-start text-left whitespace-normal h-auto"
                 onClick={() =>
                   deletePayableMutation.mutate({
                     payable: deletingPayable,
@@ -752,8 +775,25 @@ export default function Payables() {
                 }
                 disabled={deletePayableMutation.isPending}
               >
-                ⚠️ EXCLUIR ESTE MÊS E DESATIVAR DAQUI PARA FRENTE PRESERVA O
-                PASSADO
+                {deletingPayable?.installment_group_id 
+                  ? '⚠️ EXCLUIR ESTA E TODAS AS PARCELAS FUTURAS' 
+                  : '⚠️ EXCLUIR ESTE MÊS E DESATIVAR DAQUI PARA FRENTE PRESERVA O PASSADO'}
+              </Button>
+            )}
+
+            {deletingPayable?.installment_group_id && (
+              <Button
+                variant="destructive"
+                className="font-bold justify-start text-left whitespace-normal h-auto"
+                onClick={() =>
+                  deletePayableMutation.mutate({
+                    payable: deletingPayable,
+                    deleteAllGroup: true,
+                  })
+                }
+                disabled={deletePayableMutation.isPending}
+              >
+                ⚠️ EXCLUIR TODAS AS PARCELAS DA COMPRA
               </Button>
             )}
 

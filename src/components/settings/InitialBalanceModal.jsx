@@ -3,23 +3,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
+import { Switch } from '@/components/ui/switch';
+
 export default function InitialBalanceModal({ open, onOpenChange }) {
     const queryClient = useQueryClient();
     const [targetBalance, setTargetBalance] = useState('');
+    const [isNegative, setIsNegative] = useState(false);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
 
     const handleSave = async () => {
         if (!targetBalance || !date) return toast.error('Preencha os campos obrigatórios');
         setLoading(true);
+        
+        let finalBalance = parseFloat(targetBalance);
+        if (isNegative) finalBalance = -finalBalance;
+
         try {
             const res = await base44.functions.invoke('adjustInitialBalance', { 
-                targetBalance: parseFloat(targetBalance), 
+                targetBalance: finalBalance, 
                 date 
             });
             if (res.data?.error) throw new Error(res.data.error);
@@ -50,13 +58,18 @@ export default function InitialBalanceModal({ open, onOpenChange }) {
                         <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
                     </div>
                     <div className="space-y-2">
-                        <Label>Saldo Real na Data (R$)</Label>
-                        <Input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="Ex: 5000.00" 
+                        <div className="flex justify-between items-center mb-1">
+                            <Label>Saldo Real na Data (R$)</Label>
+                            <div className="flex items-center gap-2">
+                                <Label className="text-xs text-muted-foreground cursor-pointer">Saldo Negativo?</Label>
+                                <Switch checked={isNegative} onCheckedChange={setIsNegative} />
+                            </div>
+                        </div>
+                        <CurrencyInput 
+                            placeholder="Ex: R$ 5.000,00" 
                             value={targetBalance} 
-                            onChange={e => setTargetBalance(e.target.value)} 
+                            onChange={(val) => setTargetBalance(val)} 
+                            className={isNegative ? 'text-red-500 font-bold' : ''}
                         />
                     </div>
                 </div>

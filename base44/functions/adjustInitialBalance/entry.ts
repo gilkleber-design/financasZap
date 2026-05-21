@@ -19,10 +19,13 @@ Deno.serve(async (req) => {
         let currentBalance = 0;
         allTx.forEach(t => {
             if (t.status !== 'ignored' && t.date <= date) {
+                const amount = Number(t.amount) || 0;
+                const netAmount = t.net_amount !== undefined ? Number(t.net_amount) : amount;
+                
                 if (t.type === 'income') {
-                    currentBalance += (t.net_amount || t.amount);
+                    currentBalance += netAmount;
                 } else if (t.type === 'expense') {
-                    currentBalance -= t.amount;
+                    currentBalance -= amount;
                 }
             }
         });

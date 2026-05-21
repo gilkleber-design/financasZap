@@ -118,9 +118,9 @@ export default function DashboardPage() {
     const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
     const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
     
-    // KPI 1: Saldo Real em Conta
-    const realIncomeTotal = validTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-    const realExpenseTotal = validTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+    // KPI 1: Resultado Mensal (Restrito apenas ao mês atual)
+    const realIncomeTotal = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+    const realExpenseTotal = monthTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realBalance = realIncomeTotal - realExpenseTotal;
 
     // KPI 2: Meta de Receitas (Mês Corrente + Atrasados)
@@ -190,9 +190,9 @@ export default function DashboardPage() {
 
   const kpiCards = [
     {
-      title: 'Saldo Real em Conta',
+      title: 'Resultado Mensal',
       value: stats.realBalance,
-      subtitle: '(Baseado apenas em transações conciliadas)',
+      subtitle: '(Receitas vs Despesas do mês atual)',
       icon: Wallet,
       color: 'emerald',
       customBg: true,
@@ -206,7 +206,7 @@ export default function DashboardPage() {
       percentage: stats.incomePercentage.toFixed(0),
       icon: Coins,
       color: 'emerald',
-      isMetaCard: true, // Flag para renderizar a feature nova
+      isMetaCard: true,
     },
     {
       title: 'Saúde do Orçamento (Projetada)',
@@ -296,14 +296,12 @@ export default function DashboardPage() {
                   {card.title.includes('Saúde') ? (
                     <p className={`text-xl lg:text-2xl xl:text-3xl font-bold whitespace-nowrap truncate ${card.value >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{card.value >= 0 ? '+' : ''}{valueText}</p>
                   ) : (
-                    // LÓGICA DA META DE RECEITAS COM QUEBRA DE ATRASADOS
                     <div className="flex flex-col items-start w-full">
                       <div className="flex flex-wrap items-baseline gap-1.5 w-full">
                         <p className="text-xl lg:text-2xl xl:text-3xl font-bold text-slate-950 dark:text-white whitespace-nowrap">{valueText}</p>
                         <span className="text-sm text-slate-400 whitespace-nowrap">/ <CurrencyText value={card.target} /></span>
                       </div>
                       
-                      {/* Detalhamento de atrasados */}
                       {card.isMetaCard === true && card.overdueTarget > 0 && (
                         <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
                           (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atrasos</span>)

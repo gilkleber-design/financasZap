@@ -308,28 +308,7 @@ export default function Payables() {
   const payablesItems = payablesResponse?.data?.items || [];
 
   const filtered = creditCardOnly
-    ? payablesItems.filter((p) => {
-        const method = (
-          p.payment_method ||
-          p.forma_pagamento ||
-          p.paymentMethod ||
-          p.payment_type ||
-          p.formaPagamento ||
-          p.method ||
-          ''
-        )
-          .toString()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase();
-
-        return (
-          method.includes('credito') ||
-          method.includes('cartao') ||
-          method.includes('credit_card') ||
-          method.includes('creditcard')
-        );
-      })
+    ? payablesItems.filter((p) => p.origin_type === 'card')
     : payablesItems;
 
   const getStatus = (p) => {

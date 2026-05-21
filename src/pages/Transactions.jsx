@@ -52,8 +52,12 @@ export default function Transactions() {
       t.amount?.toString().includes(searchLower) ||
       t.notes?.toLowerCase().includes(searchLower);
       
+    const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
     const matchType = filterType === 'all' || t.type === filterType;
-    const matchCat = filterCategory === 'all' || t.category === filterCategory;
+    const matchCat = filterCategory === 'all' || 
+                     t.category === filterCategory || 
+                     normalize(t.category) === normalize(filterCategory);
     const matchCreatedBy = filterCreatedBy === 'all' || t.created_by === filterCreatedBy;
     // Removendo o filtro rígido de ano atual para que você possa ver todas as transações, incluindo as de 2025 ou anos seguintes
     

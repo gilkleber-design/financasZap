@@ -13,14 +13,27 @@ export function useCategories() {
   const roots = sortByName(sortedCategories.filter(c => !c.parent_id && c.active !== false));
   const getChildren = (parentId) => sortByName(sortedCategories.filter(c => c.parent_id === parentId && c.active !== false));
   
+  const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  const findCategory = (slugOrName) => {
+    if (!slugOrName) return null;
+    const v = String(slugOrName);
+    return categories.find(c => 
+      c.slug === v || 
+      c.name?.toLowerCase() === v.toLowerCase() || 
+      normalize(c.name) === normalize(v) ||
+      normalize(c.slug) === normalize(v)
+    );
+  };
+
   const getCategoryLabel = (slug) => {
-    const cat = categories.find(c => c.slug === slug);
+    const cat = findCategory(slug);
     return cat?.name || slug;
   };
 
   const getCategoryColor = (slug) => {
     // Usa a cor definida na categoria, ou fallback genérico
-    const cat = categories.find(c => c.slug === slug);
+    const cat = findCategory(slug);
     if (cat?.color) {
       const hex = cat.color;
       // Converte hex para classe Tailwind aproximada

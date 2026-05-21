@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Plus } from 'lucide-react';
@@ -36,7 +36,24 @@ export function CategorySelect({
   const isAllowed = (category) => !typeFilter || typeFilter.includes(category.type || 'expense');
   const activeCategories = categories.filter(c => c.active !== false && isAllowed(c));
   const visibleRoots = roots.filter(isAllowed);
-  const selectedCategory = activeCategories.find(c => String(c[valueKey]) === String(value));
+  
+  const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  const selectedCategory = activeCategories.find(c => {
+    const v = String(value);
+    return String(c[valueKey]) === v || 
+           c.name?.toLowerCase() === v.toLowerCase() || 
+           normalize(c.name) === normalize(v) ||
+           normalize(c.slug) === normalize(v);
+  });
+
+  useEffect(() => {
+    if (value && selectedCategory && String(selectedCategory[valueKey]) !== String(value)) {
+      onChange(selectedCategory[valueKey], selectedCategory);
+    }
+  }, [value, selectedCategory, valueKey, onChange]);
+
+  const selectValue = selectedCategory ? String(selectedCategory[valueKey]) : (value || '_none');
 
   const emitChange = (nextValue) => {
     if (nextValue === '__new_category__') {
@@ -58,7 +75,7 @@ export function CategorySelect({
 
   return (
     <>
-      <Select value={value || '_none'} onValueChange={emitChange} disabled={isLoading}>
+      <Select value={selectValue} onValueChange={emitChange} disabled={isLoading}>
         <SelectTrigger className={className}>
           <SelectValue placeholder={placeholder} />
           {selectedCategory && (

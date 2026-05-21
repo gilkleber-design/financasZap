@@ -114,42 +114,36 @@ export default function DashboardPage() {
 
   // --- LÓGICA DE NEGÓCIO BLINDADA ---
   const stats = useMemo(() => {
-    // 1. FILTRO MESTRE: Só entra dinheiro e gasto real (Validado ou Conciliado)
+    // 1. FILTRO MESTRE: Só entra dinheiro e gasto real
     const validTransactions = rawTransactions.filter(t => !t.status || t.status === 'registered' || t.status === 'conciliated');
     const monthTransactions = validTransactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
     
-    // KPI 1: Resultado Mensal (Restrito apenas ao mês atual)
+    // KPI 1: Resultado Mensal (Isolado por data)
     const realIncomeTotal = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realExpenseTotal = monthTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
     const realBalance = realIncomeTotal - realExpenseTotal;
 
-    // KPI 2: Meta de Receitas (Mês Corrente + Atrasados)
-    const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+    // KPI 2: Expectativa de Caixa
+    const monthIncome = realIncomeTotal;
     
-    // Pendentes apenas deste mês
     const pendingCurrentMonth = receivables.filter(r => r.status === 'pending' && r.due_date >= monthStart && r.due_date <= monthEnd);
     const pendingCurrentTotal = pendingCurrentMonth.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
     
-    // Pendentes atrasados (de meses anteriores)
     const pendingPreviousMonths = receivables.filter(r => r.status === 'pending' && r.due_date < monthStart);
     const pendingOverdueTotal = pendingPreviousMonths.reduce((acc, r) => acc + parseFloat(r.amount || 0), 0);
 
-    // Cálculos da Meta
-    const baseTarget = monthIncome + pendingCurrentTotal;
-    const overdueTarget = pendingOverdueTotal;
-    const targetIncome = baseTarget + overdueTarget || (monthIncome + 1); // Evita divisão por zero
-    
+    const targetIncome = monthIncome + pendingCurrentTotal + pendingOverdueTotal || (monthIncome + 1);
     const incomePercentage = Math.min((monthIncome / targetIncome) * 100, 100);
 
-    // KPI 3: Saúde do Orçamento (Projetada)
+    // KPI 3: Saúde do Orçamento (Teto de Gastos)
+    const totalBudget = budgets.reduce((acc, b) => acc + parseFloat(b.amount || 0), 0);
     const pendingPayablesMonth = payables.filter(p => p.status === 'pending' && p.due_date >= monthStart && p.due_date <= monthEnd);
+    const pendingPayablesTotal = pendingPayablesMonth.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
     
-    const projectedIncome = monthIncome + pendingCurrentTotal + pendingOverdueTotal; 
-    const monthExpense = monthTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-    const projectedExpense = monthExpense + pendingPayablesMonth.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+    const totalExpenseProjected = realExpenseTotal + pendingPayablesTotal;
+    const budgetBalance = totalBudget - totalExpenseProjected;
     
-    const projectedBalance = projectedIncome - projectedExpense;
-    const healthPercent = projectedIncome > 0 ? Math.max(0, Math.min(((projectedIncome - projectedExpense) / projectedIncome) * 100, 100)) : 0;
+    const healthPercent = totalBudget > 0 ? Math.max(0, Math.min((budgetBalance / totalBudget) * 100, 100)) : 0;
 
     // KPI 4: A Cobrar / Vencidas
     const overdueIncomes = receivables.filter(r => r.status === 'pending' && isBefore(new Date(r.due_date), new Date(todayStr)));
@@ -175,10 +169,10 @@ export default function DashboardPage() {
       realBalance,
       monthIncome,
       targetIncome,
-      baseTarget,
-      overdueTarget,
+      baseTarget: monthIncome + pendingCurrentTotal,
+      overdueTarget: pendingOverdueTotal,
       incomePercentage,
-      projectedBalance,
+      projectedBalance: budgetBalance,
       healthPercent,
       overdueIncomes,
       overdueIncomeTotal,
@@ -192,24 +186,24 @@ export default function DashboardPage() {
     {
       title: 'Resultado Mensal',
       value: stats.realBalance,
-      subtitle: '(Receitas vs Despesas do mês atual)',
+      subtitle: '(Receitas vs Despesas de maio)',
       icon: Wallet,
       color: 'emerald',
       customBg: true,
     },
     {
-      title: 'Meta de Receitas (Mês)',
+      title: 'Expectativa de Caixa',
       value: stats.monthIncome,
       target: stats.targetIncome,
       baseTarget: stats.baseTarget,
       overdueTarget: stats.overdueTarget,
-      percentage: stats.incomePercentage.toFixed(0),
+      percentage: stats.incomePercentage, // Mantido como número para evitar crash na ProgressBar
       icon: Coins,
       color: 'emerald',
       isMetaCard: true,
     },
     {
-      title: 'Saúde do Orçamento (Projetada)',
+      title: 'Saúde do Orçamento',
       value: stats.projectedBalance,
       healthPercent: stats.healthPercent,
       icon: Scale,
@@ -294,7 +288,12 @@ export default function DashboardPage() {
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{card.title}</p>
                   
                   {card.title.includes('Saúde') ? (
-                    <p className={`text-xl lg:text-2xl xl:text-3xl font-bold whitespace-nowrap truncate ${card.value >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{card.value >= 0 ? '+' : ''}{valueText}</p>
+                    <div className="flex flex-col items-start w-full">
+                      <p className={cn("text-xl lg:text-2xl xl:text-3xl font-bold whitespace-nowrap truncate", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                        {card.value >= 0 ? 'Sobra: ' : 'Estouro: '}{valueText}
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Saldo do limite planejado</p>
+                    </div>
                   ) : (
                     <div className="flex flex-col items-start w-full">
                       <div className="flex flex-wrap items-baseline gap-1.5 w-full">
@@ -302,7 +301,7 @@ export default function DashboardPage() {
                         <span className="text-sm text-slate-400 whitespace-nowrap">/ <CurrencyText value={card.target} /></span>
                       </div>
                       
-                      {card.isMetaCard === true && card.overdueTarget > 0 && (
+                      {card.isMetaCard && card.overdueTarget > 0 && (
                         <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
                           (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atrasos</span>)
                         </div>
@@ -314,12 +313,12 @@ export default function DashboardPage() {
               {card.healthPercent !== undefined ? (
                 <div className="w-full space-y-1">
                   <HealthBar percentage={card.healthPercent} />
-                  <p className="text-[11px] text-right text-muted-foreground">índice saúde</p>
+                  <p className="text-[11px] text-right text-muted-foreground">índice limite de gastos</p>
                 </div>
               ) : (
                 <div className="w-full space-y-1">
                   <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={card.percentage < 100} className="emerald-bars" />
-                  <p className="text-[11px] text-right text-muted-foreground">{card.percentage}%</p>
+                  <p className="text-[11px] text-right text-muted-foreground">{card.percentage.toFixed(0)}% recebido</p>
                 </div>
               )}
             </div>
@@ -431,7 +430,7 @@ const SidebarTable = ({ data, type, urgent }) => {
 
   return (
     <div className="w-full">
-       <div className={`grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground ${urgent && "border-l-4 border-rose-500"}`}>
+       <div className={cn("grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", urgent ? "border-l-4 border-rose-500" : "")}>
         <span>Data</span>
         <span>Descrição</span>
         <span>{isOverdueIncome ? '' : 'Montante'}</span>
@@ -441,9 +440,9 @@ const SidebarTable = ({ data, type, urgent }) => {
         const formattedDate = format(dateObj, "dd/MM/yyyy");
 
         return (
-          <div key={i} className={`grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-3.5 items-center ${urgent && "border-l-4 border-rose-500 bg-rose-50/20 dark:bg-rose-950/10"}`}>
-            <span className={`text-sm ${urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400"}`}>{formattedDate}</span>
-            <div className={`flex items-center gap-1.5 text-sm ${urgent ? "font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-slate-950 dark:text-white"} min-w-0`}>
+          <div key={i} className={cn("grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-3.5 items-center", urgent ? "border-l-4 border-rose-500 bg-rose-50/20 dark:bg-rose-950/10" : "")}>
+            <span className={cn("text-sm", urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400")}>{formattedDate}</span>
+            <div className={cn("flex items-center gap-1.5 text-sm min-w-0", urgent ? "font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-slate-950 dark:text-white")}>
                {urgent && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
                <span className="truncate">{item.description}</span>
             </div>

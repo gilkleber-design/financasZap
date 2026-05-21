@@ -29,7 +29,8 @@
     "origin_type": {
       "type": "string",
       "enum": [
-        "account"
+        "account",
+        "card"
       ]
     },
     "payment_modality": {

@@ -58,7 +58,8 @@
     "origin_type": {
       "type": "string",
       "enum": [
-        "account"
+        "account",
+        "card"
       ],
       "description": "Tipo da origem"
     },

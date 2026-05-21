@@ -13,6 +13,7 @@ import ExpenseFormModal from '@/components/payables/ExpenseFormModal';
 import ConfirmPayableModal from '@/components/payables/ConfirmPayableModal';
 import EditPayableModal from '@/components/payables/EditPayableModal';
 import RecurrenceFormModal from '@/components/recurrences/RecurrenceFormModal';
+import { useCategories } from '@/hooks/useCategories';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -22,11 +23,6 @@ const STATUS_COLORS = {
   paid: 'bg-emerald-100 text-emerald-700',
   overdue: 'bg-red-100 text-red-700',
   provisioned: 'bg-blue-100 text-blue-700',
-};
-const CATEGORY_LABELS = {
-  alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
-  saude: 'Saúde', educacao: 'Educação', lazer: 'Lazer', vestuario: 'Vestuário',
-  servicos: 'Serviços', impostos: 'Impostos', outros: 'Outros', transferencia_liquidacao: 'Liquidação Fatura'
 };
 
 // ---- Aba de Gerenciamento de Contas Fixas Raiz ----
@@ -162,6 +158,7 @@ export default function Payables() {
   // CORREÇÃO: Filtro padrão alterado para Vencimento (due_date)
   const [filterBy, setFilterBy] = useState('due_date'); 
   const queryClient = useQueryClient();
+  const { getCategoryLabel } = useCategories();
 
   const listFilter = activeTab === 'fixas' ? 'FIXAS' : activeTab === 'parceladas' ? 'PARCELADAS' : activeTab === 'avulsas' ? 'AVULSAS' : 'TODAS';
   const listStatus = filterStatus === 'open' ? 'EM_ABERTO' : filterStatus === 'overdue' ? 'VENCIDAS' : 'PAGAS';
@@ -334,7 +331,7 @@ export default function Payables() {
                         </div>
                         <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                             {format(new Date((filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date).includes('T') ? (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) : (filterBy === 'competencia' ? (p.competencia || p.due_date) : p.due_date) + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
-                            {p.category && <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-slate-300" /> {CATEGORY_LABELS[p.category] || p.category}</span>}
+                            {p.category && <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-slate-300" /> {getCategoryLabel(p.category)}</span>}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0 mr-4">

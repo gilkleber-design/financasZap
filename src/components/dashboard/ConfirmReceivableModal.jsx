@@ -56,7 +56,7 @@ export default function ConfirmReceivableModal({ receivable, onClose }) {
       amount: grossAmount,
       net_amount: amount,
       type: 'income',
-      category: 'receita_pj',
+      category: receivable.income_source_id ? 'receita_pj' : 'outros',
       date: form.date,
       tax_rate: taxRate || undefined,
       tax_amount: taxRate > 0 ? grossAmount - amount : undefined,

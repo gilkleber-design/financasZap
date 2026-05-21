@@ -1,24 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useCategories } from '@/hooks/useCategories';
 
 const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16'];
 
-const CATEGORY_LABELS = {
-  alimentacao: 'Alimentação',
-  transporte: 'Transporte',
-  moradia: 'Moradia',
-  saude: 'Saúde',
-  educacao: 'Educação',
-  lazer: 'Lazer',
-  vestuario: 'Vestuário',
-  servicos: 'Serviços',
-  impostos: 'Impostos',
-  salario_clt: 'Salário CLT',
-  receita_pj: 'Receita PJ',
-  outros: 'Outros',
-};
-
 export default function CategoryChart({ data }) {
+  const { getCategoryLabel } = useCategories();
   const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
   const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
@@ -35,7 +22,7 @@ export default function CategoryChart({ data }) {
 
   // Ordena decrescente e limita aos 7 maiores
   const sorted = data
-    .map(d => ({ ...d, name: CATEGORY_LABELS[d.name] || d.name }))
+    .map(d => ({ ...d, name: getCategoryLabel(d.name) }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 7)
     .map(d => ({ ...d, name: capitalize(d.name.replace(/_/g, ' ')) }));

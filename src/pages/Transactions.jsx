@@ -14,13 +14,7 @@ import { toast } from 'sonner';
 import TransactionFormModal from '@/components/transactions/TransactionFormModal';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import BankStatementReconciliationModal from '@/components/reconciliation/BankStatementReconciliationModal';
-
-const CATEGORY_LABELS = {
-  alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
-  saude: 'Saúde', educacao: 'Educação', lazer: 'Lazer', vestuario: 'Vestuário',
-  servicos: 'Serviços', impostos: 'Impostos', salario_clt: 'Salário CLT',
-  receita_pj: 'Receita PJ', outros: 'Outros',
-};
+import { useCategories } from '@/hooks/useCategories';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -34,6 +28,7 @@ export default function Transactions() {
   const [filterCreatedBy, setFilterCreatedBy] = useState('all');
   const [openReconciliation, setOpenReconciliation] = useState(false);
   const queryClient = useQueryClient();
+  const { flatForSelect, getCategoryLabel } = useCategories();
 
   const { data: rawTransactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
@@ -102,8 +97,10 @@ export default function Transactions() {
           <SelectTrigger className="w-44"><SelectValue placeholder="Categoria" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as categorias</SelectItem>
-            {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
-              <SelectItem key={v} value={v}>{l}</SelectItem>
+            {flatForSelect.map((cat) => (
+              <SelectItem key={cat.value} value={cat.value}>
+                {cat.isChild ? `→ ${cat.label}` : cat.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -139,7 +136,7 @@ export default function Transactions() {
                     <span className="text-xs text-muted-foreground">
                       {tx.date ? format(new Date(tx.date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                     </span>
-                    {tx.category && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{CATEGORY_LABELS[tx.category] || tx.category}</Badge>}
+                    {tx.category && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">{getCategoryLabel(tx.category)}</Badge>}
                     {tx.tax_rate > 0 && <Badge className="text-xs py-0 h-4 px-1.5 bg-amber-100 text-amber-700 border-0">IR {tx.tax_rate}%</Badge>}
                   </div>
                 </div>

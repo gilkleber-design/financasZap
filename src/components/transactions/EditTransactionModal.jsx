@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -19,8 +20,19 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
     date: transaction.date || '',
     tax_rate: transaction.tax_rate || '',
     notes: transaction.notes || '',
+    origin: transaction.account_id ? `account:${transaction.account_id}` : (transaction.card_id ? `card:${transaction.card_id}` : ''),
   });
   const [saving, setSaving] = useState(false);
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => base44.entities.Account.list('', 100),
+  });
+
+  const { data: cards = [] } = useQuery({
+    queryKey: ['cards'],
+    queryFn: () => base44.entities.Card.list('', 100),
+  });
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -32,6 +44,10 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
     const amount = parseFloat(form.amount);
     const netAmount = form.net_amount ? parseFloat(form.net_amount) : (form.type === 'income' && taxRate > 0 ? amount * (1 - taxRate / 100) : amount);
 
+    const isAccount = form.origin?.startsWith('account:');
+    const isCard = form.origin?.startsWith('card:');
+    const originId = form.origin?.split(':')[1];
+
     await base44.entities.Transaction.update(transaction.id, {
       description: form.description,
       amount,
@@ -42,6 +58,8 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
       tax_rate: taxRate || undefined,
       tax_amount: taxRate > 0 ? amount * taxRate / 100 : undefined,
       notes: form.notes || undefined,
+      account_id: isAccount ? originId : null,
+      card_id: isCard ? originId : null,
     });
 
     toast.success('Transação atualizada!');
@@ -82,6 +100,26 @@ export default function EditTransactionModal({ transaction, onClose, onSaved }) 
             <div>
               <Label>Data *</Label>
               <Input type="date" value={form.date} onChange={e => set('date', e.target.value)} className="mt-1" />
+            </div>
+
+            <div className="col-span-2">
+              <Label>Origem (Conta/Cartão) *</Label>
+              <Select value={form.origin} onValueChange={v => set('origin', v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a origem..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— Nenhuma —</SelectItem>
+                  {accounts.map(a => (
+                    <SelectItem key={`account:${a.id}`} value={`account:${a.id}`}>
+                      🏦 {a.name} {a.bank ? `(${a.bank})` : ''}
+                    </SelectItem>
+                  ))}
+                  {cards.map(c => (
+                    <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>
+                      💳 {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {form.type === 'income' && (

@@ -259,168 +259,159 @@ export default function DashboardPage() {
   ];
 
   return (
-    // Casca mestre: Bloqueia a rolagem do Body inteiro
-    <div className="h-screen w-full flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    // Rolagem nativa restaurada com min-h-screen
+    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 lg:p-6 lg:p-8 space-y-6 lg:space-y-8">
       
-      {/* SECTION SUPERIOR (FIXA) - Cabeçalho e KPIs não somem ao rolar */}
-      <div className="shrink-0 p-4 lg:p-6 pb-2 lg:pb-3 flex flex-col gap-4 lg:gap-5 border-b border-slate-200/50 dark:border-slate-800/50 bg-slate-50 dark:bg-slate-950 z-10">
-        
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl lg:text-2xl font-bold uppercase tracking-tight text-slate-950 dark:text-white leading-none">PAINEL DE CONTROLE</h1>
-            <p className="text-muted-foreground text-[11px] lg:text-xs uppercase tracking-wider font-semibold mt-1.5">
-              {format(now, "MMMM yyyy", { locale: ptBR })}
-            </p>
-          </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-950 dark:bg-white text-white dark:text-slate-950 rounded-lg text-sm font-semibold shadow hover:opacity-90 transition-opacity">
-            <span className="text-xl leading-none text-transparent bg-gradient-to-br from-green-400 via-blue-500 to-red-500 bg-clip-text">+</span>
-            Lançamento
-          </button>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold uppercase tracking-tight text-slate-950 dark:text-white leading-none">PAINEL DE CONTROLE</h1>
+          <p className="text-muted-foreground text-[11px] lg:text-xs uppercase tracking-wider font-semibold mt-1.5">
+            {format(now, "MMMM yyyy", { locale: ptBR })}
+          </p>
         </div>
-
-        {/* KPI Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
-          {kpiCards.map((card, index) => {
-            const Icon = card.icon;
-            const valueText = <CurrencyText value={card.value} />;
-
-            if (card.customBg && card.color === 'emerald') {
-              return (
-                <div key={index} className="rounded-2xl lg:rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-4 flex gap-3 items-start shadow-sm min-w-0">
-                  <div className="p-2.5 bg-white dark:bg-emerald-900 rounded-xl border border-emerald-100 shrink-0">
-                    <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div className="flex-1 space-y-0.5 min-w-0 relative">
-                    <KpiTitle title={card.title} description={card.description} />
-                    <p className="text-lg lg:text-xl font-bold leading-none text-slate-950 dark:text-white truncate pb-0.5">{valueText}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{card.subtitle}</p>
-                  </div>
-                </div>
-              );
-            }
-
-            if (card.urgent) {
-              return (
-                <div key={index} className="rounded-2xl lg:rounded-3xl border-2 border-rose-200 bg-rose-50 dark:bg-rose-950/30 p-4 flex gap-3 items-start shadow-sm relative min-w-0">
-                  <Icon className="w-4 h-4 text-rose-500 absolute top-3 right-3" />
-                  <div className="p-2.5 bg-white dark:bg-rose-900 rounded-xl border border-rose-100 shrink-0">
-                    <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-rose-600 dark:text-rose-400" />
-                  </div>
-                  <div className="flex-1 space-y-0.5 min-w-0 relative">
-                    <KpiTitle title={card.title} description={card.description} />
-                    <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-                      <p className="text-lg lg:text-xl font-bold leading-none text-slate-950 dark:text-white truncate">{card.count}</p>
-                      <span className="text-xs font-medium text-slate-950 dark:text-white truncate pb-0.5">receitas vencidas</span>
-                    </div>
-                    <p className="text-base font-semibold leading-none text-slate-950 dark:text-white truncate pb-0.5">{valueText}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">urgentes próximos 7 dias</p>
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div key={index} className="rounded-2xl lg:rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col gap-3 items-start shadow-sm relative min-w-0">
-                <button className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"><MoreHorizontal className="w-4 h-4" /></button>
-                <div className="flex gap-3 items-start w-full min-w-0">
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 shrink-0">
-                    <Icon className={`w-5 h-5 lg:w-6 lg:h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
-                  </div>
-                  <div className="flex-1 space-y-0.5 min-w-0 relative">
-                    <KpiTitle title={card.title} description={card.description} />
-                    
-                    {card.title.includes('Saúde') ? (
-                      <div className="flex flex-col items-start w-full min-w-0">
-                        <p className={cn("text-lg lg:text-xl font-bold leading-none truncate w-full pb-0.5", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                          {card.value >= 0 ? 'Sobra: ' : 'Estouro: '}<CurrencyText value={Math.abs(card.value)} />
-                        </p>
-                        <p className="text-[10px] font-semibold text-slate-400 truncate w-full">Saldo limite planejado</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-start w-full min-w-0">
-                        <div className="flex flex-col xl:flex-row xl:items-baseline gap-1 w-full min-w-0 pb-0.5">
-                          <p className="text-lg lg:text-xl font-bold leading-none text-slate-950 dark:text-white truncate max-w-full">{valueText}</p>
-                          {card.target !== undefined && (
-                            <span className="text-xs text-slate-400 truncate max-w-full">/ <CurrencyText value={card.target} /></span>
-                          )}
-                        </div>
-                        
-                        {card.isMetaCard && card.overdueTarget > 0 && (
-                          <div className="text-[10px] font-semibold text-slate-400 truncate w-full">
-                            (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atraso</span>)
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {card.healthPercent !== undefined ? (
-                  <div className="w-full mt-auto space-y-1">
-                    <HealthBar percentage={card.healthPercent} />
-                    <p className="text-[10px] text-right text-muted-foreground leading-none">índice limite gastos</p>
-                  </div>
-                ) : (
-                  <div className="w-full mt-auto space-y-1">
-                    <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={(card.percentage || 0) < 100} variant="income" />
-                    <p className="text-[10px] text-right text-muted-foreground leading-none">{(card.percentage || 0).toFixed(0)}% recebido</p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <button className="flex items-center gap-2 px-4 py-2 bg-slate-950 dark:bg-white text-white dark:text-slate-950 rounded-lg text-sm font-semibold shadow hover:opacity-90 transition-opacity">
+          <span className="text-xl leading-none text-transparent bg-gradient-to-br from-green-400 via-blue-500 to-red-500 bg-clip-text">+</span>
+          Lançamento
+        </button>
       </div>
 
-      {/* SECTION INFERIOR (SCROLLABLE) - Só rola se a tela for pequena demais */}
-      <div className="flex-1 overflow-y-auto p-4 lg:p-6 pt-2 lg:pt-3">
+      {/* KPI Cards Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
+        {kpiCards.map((card, index) => {
+          const Icon = card.icon;
+          const valueText = <CurrencyText value={card.value} />;
+
+          if (card.customBg && card.color === 'emerald') {
+            return (
+              <div key={index} className="rounded-2xl lg:rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-4 lg:p-5 flex gap-3 items-start shadow-sm min-w-0">
+                <div className="p-2.5 bg-white dark:bg-emerald-900 rounded-xl border border-emerald-100 shrink-0">
+                  <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div className="flex-1 space-y-0.5 min-w-0 relative">
+                  <KpiTitle title={card.title} description={card.description} />
+                  <p className="text-lg lg:text-xl xl:text-2xl font-bold leading-none text-slate-950 dark:text-white truncate pt-1 pb-0.5">{valueText}</p>
+                  <p className="text-[10px] lg:text-[11px] text-muted-foreground truncate">{card.subtitle}</p>
+                </div>
+              </div>
+            );
+          }
+
+          if (card.urgent) {
+            return (
+              <div key={index} className="rounded-2xl lg:rounded-3xl border-2 border-rose-200 bg-rose-50 dark:bg-rose-950/30 p-4 lg:p-5 flex gap-3 items-start shadow-sm relative min-w-0">
+                <Icon className="w-4 h-4 text-rose-500 absolute top-4 right-4" />
+                <div className="p-2.5 bg-white dark:bg-rose-900 rounded-xl border border-rose-100 shrink-0">
+                  <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div className="flex-1 space-y-0.5 min-w-0 relative">
+                  <KpiTitle title={card.title} description={card.description} />
+                  <div className="flex items-baseline gap-1.5 flex-wrap min-w-0 pt-1">
+                    <p className="text-lg lg:text-xl xl:text-2xl font-bold leading-none text-slate-950 dark:text-white truncate">{card.count}</p>
+                    <span className="text-xs font-medium text-slate-950 dark:text-white truncate pb-0.5">receitas vencidas</span>
+                  </div>
+                  <p className="text-base lg:text-lg font-semibold leading-none text-slate-950 dark:text-white truncate pb-0.5">{valueText}</p>
+                  <p className="text-[10px] lg:text-[11px] text-muted-foreground truncate">urgentes próximos 7 dias</p>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={index} className="rounded-2xl lg:rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 lg:p-5 flex flex-col gap-3 items-start shadow-sm relative min-w-0">
+              <button className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><MoreHorizontal className="w-4 h-4" /></button>
+              <div className="flex gap-3 items-start w-full min-w-0">
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 shrink-0">
+                  <Icon className={`w-5 h-5 lg:w-6 lg:h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                </div>
+                <div className="flex-1 space-y-0.5 min-w-0 relative">
+                  <KpiTitle title={card.title} description={card.description} />
+                  
+                  {card.title.includes('Saúde') ? (
+                    <div className="flex flex-col items-start w-full min-w-0 pt-1">
+                      <p className={cn("text-lg lg:text-xl xl:text-2xl font-bold leading-none truncate w-full pb-0.5", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                        {card.value >= 0 ? 'Sobra: ' : 'Estouro: '}<CurrencyText value={Math.abs(card.value)} />
+                      </p>
+                      <p className="text-[10px] lg:text-[11px] font-semibold text-slate-400 truncate w-full">Saldo limite planejado</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-start w-full min-w-0 pt-1">
+                      <div className="flex flex-col xl:flex-row xl:items-baseline gap-1 w-full min-w-0 pb-0.5">
+                        <p className="text-lg lg:text-xl xl:text-2xl font-bold leading-none text-slate-950 dark:text-white truncate max-w-full">{valueText}</p>
+                        {card.target !== undefined && (
+                          <span className="text-xs text-slate-400 truncate max-w-full">/ <CurrencyText value={card.target} /></span>
+                        )}
+                      </div>
+                      
+                      {card.isMetaCard && card.overdueTarget > 0 && (
+                        <div className="text-[10px] lg:text-[11px] font-semibold text-slate-400 truncate w-full">
+                          (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atraso</span>)
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {card.healthPercent !== undefined ? (
+                <div className="w-full mt-auto space-y-1 pt-2">
+                  <HealthBar percentage={card.healthPercent} />
+                  <p className="text-[10px] text-right text-muted-foreground leading-none">índice limite gastos</p>
+                </div>
+              ) : (
+                <div className="w-full mt-auto space-y-1 pt-2">
+                  <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={(card.percentage || 0) < 100} variant="income" />
+                  <p className="text-[10px] text-right text-muted-foreground leading-none">{(card.percentage || 0).toFixed(0)}% recebido</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Main Content (Grid) - Cards com max-h-[500px] para rolar internamente apenas se crescerem demais */}
+      <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] xl:grid-cols-[70%_30%] gap-4 lg:gap-6 items-start">
         
-        {/* Wrapper que impede que os cards das tabelas sejam esmagados (altura mínima garantida) */}
-        <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] xl:grid-cols-[70%_30%] gap-4 lg:gap-5 h-full min-h-[600px]">
-          
-          {/* Coluna Esquerda */}
-          <div className="flex flex-col gap-4 lg:gap-5 h-full">
-            <Card className="flex-1 flex flex-col overflow-hidden min-h-[250px]">
-              <CardHeader className="py-3 lg:py-4">
-                <CardTitle>Raio-X de Despesas</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 flex-1 min-h-0">
-                <XRayTable categories={stats.expenseStats} type="despesa" />
-              </CardContent>
-            </Card>
+        {/* Coluna Esquerda */}
+        <div className="flex flex-col gap-4 lg:gap-6">
+          <Card className="flex flex-col overflow-hidden max-h-[500px]">
+            <CardHeader className="py-4">
+              <CardTitle>Raio-X de Despesas</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 overflow-hidden">
+              <XRayTable categories={stats.expenseStats} type="despesa" />
+            </CardContent>
+          </Card>
 
-            <Card className="flex-1 flex flex-col overflow-hidden min-h-[250px]">
-              <CardHeader className="py-3 lg:py-4">
-                <CardTitle>Raio-X de Receitas</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 flex-1 min-h-0">
-                <XRayTable categories={stats.incomeStats} type="receita" />
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="flex flex-col overflow-hidden max-h-[500px]">
+            <CardHeader className="py-4">
+              <CardTitle>Raio-X de Receitas</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 overflow-hidden">
+              <XRayTable categories={stats.incomeStats} type="receita" />
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Coluna Direita */}
-          <div className="flex flex-col gap-4 lg:gap-5 h-full">
-            <Card className="flex-1 flex flex-col overflow-hidden min-h-[250px]">
-              <CardHeader className="py-3 lg:py-4 border-rose-100 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 flex items-center justify-between">
-                <CardTitle className="text-rose-600 dark:text-rose-400">Receitas Vencidas</CardTitle>
-                <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5 text-rose-500" />
-              </CardHeader>
-              <CardContent className="p-0 flex-1 min-h-0">
-                <SidebarTable data={stats.overdueIncomes} type="vencidas" urgent={true} />
-              </CardContent>
-            </Card>
+        {/* Coluna Direita */}
+        <div className="flex flex-col gap-4 lg:gap-6">
+          <Card className="flex flex-col overflow-hidden max-h-[500px]">
+            <CardHeader className="py-4 border-rose-100 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 flex items-center justify-between">
+              <CardTitle className="text-rose-600 dark:text-rose-400">Receitas Vencidas</CardTitle>
+              <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5 text-rose-500" />
+            </CardHeader>
+            <CardContent className="p-0 flex-1 overflow-hidden">
+              <SidebarTable data={stats.overdueIncomes} type="vencidas" urgent={true} />
+            </CardContent>
+          </Card>
 
-            <Card className="flex-1 flex flex-col overflow-hidden min-h-[250px]">
-              <CardHeader className="py-3 lg:py-4 flex items-center justify-between">
-                <CardTitle>Próximos Vencimentos</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 flex-1 min-h-0">
-                <SidebarTable data={stats.upcomingExpensesList} type="proximos" />
-              </CardContent>
-            </Card>
-          </div>
-          
+          <Card className="flex flex-col overflow-hidden max-h-[500px]">
+            <CardHeader className="py-4 flex items-center justify-between">
+              <CardTitle>Próximos Vencimentos</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 overflow-hidden">
+              <SidebarTable data={stats.upcomingExpensesList} type="proximos" />
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -440,22 +431,22 @@ const XRayTable = ({ categories, type }) => {
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="shrink-0 grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-4 p-4 py-2 border-b border-slate-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right bg-slate-50/50 dark:bg-slate-900/50">
+      <div className="shrink-0 grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-4 p-4 py-3 border-b border-slate-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right bg-slate-50/50 dark:bg-slate-900/50">
         <span className="text-left">Categoria</span>
         <span>{headerTarget}</span>
         <span>{headerExec}</span>
       </div>
       
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 custom-scrollbar">
         {categories.map((cat, i) => {
           const Icon = cat.icon || Activity;
           return (
-            <div key={i} className="grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-x-4 p-4 py-3 items-center hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+            <div key={i} className="grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-x-4 p-4 py-3.5 items-center hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="p-2 rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shrink-0" style={{ borderColor: cat.color }}>
                   <Icon className="w-4 h-4 text-slate-600 dark:text-slate-400" style={{ color: cat.color }} />
                 </div>
-                <div className="flex-grow space-y-1 min-w-0 overflow-hidden">
+                <div className="flex-grow space-y-1.5 min-w-0 overflow-hidden">
                   <p className="font-semibold text-xs lg:text-sm leading-none text-slate-950 dark:text-white truncate pb-0.5">{cat.name}</p>
                   <ProgressBar value={cat.realizado} Compromisso={cat.comprometido} max={cat.meta} showHashedCompromisso={isExpense || cat.comprometido > 0} variant={isExpense ? 'expense' : 'income'} />
                 </div>
@@ -467,7 +458,7 @@ const XRayTable = ({ categories, type }) => {
         })}
       </div>
 
-      <div className="shrink-0 p-3 px-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-3 text-slate-600 dark:text-slate-400 font-medium bg-slate-50/50 dark:bg-slate-900/50">
+      <div className="shrink-0 p-3 px-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-4 text-slate-600 dark:text-slate-400 font-medium bg-slate-50/50 dark:bg-slate-900/50">
         <div className="flex items-center gap-1.5 text-[11px] font-semibold"><div className="w-4 h-1.5 rounded bg-slate-400 dark:bg-slate-500" /> Realizado</div>
         <div className="flex items-center gap-1.5 text-[11px] font-semibold relative overflow-hidden">
           <div className="w-4 h-1.5 rounded bg-slate-200 dark:bg-slate-700" /><div className="absolute left-0 top-0 w-4 h-1.5 bg-[repeating-linear-gradient(45deg,_transparent,_transparent_2px,_rgba(255,255,255,0.4)_2px,_rgba(255,255,255,0.4)_4px)]" /> Compromisso
@@ -487,19 +478,19 @@ const SidebarTable = ({ data, type, urgent }) => {
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className={cn("shrink-0 grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800", urgent ? "border-l-4 border-l-rose-500" : "")}>
+      <div className={cn("shrink-0 grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800", urgent ? "border-l-4 border-l-rose-500" : "")}>
         <span>Data</span>
         <span>Descrição</span>
         <span>{isOverdueIncome ? '' : 'Valor'}</span>
       </div>
       
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/50">
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/50 custom-scrollbar">
         {data.map((item, i) => {
           const dateObj = item.due_date ? new Date(item.due_date) : new Date();
           const formattedDate = format(dateObj, "dd/MM");
 
           return (
-            <div key={i} className={cn("grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors", urgent ? "border-l-4 border-l-rose-500 bg-rose-50/10 dark:bg-rose-950/5" : "")}>
+            <div key={i} className={cn("grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-3.5 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors", urgent ? "border-l-4 border-l-rose-500 bg-rose-50/10 dark:bg-rose-950/5" : "")}>
               <span className={cn("text-xs shrink-0", urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400")}>{formattedDate}</span>
               <div className={cn("flex items-center gap-1.5 text-xs lg:text-sm min-w-0", urgent ? "font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-slate-950 dark:text-white")}>
                  {urgent && <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}

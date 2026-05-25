@@ -20,7 +20,8 @@ Deno.serve(async (req) => {
     const catBySlug = {};
     const catById = {};
 
-    categories.forEach((category) => {
+    categories.forEach((record) => {
+      const category = { id: record.id, ...(record.data || record) };
       catBySlug[category.slug] = category;
       catById[category.id] = category;
     });
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
     const root = used.parent_id ? catById[used.parent_id] || used : used;
     const groupSlugs = [root.slug];
 
-    categories.forEach((category) => {
+    Object.values(catById).forEach((category) => {
       if (category.parent_id === root.id) {
         groupSlugs.push(category.slug);
       }
@@ -44,12 +45,12 @@ Deno.serve(async (req) => {
       year: Number(year),
     });
 
-    let budgetEntry = budgets.find((budget) => budget.category_id === used.id);
+    let budgetEntry = budgets.find((record) => (record.data?.category_id || record.category_id) === used.id);
     if (!budgetEntry && used.id !== root.id) {
-      budgetEntry = budgets.find((budget) => budget.category_id === root.id);
+      budgetEntry = budgets.find((record) => (record.data?.category_id || record.category_id) === root.id);
     }
 
-    const planned = budgetEntry ? Number(budgetEntry.amount) : 0;
+    const planned = budgetEntry ? Number(budgetEntry.data?.amount || budgetEntry.amount || 0) : 0;
 
     const mm = String(month).padStart(2, '0');
     const lastDay = new Date(Number(year), Number(month), 0).getDate();
@@ -62,8 +63,8 @@ Deno.serve(async (req) => {
     }, '-date', 5000);
 
     const rawSpent = transactions
-      .filter((transaction) => groupSlugs.includes(transaction.category))
-      .reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0);
+      .filter((record) => groupSlugs.includes(record.data?.category || record.category))
+      .reduce((sum, record) => sum + (Number(record.data?.amount || record.amount) || 0), 0);
 
     const spent = Number(rawSpent.toFixed(2));
     const utilization = planned > 0 ? Number(((spent / planned) * 100).toFixed(2)) : 0;

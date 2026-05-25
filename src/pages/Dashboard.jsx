@@ -84,29 +84,31 @@ const HealthBar = ({ percentage }) => {
 };
 
 const Card = ({ children, className }) => (
-  <div className={cn("bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm", className)}>{children}</div>
+  <div className={cn("bg-white dark:bg-slate-900 rounded-2xl lg:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col", className)}>{children}</div>
 );
 const CardHeader = ({ children, className }) => (
-  <div className={cn("p-5 border-b border-slate-100 dark:border-slate-800", className)}>{children}</div>
+  <div className={cn("p-4 border-b border-slate-100 dark:border-slate-800 shrink-0", className)}>{children}</div>
 );
 const CardTitle = ({ children, className }) => (
-  <h3 className={cn("text-lg font-semibold text-slate-950 dark:text-white", className)}>{children}</h3>
+  <h3 className={cn("text-base lg:text-lg font-semibold text-slate-950 dark:text-white", className)}>{children}</h3>
 );
 const CardContent = ({ children, className }) => (
-  <div className={cn("p-5", className)}>{children}</div>
+  <div className={cn("p-4 flex-1 min-h-0 flex flex-col overflow-hidden", className)}>{children}</div>
 );
 
-// Alterado de <div> para <button> para corrigir erros de ESLint (jsx-a11y)
+// Corrigido para não usar <div> dentro de <button> e respeitar o HTML specs.
 const KpiTitle = ({ title, description }) => (
-  <button type="button" className="flex items-center gap-1.5 relative group w-fit cursor-help outline-none">
-    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">{title}</p>
-    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0" />
+  <div className="flex items-center gap-1.5 relative group cursor-help max-w-full w-fit">
+    <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate block">
+      {title}
+    </span>
+    <Info className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors shrink-0" />
     
-    <div className="absolute z-50 bottom-full left-0 mb-2 w-64 p-3 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-medium leading-relaxed rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus:opacity-100 group-focus:visible transition-all shadow-xl pointer-events-none normal-case tracking-normal whitespace-normal text-left">
+    <div className="absolute z-50 bottom-full left-0 mb-2 w-64 p-3 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-medium leading-relaxed rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all shadow-xl pointer-events-none normal-case tracking-normal whitespace-normal text-left">
       {description}
       <div className="absolute top-full left-4 border-[6px] border-transparent border-t-slate-900 dark:border-t-slate-100" />
     </div>
-  </button>
+  </div>
 );
 
 // --- MAIN DASHBOARD PAGE ---
@@ -258,38 +260,38 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 lg:space-y-8 bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100">
+    <div className="h-screen w-full flex flex-col overflow-hidden p-4 lg:p-6 gap-4 lg:gap-5 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold uppercase tracking-tight text-slate-950 dark:text-white">PAINEL DE CONTROLE</h1>
-          <p className="text-muted-foreground text-sm uppercase tracking-wider font-semibold mt-1">
+          <h1 className="text-xl lg:text-2xl font-bold uppercase tracking-tight text-slate-950 dark:text-white leading-none">PAINEL DE CONTROLE</h1>
+          <p className="text-muted-foreground text-[11px] lg:text-xs uppercase tracking-wider font-semibold mt-1.5">
             {format(now, "MMMM yyyy", { locale: ptBR })}
           </p>
         </div>
         <button className="flex items-center gap-2 px-4 py-2 bg-slate-950 dark:bg-white text-white dark:text-slate-950 rounded-lg text-sm font-semibold shadow hover:opacity-90 transition-opacity">
           <span className="text-xl leading-none text-transparent bg-gradient-to-br from-green-400 via-blue-500 to-red-500 bg-clip-text">+</span>
-          Novo Lançamento Rápido
+          Lançamento
         </button>
       </div>
 
       {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+      <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
         {kpiCards.map((card, index) => {
           const Icon = card.icon;
           const valueText = <CurrencyText value={card.value} />;
 
           if (card.customBg && card.color === 'emerald') {
             return (
-              <div key={index} className="rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-5 flex gap-4 items-start shadow-sm min-w-0">
-                <div className="p-3 bg-white dark:bg-emerald-900 rounded-2xl border border-emerald-100 shrink-0">
-                  <Icon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <div key={index} className="rounded-2xl lg:rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-4 flex gap-3 items-start shadow-sm min-w-0">
+                <div className="p-2.5 bg-white dark:bg-emerald-900 rounded-xl border border-emerald-100 shrink-0">
+                  <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0 relative">
+                <div className="flex-1 space-y-0.5 min-w-0 relative">
                   <KpiTitle title={card.title} description={card.description} />
-                  <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate">{valueText}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{card.subtitle}</p>
+                  <p className="text-lg lg:text-xl font-bold leading-none text-slate-950 dark:text-white truncate pb-0.5">{valueText}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{card.subtitle}</p>
                 </div>
               </div>
             );
@@ -297,53 +299,53 @@ export default function DashboardPage() {
 
           if (card.urgent) {
             return (
-              <div key={index} className="rounded-3xl border-2 border-rose-200 bg-rose-50 dark:bg-rose-950/30 p-5 flex gap-4 items-start shadow-sm relative min-w-0">
-                <Icon className="w-5 h-5 text-rose-500 absolute top-4 right-4" />
-                <div className="p-3 bg-white dark:bg-rose-900 rounded-2xl border border-rose-100 shrink-0">
-                  <Icon className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+              <div key={index} className="rounded-2xl lg:rounded-3xl border-2 border-rose-200 bg-rose-50 dark:bg-rose-950/30 p-4 flex gap-3 items-start shadow-sm relative min-w-0">
+                <Icon className="w-4 h-4 text-rose-500 absolute top-3 right-3" />
+                <div className="p-2.5 bg-white dark:bg-rose-900 rounded-xl border border-rose-100 shrink-0">
+                  <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-rose-600 dark:text-rose-400" />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0 relative">
+                <div className="flex-1 space-y-0.5 min-w-0 relative">
                   <KpiTitle title={card.title} description={card.description} />
                   <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-                    <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate">{card.count}</p>
-                    <span className="text-sm font-medium text-slate-950 dark:text-white truncate">receitas vencidas</span>
+                    <p className="text-lg lg:text-xl font-bold leading-none text-slate-950 dark:text-white truncate">{card.count}</p>
+                    <span className="text-xs font-medium text-slate-950 dark:text-white truncate pb-0.5">receitas vencidas</span>
                   </div>
-                  <p className="text-lg font-semibold text-slate-950 dark:text-white truncate">{valueText}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">urgentes para os próximos 7 dias</p>
+                  <p className="text-base font-semibold leading-none text-slate-950 dark:text-white truncate pb-0.5">{valueText}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">urgentes próximos 7 dias</p>
                 </div>
               </div>
             );
           }
 
           return (
-            <div key={index} className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col gap-4 items-start shadow-sm relative min-w-0">
-              <button className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><MoreHorizontal className="w-5 h-5" /></button>
-              <div className="flex gap-4 items-start w-full min-w-0">
-                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 shrink-0">
-                  <Icon className={`w-6 h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
+            <div key={index} className="rounded-2xl lg:rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col gap-3 items-start shadow-sm relative min-w-0">
+              <button className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"><MoreHorizontal className="w-4 h-4" /></button>
+              <div className="flex gap-3 items-start w-full min-w-0">
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 shrink-0">
+                  <Icon className={`w-5 h-5 lg:w-6 lg:h-6 ${card.color === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
                 </div>
-                <div className="flex-1 space-y-1 min-w-0 relative">
+                <div className="flex-1 space-y-0.5 min-w-0 relative">
                   <KpiTitle title={card.title} description={card.description} />
                   
                   {card.title.includes('Saúde') ? (
                     <div className="flex flex-col items-start w-full min-w-0">
-                      <p className={cn("text-xl lg:text-2xl font-bold truncate w-full", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      <p className={cn("text-lg lg:text-xl font-bold leading-none truncate w-full pb-0.5", card.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
                         {card.value >= 0 ? 'Sobra: ' : 'Estouro: '}<CurrencyText value={Math.abs(card.value)} />
                       </p>
-                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5 truncate w-full">Saldo do limite planejado</p>
+                      <p className="text-[10px] font-semibold text-slate-400 truncate w-full">Saldo limite planejado</p>
                     </div>
                   ) : (
                     <div className="flex flex-col items-start w-full min-w-0">
-                      <div className="flex flex-col xl:flex-row xl:items-baseline gap-1 xl:gap-1.5 w-full min-w-0">
-                        <p className="text-xl lg:text-2xl font-bold text-slate-950 dark:text-white truncate max-w-full">{valueText}</p>
+                      <div className="flex flex-col xl:flex-row xl:items-baseline gap-1 w-full min-w-0 pb-0.5">
+                        <p className="text-lg lg:text-xl font-bold leading-none text-slate-950 dark:text-white truncate max-w-full">{valueText}</p>
                         {card.target !== undefined && (
-                          <span className="text-sm text-slate-400 truncate max-w-full">/ <CurrencyText value={card.target} /></span>
+                          <span className="text-xs text-slate-400 truncate max-w-full">/ <CurrencyText value={card.target} /></span>
                         )}
                       </div>
                       
                       {card.isMetaCard && card.overdueTarget > 0 && (
-                        <div className="text-[10px] font-semibold text-slate-400 mt-1 truncate w-full">
-                          (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atrasos</span>)
+                        <div className="text-[10px] font-semibold text-slate-400 truncate w-full">
+                          (<span className="text-sky-500"><CurrencyText value={card.baseTarget} /> base</span> + <span className="text-rose-400"><CurrencyText value={card.overdueTarget} /> atraso</span>)
                         </div>
                       )}
                     </div>
@@ -351,14 +353,14 @@ export default function DashboardPage() {
                 </div>
               </div>
               {card.healthPercent !== undefined ? (
-                <div className="w-full space-y-1">
+                <div className="w-full mt-auto space-y-1">
                   <HealthBar percentage={card.healthPercent} />
-                  <p className="text-[11px] text-right text-muted-foreground">índice limite de gastos</p>
+                  <p className="text-[10px] text-right text-muted-foreground leading-none">índice limite gastos</p>
                 </div>
               ) : (
-                <div className="w-full space-y-1">
+                <div className="w-full mt-auto space-y-1">
                   <ProgressBar value={card.value} Compromisso={0} max={card.target} showHashedCompromisso={(card.percentage || 0) < 100} variant="income" />
-                  <p className="text-[11px] text-right text-muted-foreground">{(card.percentage || 0).toFixed(0)}% recebido</p>
+                  <p className="text-[10px] text-right text-muted-foreground leading-none">{(card.percentage || 0).toFixed(0)}% recebido</p>
                 </div>
               )}
             </div>
@@ -367,43 +369,46 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Content (70/30 Grid) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[70%_30%] gap-6 lg:gap-8 items-start">
-        <div className="space-y-6">
-          <Card className="p-0 overflow-hidden rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-            <CardHeader className="p-5 border-b border-slate-100 dark:border-slate-800 space-y-0.5">
-              <CardTitle className="text-lg font-semibold text-slate-950 dark:text-white">Raio-X de Despesas</CardTitle>
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[65%_35%] xl:grid-cols-[70%_30%] gap-4 lg:gap-5">
+        
+        {/* Coluna Esquerda */}
+        <div className="flex flex-col gap-4 lg:gap-5 h-full min-h-0">
+          <Card className="flex-1 min-h-0 overflow-hidden">
+            <CardHeader className="py-3 lg:py-4">
+              <CardTitle>Raio-X de Despesas</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 flex-1 min-h-0">
               <XRayTable categories={stats.expenseStats} type="despesa" />
             </CardContent>
           </Card>
 
-          <Card className="p-0 overflow-hidden rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-            <CardHeader className="p-5 border-b border-slate-100 dark:border-slate-800 space-y-0.5">
-              <CardTitle className="text-lg font-semibold text-slate-950 dark:text-white">Raio-X de Receitas</CardTitle>
+          <Card className="flex-1 min-h-0 overflow-hidden">
+            <CardHeader className="py-3 lg:py-4">
+              <CardTitle>Raio-X de Receitas</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 flex-1 min-h-0">
               <XRayTable categories={stats.incomeStats} type="receita" />
             </CardContent>
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card className="rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
-            <CardHeader className="p-5 py-4 border-b border-rose-100 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-rose-600 dark:text-rose-400">Receitas Vencidas / Cobranças Pendentes</CardTitle>
-              <AlertTriangle className="w-5 h-5 text-rose-500" />
+        {/* Coluna Direita */}
+        <div className="flex flex-col gap-4 lg:gap-5 h-full min-h-0">
+          <Card className="flex-1 min-h-0 overflow-hidden">
+            <CardHeader className="py-3 lg:py-4 border-rose-100 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 flex items-center justify-between">
+              <CardTitle className="text-rose-600 dark:text-rose-400">Receitas Vencidas</CardTitle>
+              <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5 text-rose-500" />
             </CardHeader>
-            <CardContent className="p-0 divide-y divide-slate-100 dark:divide-slate-800">
+            <CardContent className="p-0 flex-1 min-h-0">
               <SidebarTable data={stats.overdueIncomes} type="vencidas" urgent={true} />
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
-            <CardHeader className="p-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-slate-950 dark:text-white">Próximos Vencimentos de Despesas</CardTitle>
+          <Card className="flex-1 min-h-0 overflow-hidden">
+            <CardHeader className="py-3 lg:py-4 flex items-center justify-between">
+              <CardTitle>Próximos Vencimentos</CardTitle>
             </CardHeader>
-            <CardContent className="p-0 divide-y divide-slate-100 dark:divide-slate-800">
+            <CardContent className="p-0 flex-1 min-h-0">
               <SidebarTable data={stats.upcomingExpensesList} type="proximos" />
             </CardContent>
           </Card>
@@ -417,45 +422,47 @@ export default function DashboardPage() {
 const XRayTable = ({ categories, type }) => {
   const isExpense = type === 'despesa';
   const headerTarget = isExpense ? 'Teto (Planned)' : 'Meta (Planned)';
-  const headerExec = isExpense ? 'Total Usado (Comprometido + Realizado)' : 'Total Recebido';
+  const headerExec = isExpense ? 'Total Usado' : 'Total Recebido';
 
   if (!categories || categories.length === 0) {
-    return <div className="p-6 text-center text-muted-foreground text-sm">Nenhum dado registrado para este mês.</div>;
+    return <div className="p-6 text-center text-muted-foreground text-sm flex-1">Nenhum dado registrado para este mês.</div>;
   }
 
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-[1fr,20%,30%] md:grid-cols-[1fr,15%,25%] gap-4 p-5 py-3 border-b border-slate-100 dark:border-slate-800 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right">
+    <div className="w-full h-full flex flex-col">
+      <div className="shrink-0 grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-4 p-4 py-2 border-b border-slate-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right bg-slate-50/50 dark:bg-slate-900/50">
         <span className="text-left">Categoria</span>
         <span>{headerTarget}</span>
         <span>{headerExec}</span>
       </div>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+      
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
         {categories.map((cat, i) => {
           const Icon = cat.icon || Activity;
           return (
-            <div key={i} className="grid grid-cols-[1fr,20%,30%] md:grid-cols-[1fr,15%,25%] gap-x-4 p-5 py-4 items-center">
+            <div key={i} className="grid grid-cols-[1fr,20%,25%] md:grid-cols-[1fr,15%,25%] gap-x-4 p-4 py-3 items-center hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shrink-0" style={{ borderColor: cat.color }}>
-                  <Icon className="w-5 h-5 text-slate-600 dark:text-slate-400" style={{ color: cat.color }} />
+                <div className="p-2 rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shrink-0" style={{ borderColor: cat.color }}>
+                  <Icon className="w-4 h-4 text-slate-600 dark:text-slate-400" style={{ color: cat.color }} />
                 </div>
                 <div className="flex-grow space-y-1 min-w-0 overflow-hidden">
-                  <p className="font-semibold text-sm text-slate-950 dark:text-white truncate">{cat.name}</p>
+                  <p className="font-semibold text-xs lg:text-sm leading-none text-slate-950 dark:text-white truncate pb-0.5">{cat.name}</p>
                   <ProgressBar value={cat.realizado} Compromisso={cat.comprometido} max={cat.meta} showHashedCompromisso={isExpense || cat.comprometido > 0} variant={isExpense ? 'expense' : 'income'} />
                 </div>
               </div>
-              <div className="text-sm font-semibold text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.meta} /></div>
-              <div className="text-sm font-bold text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.totalUsage} /></div>
+              <div className="text-xs lg:text-sm font-semibold leading-none text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.meta} /></div>
+              <div className="text-xs lg:text-sm font-bold leading-none text-slate-950 dark:text-white text-right truncate"><CurrencyText value={cat.totalUsage} /></div>
             </div>
           );
         })}
       </div>
-      <div className="p-4 px-5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-4 text-slate-600 dark:text-slate-400 font-medium">
-        <div className="flex items-center gap-1.5 text-sm font-semibold"><div className="w-5 h-2 rounded bg-slate-400 dark:bg-slate-500" /> Realizado</div>
-        <div className="flex items-center gap-1.5 text-sm font-semibold relative overflow-hidden">
-          <div className="w-5 h-2 rounded bg-slate-200 dark:bg-slate-700" /><div className="absolute left-0 top-0 w-5 h-2 bg-[repeating-linear-gradient(45deg,_transparent,_transparent_2px,_rgba(255,255,255,0.4)_2px,_rgba(255,255,255,0.4)_4px)]" /> Comprometido
+
+      <div className="shrink-0 p-3 px-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-3 text-slate-600 dark:text-slate-400 font-medium bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold"><div className="w-4 h-1.5 rounded bg-slate-400 dark:bg-slate-500" /> Realizado</div>
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold relative overflow-hidden">
+          <div className="w-4 h-1.5 rounded bg-slate-200 dark:bg-slate-700" /><div className="absolute left-0 top-0 w-4 h-1.5 bg-[repeating-linear-gradient(45deg,_transparent,_transparent_2px,_rgba(255,255,255,0.4)_2px,_rgba(255,255,255,0.4)_4px)]" /> Compromisso
         </div>
-        <div className="flex items-center gap-1.5 text-sm font-semibold"><div className="w-5 h-2 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" /> Planejado</div>
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold"><div className="w-4 h-1.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" /> Meta</div>
       </div>
     </div>
   );
@@ -465,42 +472,45 @@ const SidebarTable = ({ data, type, urgent }) => {
   const isOverdueIncome = type === 'vencidas';
 
   if (!data || data.length === 0) {
-    return <div className="p-6 text-center text-muted-foreground text-sm">Nenhum registro pendente.</div>;
+    return <div className="p-6 text-center text-muted-foreground text-sm flex-1">Nenhum registro pendente.</div>;
   }
 
   return (
-    <div className="w-full">
-       <div className={cn("grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", urgent ? "border-l-4 border-rose-500" : "")}>
+    <div className="w-full h-full flex flex-col">
+      <div className={cn("shrink-0 grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800", urgent ? "border-l-4 border-l-rose-500" : "")}>
         <span>Data</span>
         <span>Descrição</span>
-        <span>{isOverdueIncome ? '' : 'Montante'}</span>
+        <span>{isOverdueIncome ? '' : 'Valor'}</span>
       </div>
-      {data.map((item, i) => {
-        const dateObj = item.due_date ? new Date(item.due_date) : new Date();
-        const formattedDate = format(dateObj, "dd/MM/yyyy");
+      
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/50">
+        {data.map((item, i) => {
+          const dateObj = item.due_date ? new Date(item.due_date) : new Date();
+          const formattedDate = format(dateObj, "dd/MM");
 
-        return (
-          <div key={i} className={cn("grid grid-cols-[80px,1fr,auto] gap-x-3 px-5 py-3.5 items-center", urgent ? "border-l-4 border-rose-500 bg-rose-50/20 dark:bg-rose-950/10" : "")}>
-            <span className={cn("text-sm shrink-0", urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400")}>{formattedDate}</span>
-            <div className={cn("flex items-center gap-1.5 text-sm min-w-0", urgent ? "font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-slate-950 dark:text-white")}>
-               {urgent && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
-               <span className="truncate">{item.description}</span>
+          return (
+            <div key={i} className={cn("grid grid-cols-[70px,1fr,auto] gap-x-2 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors", urgent ? "border-l-4 border-l-rose-500 bg-rose-50/10 dark:bg-rose-950/5" : "")}>
+              <span className={cn("text-xs shrink-0", urgent ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400")}>{formattedDate}</span>
+              <div className={cn("flex items-center gap-1.5 text-xs lg:text-sm min-w-0", urgent ? "font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-slate-950 dark:text-white")}>
+                 {urgent && <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
+                 <span className="truncate">{item.description}</span>
+              </div>
+              {isOverdueIncome ? (
+                 <button className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800 rounded-full text-[10px] uppercase tracking-wider font-bold shadow-sm hover:opacity-90 shrink-0">
+                   <MessageCircle className="w-3 h-3 text-emerald-500" /> Cobrar
+                 </button>
+              ) : (
+                  <div className="flex items-center gap-2 text-right shrink-0">
+                      <span className="text-xs lg:text-sm font-bold leading-none text-slate-950 dark:text-white truncate max-w-[80px]"><CurrencyText value={parseFloat(item.amount)} /></span>
+                      <button className="flex items-center px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] uppercase tracking-wider font-bold shadow-sm hover:bg-slate-50 transition shrink-0">
+                           Baixa
+                      </button>
+                  </div>
+              )}
             </div>
-            {isOverdueIncome ? (
-               <button className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800 rounded-full text-xs font-semibold shadow hover:opacity-90 shrink-0">
-                 <MessageCircle className="w-4 h-4 text-emerald-500" /> Cobrar
-               </button>
-            ) : (
-                <div className="flex items-center gap-2 text-right shrink-0">
-                    <span className="text-sm font-bold text-slate-950 dark:text-white truncate max-w-[100px]"><CurrencyText value={parseFloat(item.amount)} /></span>
-                    <button className="flex items-center px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold shadow hover:bg-slate-50 transition shrink-0">
-                         Dar Baixa
-                    </button>
-                </div>
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 };

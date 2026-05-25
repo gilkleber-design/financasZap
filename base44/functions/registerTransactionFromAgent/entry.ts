@@ -68,7 +68,28 @@ Deno.serve(async (req) => {
             }
         }
 
-        return Response.json({ success: true, transaction: tx });
+        const categories = category ? await base44.entities.Category.filter({ slug: category }) : [];
+        const categoryRecord = categories?.[0] || null;
+        const originList = isAccount
+            ? await base44.entities.Account.filter({ id: origin_id })
+            : await base44.entities.Card.filter({ id: origin_id });
+        const originRecord = originList?.[0] || null;
+
+        return Response.json({
+            success: true,
+            transaction: tx,
+            summary_context: {
+                category_slug: categoryRecord?.slug || category || null,
+                category_name: categoryRecord?.name || null,
+                origin_name: originRecord?.name || originRecord?.holder_name || null,
+                institution_name: originRecord?.bank || null,
+                event_date: tx.date,
+                effective_date: tx.date,
+                amount: tx.amount,
+                description: tx.description,
+                status: tx.status,
+            }
+        });
     } catch (error) {
         console.error("Error registering transaction:", error);
         return Response.json({ error: error.message }, { status: 500 });

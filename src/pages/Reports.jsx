@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import AuditReportAccordion from '@/components/reports/AuditReportAccordion';
 import PayableDetailDrawer from '@/components/reports/PayableDetailDrawer';
 import ConsolidatedReportModal from '@/components/reports/ConsolidatedReportModal';
+import AuditCategoryPieChart from '@/components/reports/AuditCategoryPieChart';
 
 const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16'];
 
@@ -252,8 +253,10 @@ export default function Reports() {
             <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
               <ChevronRight className="w-4 h-4" />
             </Button>
-
           </div>
+
+          <AuditCategoryPieChart auditData={auditData} categories={categories} />
+
           <AuditReportAccordion 
              payables={auditData} 
              onRowClick={handlePayableClick} 

@@ -68,12 +68,13 @@ Deno.serve(async (req) => {
       date: { $gte: dateStart, $lte: dateEnd },
     }, '-date', 5000);
 
-    const spent = transactions
+    const rawSpent = transactions
       .filter((t) => groupSlugs.includes(t.category))
       .reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
-    const utilization = planned > 0 ? (spent / planned) * 100 : 0;
-    const available = planned - spent;
+    const spent = Number(rawSpent.toFixed(2));
+    const utilization = planned > 0 ? Number(((spent / planned) * 100).toFixed(2)) : 0;
+    const available = Number((planned - spent).toFixed(2));
 
     return Response.json({
       category_slug: used.slug,
@@ -83,7 +84,7 @@ Deno.serve(async (req) => {
       month: Number(month),
       year: Number(year),
       has_budget: planned > 0,
-      planned,
+      planned: Number(Number(planned).toFixed(2)),
       spent,
       utilization,
       available,

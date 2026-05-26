@@ -131,6 +131,11 @@ export default function CategoryManager() {
 
   const roots = sortByName(categories.filter(c => !c.parent_id && c.active !== false));
   const childrenOf = (id) => sortByName(categories.filter(c => c.parent_id === id && c.active !== false));
+  const groupedRoots = {
+    expense: roots.filter(c => (c.type || 'expense') === 'expense'),
+    income: roots.filter(c => c.type === 'income'),
+    transfer: roots.filter(c => c.type === 'transfer'),
+  };
 
   const handleSave = async (data) => {
     if (editingCategory) {
@@ -158,55 +163,68 @@ export default function CategoryManager() {
         </p>
       )}
 
-      <div className="space-y-2">
-        {roots.map(root => {
-          const children = childrenOf(root.id);
-          return (
-            <div key={root.id} className="border border-border rounded-xl overflow-hidden">
-              {/* Categoria raiz */}
-              <div className="flex items-center gap-3 px-4 py-3 bg-card">
-                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: root.color || '#64748b' }} />
-                <span className="text-sm font-semibold flex-1">{root.name}</span>
-                <Badge className={`text-xs text-white ${root.type === 'income' ? 'bg-green-600' : root.type === 'transfer' ? 'bg-slate-500' : 'bg-red-600'}`}>{root.type === 'income' ? 'Receita' : root.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="w-7 h-7 text-blue-500"
-                    onClick={() => { setAddingParentId(root.id); setEditingCategory(null); }}
-                    title="Adicionar subcategoria">
-                    <Plus className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground"
-                    onClick={() => { setEditingCategory(root); setAddingParentId(undefined); }}>
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-red-500"
-                    onClick={() => deleteMutation.mutate(root.id)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+      <div className="space-y-4">
+        {[
+          { key: 'expense', title: 'Despesas', items: groupedRoots.expense },
+          { key: 'income', title: 'Receitas', items: groupedRoots.income },
+          { key: 'transfer', title: 'Transferências', items: groupedRoots.transfer },
+        ].map((group) => (
+          <div key={group.key} className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">{group.title}</h4>
+            {group.items.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
+                Nenhuma categoria neste grupo.
               </div>
+            ) : (
+              group.items.map(root => {
+                const children = childrenOf(root.id);
+                return (
+                  <div key={root.id} className="border border-border rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-card">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: root.color || '#64748b' }} />
+                      <span className="text-sm font-semibold flex-1">{root.name}</span>
+                      <Badge className={`text-xs text-white ${root.type === 'income' ? 'bg-green-600' : root.type === 'transfer' ? 'bg-slate-500' : 'bg-red-600'}`}>{root.type === 'income' ? 'Receita' : root.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="w-7 h-7 text-blue-500"
+                          onClick={() => { setAddingParentId(root.id); setEditingCategory(null); }}
+                          title="Adicionar subcategoria">
+                          <Plus className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground"
+                          onClick={() => { setEditingCategory(root); setAddingParentId(undefined); }}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-red-500"
+                          onClick={() => deleteMutation.mutate(root.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
 
-              {/* Subcategorias */}
-              {children.map(child => (
-                <div key={child.id} className="flex items-center gap-3 px-4 py-2.5 bg-muted/20 border-t border-border">
-                  <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: child.color || root.color || '#64748b' }} />
-                  <span className="text-sm flex-1">{child.name}</span>
-                  <Badge className={`text-xs text-white ${child.type === 'income' ? 'bg-green-600' : child.type === 'transfer' ? 'bg-slate-500' : 'bg-red-600'}`}>{child.type === 'income' ? 'Receita' : child.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground"
-                      onClick={() => { setEditingCategory(child); setAddingParentId(undefined); }}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-red-500"
-                      onClick={() => deleteMutation.mutate(child.id)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {children.map(child => (
+                      <div key={child.id} className="flex items-center gap-3 px-4 py-2.5 bg-muted/20 border-t border-border">
+                        <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: child.color || root.color || '#64748b' }} />
+                        <span className="text-sm flex-1">{child.name}</span>
+                        <Badge className={`text-xs text-white ${child.type === 'income' ? 'bg-green-600' : child.type === 'transfer' ? 'bg-slate-500' : 'bg-red-600'}`}>{child.type === 'income' ? 'Receita' : child.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground"
+                            onClick={() => { setEditingCategory(child); setAddingParentId(undefined); }}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-red-500"
+                            onClick={() => deleteMutation.mutate(child.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          );
-        })}
+                );
+              })
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Modal de criação/edição */}

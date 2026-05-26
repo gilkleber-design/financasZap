@@ -10,6 +10,7 @@ import Dashboard from '@/pages/Dashboard';
 import Transactions from '@/pages/Transactions';
 import Payables from '@/pages/Payables';
 import Receivables from '@/pages/Receivables';
+import Recebimentos from '@/pages/Recebimentos';
 import Reports from '@/pages/Reports';
 import WhatsAppInput from '@/pages/WhatsAppInput';
 import Settings from '@/pages/Settings';
@@ -28,6 +29,7 @@ const routeTitles = {
   '/transacoes': 'Transações — FinançasZap',
   '/contas-pagar': 'Contas a Pagar — FinançasZap',
   '/contas-receber': 'Contas a Receber — FinançasZap',
+  '/recebimentos': 'Recebimentos — FinançasZap',
   '/configuracoes': 'Configurações — FinançasZap',
 };
 
@@ -61,6 +63,7 @@ const AuthenticatedApp = () => {
         <Route path="/transacoes" element={<Transactions />} />
         <Route path="/contas-pagar" element={<Payables />} />
         <Route path="/contas-receber" element={<Receivables />} />
+        <Route path="/recebimentos" element={<Recebimentos />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/whatsapp" element={<WhatsAppInput />} />
         <Route path="/configuracoes" element={<Settings />} />

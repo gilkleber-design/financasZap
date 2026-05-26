@@ -93,9 +93,16 @@ export default function DashboardPage() {
     const pipelineMonthHeaders = pipelineMonths.map((date) => ({ key: formatMonthKey(date), label: format(date, 'MMM', { locale: ptBR }).toUpperCase() }));
 
     const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
+      const hospitalMatchers = [hospital.sigla, hospital.name].filter(Boolean).map((value) => value.toLowerCase());
+
       const cells = pipelineMonths.map((date) => {
         const key = formatMonthKey(date);
-        const receivableMatches = receivables.filter((item) => item.income_source_id === hospital.income_source_id && (item.competencia || item.due_date || '').slice(0, 7) === key);
+        const receivableMatches = receivables.filter((item) => {
+          const monthMatch = (item.competencia || item.due_date || '').slice(0, 7) === key;
+          const description = String(item.description || '').toLowerCase();
+          const hospitalMatch = hospitalMatchers.some((matcher) => description.includes(matcher));
+          return monthMatch && hospitalMatch;
+        });
         const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const hasReceived = receivableMatches.some((item) => item.status === 'received');

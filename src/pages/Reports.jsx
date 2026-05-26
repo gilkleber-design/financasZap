@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
 import { format, subMonths, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -12,19 +12,63 @@ import AuditReportAccordion from '@/components/reports/AuditReportAccordion';
 import PayableDetailDrawer from '@/components/reports/PayableDetailDrawer';
 import ConsolidatedReportModal from '@/components/reports/ConsolidatedReportModal';
 import AuditCategoryPieChart from '@/components/reports/AuditCategoryPieChart';
-import OverviewConsolidatedCTA from '@/components/reports/OverviewConsolidatedCTA';
 import OverviewPlannedVsActual from '@/components/reports/OverviewPlannedVsActual';
 import OverviewFiscalSummary from '@/components/reports/OverviewFiscalSummary';
-import { normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
-const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#84cc16'];
-
-const CATEGORY_LABELS = {
-  alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
-  saude: 'Saúde', educacao: 'Educação', lazer: 'Lazer', vestuario: 'Vestuário',
-  servicos: 'Serviços', impostos: 'Impostos', salario_clt: 'Salário CLT',
-  receita_pj: 'Receita PJ', outros: 'Outros',
+// --- MAPAS DE CORES E NORMALIZAÇÃO ---
+const coresCategorias = {
+  'Moradia':              '#0D3B66',
+  'Funcionários':         '#0FA3A3',
+  'Alimentação':          '#F0A030',
+  'Transporte':           '#3A86FF',
+  'Saúde':                '#E74C3C',
+  'Educação':             '#8B5CF6',
+  'Impostos e Taxas':     '#C0622A',
+  'Lazer':                '#10B981',
+  'Vestuário':            '#EC4899',
+  'Serviços':             '#6366F1',
+  'Serviços Domésticos':  '#64748B',
+  'Investimentos':        '#0A6E50',
+  'Família':              '#F59E0B',
+  'Assinaturas':          '#06B6D4',
+  'Outros':               '#94A3B8',
+  'Retiradas':            '#CBD5E1',
 };
+
+function normalizarCategoria(raw) {
+  if (!raw) return '—';
+  const mapa = {
+    passivos_de_transicao:   'Passivos de Transição',
+    impostos_taxas:          'Impostos e Taxas',
+    funcionarios:            'Funcionários',
+    alimentacao:             'Alimentação',
+    alimentação:             'Alimentação',
+    moradia:                 'Moradia',
+    transporte:              'Transporte',
+    saude:                   'Saúde',
+    saúde:                   'Saúde',
+    educacao:                'Educação',
+    educação:                'Educação',
+    lazer:                   'Lazer',
+    vestuario:               'Vestuário',
+    vestuário:               'Vestuário',
+    servicos:                'Serviços',
+    serviços:                'Serviços',
+    servicos_domesticos:     'Serviços Domésticos',
+    serviços_domésticos:     'Serviços Domésticos',
+    investimentos:           'Investimentos',
+    outros:                  'Outros',
+    familia:                 'Família',
+    família:                 'Família',
+    assinaturas:             'Assinaturas',
+    retiradas:               'Retiradas',
+  };
+  const key = raw.toLowerCase().trim().replace(/\s+/g, '_');
+  if (mapa[key]) return mapa[key];
+  const keyRaw = raw.toLowerCase().trim();
+  if (mapa[keyRaw]) return mapa[keyRaw];
+  return raw.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -73,24 +117,20 @@ export default function Reports() {
     setDrawerOpen(true);
   };
 
-  // ---- LÓGICA DE AUDITORIA (JUNÇÃO DE DADOS) ----
+  // ---- LÓGICA DE AUDITORIA ----
   const selectedMonthStr = format(currentMonth, 'yyyy-MM');
   
-  // 1. Pega as contas planejadas (Payables) do mês
   const filteredPayables = payables.filter(p => {
-    // Para auditoria financeira, o ideal é sempre olhar a competência. Se não tiver, cai pro vencimento.
     const payableMonth = format(new Date(p.competencia || p.due_date), 'yyyy-MM');
     return payableMonth === selectedMonthStr;
   });
 
-  // 2. Pega os gastos instantâneos (WhatsApp/Transactions órfãs) do mês
   const orphanTransactions = transactions.filter(t => 
     t.type === 'expense' && 
     !t.payable_id && 
     format(new Date(t.date), 'yyyy-MM') === selectedMonthStr
   );
 
-  // 3. Converte a transação órfã no formato que o componente de Auditoria entende
   const mappedOrphans = orphanTransactions.map(t => ({
     id: t.id,
     description: `${t.description} (Avulsa)`,
@@ -98,15 +138,15 @@ export default function Reports() {
     due_date: t.date,
     competencia: t.date,
     category: t.category,
-    status: 'paid', // Gastos instantâneos já estão pagos por natureza
+    status: 'paid', 
     transaction_id: t.id,
     is_orphan: true 
   }));
 
-  // 4. Une tudo na lista final da auditoria
   const auditData = [...filteredPayables, ...mappedOrphans];
   // -----------------------------------------------
 
+  // Fluxo de Caixa (Últimos 6 meses)
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = subMonths(new Date(), 5 - i);
     const start = format(startOfMonth(d), 'yyyy-MM-dd');
@@ -124,34 +164,28 @@ export default function Reports() {
 
   const monthTx = transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
 
-  const rawCategoryData = Object.entries(
-    monthTx
-      .filter(t => t.type === 'expense')
-      .reduce((acc, t) => {
-        const cat = t.category || 'outros';
-        acc[cat] = (acc[cat] || 0) + t.amount;
-        return acc;
-      }, {})
-  ).map(([slug, value]) => ({
-    slug,
-    name: normalizeCategoryLabel(CATEGORY_LABELS[slug] || slug),
-    value,
-  }));
+  // Deduplicação e normalização de categorias
+  const mapaCategoria = {};
+  let valorPassivosTransicao = 0;
 
-  const transitionCategory = rawCategoryData.find((item) => {
-    const slug = String(item.slug || '').toLowerCase();
-    const name = String(item.name || '').toLowerCase();
-    return slug === 'passivos_de_transicao' || name === 'passivos de transição' || name === 'passivos de transicao';
+  monthTx.filter(t => t.type === 'expense').forEach(t => {
+    const label = normalizarCategoria(t.category || 'outros');
+    
+    if (label === 'Passivos de Transição') {
+      valorPassivosTransicao += t.amount;
+      return;
+    }
+    if (label === 'Retiradas') return;
+
+    if (!mapaCategoria[label]) mapaCategoria[label] = 0;
+    mapaCategoria[label] += t.amount;
   });
 
-  const categoryData = rawCategoryData
-    .filter((item) => {
-      const slug = String(item.slug || '').toLowerCase();
-      const name = String(item.name || '').toLowerCase();
-      return slug !== 'passivos_de_transicao' && name !== 'passivos de transição' && name !== 'passivos de transicao';
-    })
+  const categoryData = Object.entries(mapaCategoria)
+    .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
 
+  // Orçado vs Realizado
   const plannedVsActual = useMemo(() => {
     const categoryIdToSlug = new Map(categories.map((category) => [category.id, category.slug]));
     const budgetBySlug = budgets.reduce((acc, budget) => {
@@ -163,23 +197,29 @@ export default function Reports() {
       return acc;
     }, {});
 
-    const excluded = new Set(['passivos_de_transicao', 'retiradas']);
     const actualBySlug = monthTx
       .filter((tx) => tx.type === 'expense')
       .reduce((acc, tx) => {
-        const slug = String(tx.category || 'outros').toLowerCase();
-        if (excluded.has(slug)) return acc;
-        acc[slug] = (acc[slug] || 0) + Number(tx.amount || 0);
+        const rawSlug = String(tx.category || 'outros');
+        const normalized = normalizarCategoria(rawSlug);
+        
+        if (normalized === 'Passivos de Transição' || normalized === 'Retiradas') return acc;
+        
+        acc[normalized] = (acc[normalized] || 0) + Number(tx.amount || 0);
         return acc;
       }, {});
 
-    const items = Object.entries(actualBySlug).map(([slug, actual]) => {
-      const limit = Number(budgetBySlug[slug] || 0);
+    const items = Object.keys({ ...budgetBySlug, ...actualBySlug }).map((key) => {
+      // Tenta achar o slug original ou usa a chave normalizada
+      const slug = Array.from(categoryIdToSlug.values()).find(s => normalizarCategoria(s) === key) || key;
+      const actual = actualBySlug[key] || 0;
+      const limit = Number(budgetBySlug[slug] || budgetBySlug[key] || 0);
       const hasLimit = limit > 0;
       const percent = hasLimit ? (actual / limit) * 100 : 0;
+      
       return {
         slug,
-        name: normalizeCategoryLabel(CATEGORY_LABELS[slug] || slug),
+        name: key, // Nome já normalizado
         actual,
         limit,
         hasLimit,
@@ -195,6 +235,7 @@ export default function Reports() {
     });
   }, [budgets, categories, currentMonth, monthTx]);
 
+  // Resumo Fiscal
   const receivedReceivables = receivables.filter((item) => item.status === 'received' && item.due_date >= monthStart && item.due_date <= monthEnd);
   const fiscalBySource = receivedReceivables.reduce((acc, item) => {
     const key = item.income_source_id || 'outras';
@@ -233,48 +274,106 @@ export default function Reports() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
-          <OverviewConsolidatedCTA currentMonth={currentMonth} onOpen={() => setConsolidatedModalOpen(true)} />
+          
+          {/* FIX 1 - Relatório CTA Consolidado com CSS aplicado inline via Tailwind */}
+          <div className="bg-[#EEF5FB] border-l-[4px] border-l-[#0D3B66] rounded-r-xl py-3.5 px-[18px] flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-[14px] font-bold text-[#0D3B66] mb-0.5">Relatório Consolidado</h3>
+              <p className="text-[12px] text-[#0D3B66] opacity-65">Acesse o fechamento detalhado de {format(currentMonth, 'MMMM/yyyy', { locale: ptBR })}</p>
+            </div>
+            <button
+              onClick={() => setConsolidatedModalOpen(true)}
+              className="bg-[#0D3B66] hover:bg-[#0a2f54] text-white border-none rounded-lg py-2 px-4 text-[12px] font-bold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+            >
+              Ver Completo
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card className="border border-[#E8EDF2] shadow-sm">
-              <CardHeader><CardTitle className="text-base">Fluxo de Caixa — Últimos 6 Meses</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={months}>
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v) => fmt(v)} />
-                    <Legend />
-                    <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            
+            {/* GRÁFICO 1: Fluxo de Caixa */}
+            <Card className="bg-white border-[0.5px] border-[#E8EDF2] rounded-[16px] p-5 shadow-[0_1px_4px_rgba(13,59,102,0.06)]">
+              <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Fluxo de Caixa — Últimos 6 Meses</h3>
+              <div className="relative h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={months} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#F0F4F8" />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#7B92A8', fontSize: 11 }} 
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#7B92A8', fontSize: 10 }}
+                      tickFormatter={v => `R$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} 
+                    />
+                    <Tooltip 
+                      cursor={{ fill: 'rgba(13, 59, 102, 0.05)' }}
+                      contentStyle={{ backgroundColor: '#0D3B66', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
+                      itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                      formatter={(v) => [fmt(v), '']}
+                    />
+                    <Legend 
+                      iconType="circle" 
+                      wrapperStyle={{ fontSize: '11px', color: '#7B92A8', paddingTop: '10px' }} 
+                    />
+                    <Bar dataKey="Receitas" fill="#0FA3A3" radius={[6, 6, 0, 0]} barSize={24} />
+                    <Bar dataKey="Despesas" fill="#F08080" radius={[6, 6, 0, 0]} barSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
-                <p className="mt-3 text-[9px] italic text-[#7B92A8]">* despesas registradas a partir de mai/26</p>
-              </CardContent>
+              </div>
+              <p className="text-[9px] text-[#7B92A8] italic mt-2.5">* despesas registradas a partir de mai/26</p>
             </Card>
 
-            <Card className="border border-[#E8EDF2] shadow-sm">
-              <CardHeader><CardTitle className="text-base">Despesas por Categoria (Mês Atual)</CardTitle></CardHeader>
-              <CardContent>
+            {/* GRÁFICO 2: Despesas por Categoria (Doughnut) */}
+            <Card className="bg-white border-[0.5px] border-[#E8EDF2] rounded-[16px] p-5 shadow-[0_1px_4px_rgba(13,59,102,0.06)]">
+              <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Despesas por Categoria (Mês Atual)</h3>
+              <div className="relative h-[200px]">
                 {categoryData.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma despesa neste mês</p>
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Nenhuma despesa neste mês</div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={220}>
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={categoryData} cx="50%" cy="50%" outerRadius={80} dataKey="value">
-                        {categoryData.map((item, i) => <Cell key={item.slug || i} fill={COLORS[i % COLORS.length]} />)}
+                      <Pie 
+                        data={categoryData} 
+                        cx="50%" 
+                        cy="50%" 
+                        innerRadius="62%" 
+                        outerRadius={80} 
+                        dataKey="value"
+                        stroke="#FFFFFF"
+                        strokeWidth={2}
+                      >
+                        {categoryData.map((item, i) => (
+                          <Cell key={item.name || i} fill={coresCategorias[item.name] || '#CBD5E1'} />
+                        ))}
                       </Pie>
-                      <Tooltip formatter={v => fmt(v)} />
-                      <Legend formatter={(_, __, index) => categoryData[index]?.name || ''} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0D3B66', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
+                        itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                        formatter={(value, name, props) => {
+                          const total = categoryData.reduce((acc, curr) => acc + curr.value, 0);
+                          const pct = ((value / total) * 100).toFixed(1);
+                          return [`${fmt(value)} (${pct}%)`, name];
+                        }}
+                      />
+                      <Legend 
+                        iconType="circle" 
+                        wrapperStyle={{ fontSize: '11px', color: '#0D3B66' }} 
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
-                {transitionCategory?.value > 0 && (
-                  <div className="mt-3 rounded-r-md border-l-[3px] border-l-[#F0A030] bg-[#FFF8EC] px-3 py-2 text-[11px] text-[#C0622A]">
-                    ⚠ Passivos de Transição ({fmt(transitionCategory.value)}) excluídos desta visão — categoria temporária de migração
-                  </div>
-                )}
-              </CardContent>
+              </div>
+              {valorPassivosTransicao > 0 && (
+                <div className="mt-4 rounded-r-md border-l-[3px] border-l-[#F0A030] bg-[#FFF8EC] px-3 py-2 text-[11px] text-[#C0622A]">
+                  ⚠ Passivos de Transição ({fmt(valorPassivosTransicao)}) excluídos desta visão — categoria temporária de migração
+                </div>
+              )}
             </Card>
           </div>
 

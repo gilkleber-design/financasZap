@@ -168,7 +168,6 @@ export default function CategoryManager() {
                 <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: root.color || '#64748b' }} />
                 <span className="text-sm font-semibold flex-1">{root.name}</span>
                 <Badge className={`text-xs text-white ${root.type === 'income' ? 'bg-green-600' : root.type === 'transfer' ? 'bg-slate-500' : 'bg-red-600'}`}>{root.type === 'income' ? 'Receita' : root.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
-                <Badge variant="outline" className="text-xs font-mono">{root.slug}</Badge>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="w-7 h-7 text-blue-500"
                     onClick={() => { setAddingParentId(root.id); setEditingCategory(null); }}
@@ -193,7 +192,6 @@ export default function CategoryManager() {
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: child.color || root.color || '#64748b' }} />
                   <span className="text-sm flex-1">{child.name}</span>
                   <Badge className={`text-xs text-white ${child.type === 'income' ? 'bg-green-600' : child.type === 'transfer' ? 'bg-slate-500' : 'bg-red-600'}`}>{child.type === 'income' ? 'Receita' : child.type === 'transfer' ? 'Transferência' : 'Despesa'}</Badge>
-                  <Badge variant="outline" className="text-xs font-mono">{child.slug}</Badge>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground"
                       onClick={() => { setEditingCategory(child); setAddingParentId(undefined); }}>

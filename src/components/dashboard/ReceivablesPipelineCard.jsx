@@ -66,7 +66,7 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
               <tr className="border-t border-border text-sm font-bold text-foreground">
                 <td className="pt-3 pr-4">Total</td>
                 {totals.map((total) => (
-                  <td key={total.key} className={`pt-3 pr-4 ${total.hasOverdue ? 'text-[#C0392B]' : total.allReceived ? 'text-[#0A6E50]' : total.allFuture ? 'text-[#7B92A8]' : 'text-primary'}`}>
+                  <td key={total.key} className="pt-3 pr-4 text-foreground">
                     {formatCompactCurrency(total.amount)} {total.hasOverdue ? '⚠' : ''}
                   </td>
                 ))}

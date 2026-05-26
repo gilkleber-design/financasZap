@@ -8,9 +8,9 @@ export const formatCurrency = (value, digits = 0) => new Intl.NumberFormat('pt-B
 export const formatCompactCurrency = (value) => {
   const amount = Number(value || 0);
   if (Math.abs(amount) >= 1000) {
-    return `R$ ${Math.round(amount / 1000)}k`;
+    return `R$ ${(amount / 1000).toFixed(1)}k`;
   }
-  return formatCurrency(amount, 0);
+  return formatCurrency(amount, 2);
 };
 
 export const normalizeCategoryLabel = (slug) => {

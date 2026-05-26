@@ -95,19 +95,18 @@ export default function DashboardPage() {
     const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
       const cells = pipelineMonths.map((date) => {
         const key = formatMonthKey(date);
-        const receivableMatches = receivables.filter((item) => item.income_source_id === hospital.income_source_id && (item.competencia || '').startsWith(`${key}-`));
+        const receivableMatches = receivables.filter((item) => item.income_source_id === hospital.income_source_id && (item.due_date || '').slice(0, 7) === key);
         const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const hasReceived = receivableMatches.some((item) => item.status === 'received');
         const hasPending = receivableMatches.some((item) => item.status !== 'received');
-        const expectedDate = hospital.payment_day ? formatDateKey(new Date(date.getFullYear(), date.getMonth() + Number(hospital.payment_months_offset || 1), Math.min(Number(hospital.payment_day || 1), 28))) : null;
-        const isFutureCompetencia = key > currentMonthKey;
+        const isFutureDueMonth = key > currentMonthKey;
         let status = 'futuro';
         if (hasReceived && !hasPending) status = 'recebido';
         else if (hasReceived && hasPending) status = 'parcial';
         else if (!amount) status = 'futuro';
-        else if (expectedDate && expectedDate < todayKey && !isFutureCompetencia) status = 'vencido';
-        else status = isFutureCompetencia ? 'futuro' : 'a_receber';
+        else if (!isFutureDueMonth && receivableMatches.some((item) => item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey)) status = 'vencido';
+        else status = isFutureDueMonth ? 'futuro' : 'a_receber';
         return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
       });
 

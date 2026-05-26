@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { base44 } from '@/api/base44Client';
 import DashboardLogo from '@/components/dashboard/DashboardLogo';
@@ -30,7 +30,6 @@ export default function DashboardPage() {
   const { data: budgets = [] } = useQuery({ queryKey: ['dashboard-budgets'], queryFn: () => base44.entities.Budget.list('-year', 500) });
   const { data: categories = [] } = useQuery({ queryKey: ['dashboard-categories'], queryFn: () => base44.entities.Category.list('name', 500) });
   const { data: hospitals = [] } = useQuery({ queryKey: ['dashboard-hospitals'], queryFn: () => base44.entities.Hospital.list('name', 500) });
-  const { data: shifts = [] } = useQuery({ queryKey: ['dashboard-shifts'], queryFn: () => base44.entities.Shift.list('-date', 4000) });
 
   const dashboardData = useMemo(() => {
     const validTransactions = transactions.filter((item) => item.status !== 'ignored' && item.status !== 'diverged');
@@ -41,27 +40,27 @@ export default function DashboardPage() {
     const previousMonthTransactions = validTransactions.filter((item) => item.date >= previousMonthRangeStart && item.date <= previousMonthRangeEnd);
 
     const receivedIncome = currentMonthTransactions
-      .filter((item) => item.type === 'income' && item.receivable_id)
+      .filter((item) => item.type === 'income')
       .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
     const paidExpense = currentMonthTransactions
-      .filter((item) => item.type === 'expense' && (item.payable_id || item.card_id || item.account_id))
+      .filter((item) => item.type === 'expense')
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const previousBalance = previousMonthTransactions
-      .filter((item) => item.type === 'income' && item.receivable_id)
+      .filter((item) => item.type === 'income')
       .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0)
       - previousMonthTransactions
-        .filter((item) => item.type === 'expense' && (item.payable_id || item.card_id || item.account_id))
+        .filter((item) => item.type === 'expense')
         .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
     const currentMonthReceivables = receivables.filter((item) => (item.competencia || item.due_date || '').startsWith(currentMonthKey));
     const toReceive = currentMonthReceivables
-      .filter((item) => item.status === 'pending' || item.status === 'overdue')
+      .filter((item) => item.status !== 'received')
       .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
     const balance = receivedIncome - paidExpense;
     const variation = previousBalance === 0 ? (balance === 0 ? 0 : 100) : ((balance - previousBalance) / Math.abs(previousBalance)) * 100;
 
     const overdueReceivables = receivables
-      .filter((item) => item.status !== 'received' && item.due_date && item.due_date < todayKey)
+      .filter((item) => item.status !== 'received' && item.due_date && isPast(new Date(`${item.due_date}T12:00:00`)) && !isToday(new Date(`${item.due_date}T12:00:00`)))
       .sort((a, b) => a.due_date.localeCompare(b.due_date))
       .map((item) => ({
         ...item,
@@ -71,7 +70,7 @@ export default function DashboardPage() {
       }));
 
     const urgentPayables = payables
-      .filter((item) => item.status !== 'paid' && item.status !== 'provisioned' && item.due_date && item.due_date <= todayKey)
+      .filter((item) => item.status !== 'paid' && item.status !== 'provisioned' && item.due_date && isPast(new Date(`${item.due_date}T12:00:00`)) || (item.status !== 'paid' && item.status !== 'provisioned' && item.due_date && isToday(new Date(`${item.due_date}T12:00:00`))))
       .sort((a, b) => a.due_date.localeCompare(b.due_date))
       .map((item) => ({
         ...item,
@@ -85,7 +84,7 @@ export default function DashboardPage() {
     const budgetOverruns = expenseCategories.map((category) => {
       const budget = budgets.find((item) => Number(item.month) === monthNumber && Number(item.year) === yearNumber && item.category_id === category.id);
       const spent = validTransactions
-        .filter((item) => item.type === 'expense' && item.payable_id && item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd) && (item.category === category.slug || item.category === category.id))
+        .filter((item) => item.type === 'expense' && item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd) && (item.category === category.slug || item.category === category.id))
         .reduce((sum, item) => sum + Number(item.amount || 0), 0);
       const limit = Number(budget?.amount || 0);
       return { slug: category.slug, name: category.name || normalizeCategoryLabel(category.slug), budget: limit, spent, overrun: spent - limit };
@@ -100,13 +99,15 @@ export default function DashboardPage() {
         const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const hasReceived = receivableMatches.some((item) => item.status === 'received');
-        const hasPending = receivableMatches.some((item) => item.status === 'pending' || item.status === 'overdue');
+        const hasPending = receivableMatches.some((item) => item.status !== 'received');
         const expectedDate = hospital.payment_day ? formatDateKey(new Date(date.getFullYear(), date.getMonth() + Number(hospital.payment_months_offset || 1), Math.min(Number(hospital.payment_day || 1), 28))) : null;
+        const isFutureCompetencia = key > currentMonthKey;
         let status = 'futuro';
         if (hasReceived && !hasPending) status = 'recebido';
         else if (hasReceived && hasPending) status = 'parcial';
-        else if (expectedDate && expectedDate < todayKey && amount > 0) status = 'vencido';
-        else if (amount > 0) status = 'a_receber';
+        else if (!amount) status = 'futuro';
+        else if (expectedDate && expectedDate < todayKey && !isFutureCompetencia) status = 'vencido';
+        else status = isFutureCompetencia ? 'futuro' : 'a_receber';
         return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
       });
 

@@ -21,7 +21,7 @@ export default function DashboardPage() {
   const todayKey = formatDateKey(now);
   const currentMonthKey = formatMonthKey(now);
   const previousMonthDate = subMonths(now, 1);
-  const pipelineMonths = Array.from({ length: 4 }, (_, index) => addMonths(now, index));
+  const pipelineMonths = Array.from({ length: 4 }, (_, index) => subMonths(now, 3 - index));
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const { data: transactions = [] } = useQuery({ queryKey: ['dashboard-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });

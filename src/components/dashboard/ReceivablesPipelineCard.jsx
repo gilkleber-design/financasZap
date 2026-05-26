@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 
 const STATUS_STYLES = {
   recebido: 'bg-[#E6F9F0] border-[#0A9E6A] text-[#0A9E6A]',
-  vencido: 'bg-white border-[#E74C3C] text-[#C0392B]',
+  vencido: 'bg-[#FFECEC] border-[#E74C3C] text-[#C0392B]',
   parcial: 'bg-[#FFF8EC] border-[#F0C070] text-[#C0622A]',
   a_receber: 'bg-[#E8F4FF] border-[#1E5BA8] text-[#1E5BA8]',
   futuro: 'bg-[#F0F4F8] border-[#C8D6E0] text-[#7B92A8]',

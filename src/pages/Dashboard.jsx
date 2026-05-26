@@ -9,7 +9,7 @@ import DashboardLogo from '@/components/dashboard/DashboardLogo';
 import MonthBalanceCard from '@/components/dashboard/MonthBalanceCard';
 import AttentionCard from '@/components/dashboard/AttentionCard';
 import ReceivablesPipelineCard from '@/components/dashboard/ReceivablesPipelineCard';
-import { formatCurrency, getInitials, normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
+import { getInitials, normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
 const formatMonthKey = (date) => format(date, 'yyyy-MM');
 const formatDateKey = (date) => format(date, 'yyyy-MM-dd');
@@ -18,10 +18,10 @@ export default function DashboardPage() {
   const now = new Date();
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
+  const todayKey = formatDateKey(now);
   const currentMonthKey = formatMonthKey(now);
   const previousMonthDate = subMonths(now, 1);
-  const previousMonthKey = formatMonthKey(previousMonthDate);
-  const pipelineMonths = Array.from({ length: 4 }, (_, index) => subMonths(now, 3 - index));
+  const pipelineMonths = Array.from({ length: 4 }, (_, index) => addMonths(now, index));
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const { data: transactions = [] } = useQuery({ queryKey: ['dashboard-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
@@ -33,26 +33,35 @@ export default function DashboardPage() {
   const { data: shifts = [] } = useQuery({ queryKey: ['dashboard-shifts'], queryFn: () => base44.entities.Shift.list('-date', 4000) });
 
   const dashboardData = useMemo(() => {
-    const paidTransactionStatuses = new Set(['registered', 'conciliated']);
-    const validTransactions = transactions.filter((item) => !item.status || paidTransactionStatuses.has(item.status));
+    const validTransactions = transactions.filter((item) => item.status !== 'ignored' && item.status !== 'diverged');
 
     const currentMonthTransactions = validTransactions.filter((item) => item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd));
     const previousMonthRangeStart = formatDateKey(startOfMonth(previousMonthDate));
     const previousMonthRangeEnd = formatDateKey(endOfMonth(previousMonthDate));
     const previousMonthTransactions = validTransactions.filter((item) => item.date >= previousMonthRangeStart && item.date <= previousMonthRangeEnd);
 
-    const receivedIncome = currentMonthTransactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-    const paidExpense = currentMonthTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const previousBalance = previousMonthTransactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0)
-      - previousMonthTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const receivedIncome = currentMonthTransactions
+      .filter((item) => item.type === 'income' && item.receivable_id)
+      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+    const paidExpense = currentMonthTransactions
+      .filter((item) => item.type === 'expense' && (item.payable_id || item.card_id || item.account_id))
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const previousBalance = previousMonthTransactions
+      .filter((item) => item.type === 'income' && item.receivable_id)
+      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0)
+      - previousMonthTransactions
+        .filter((item) => item.type === 'expense' && (item.payable_id || item.card_id || item.account_id))
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
     const currentMonthReceivables = receivables.filter((item) => (item.competencia || item.due_date || '').startsWith(currentMonthKey));
-    const toReceive = currentMonthReceivables.filter((item) => item.status !== 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+    const toReceive = currentMonthReceivables
+      .filter((item) => item.status === 'pending' || item.status === 'overdue')
+      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
     const balance = receivedIncome - paidExpense;
     const variation = previousBalance === 0 ? (balance === 0 ? 0 : 100) : ((balance - previousBalance) / Math.abs(previousBalance)) * 100;
 
     const overdueReceivables = receivables
-      .filter((item) => item.status !== 'received' && item.due_date && item.due_date < formatDateKey(now))
+      .filter((item) => item.status !== 'received' && item.due_date && item.due_date < todayKey)
       .sort((a, b) => a.due_date.localeCompare(b.due_date))
       .map((item) => ({
         ...item,
@@ -62,7 +71,7 @@ export default function DashboardPage() {
       }));
 
     const urgentPayables = payables
-      .filter((item) => item.status !== 'paid' && item.due_date && item.due_date <= formatDateKey(now))
+      .filter((item) => item.status !== 'paid' && item.status !== 'provisioned' && item.due_date && item.due_date <= todayKey)
       .sort((a, b) => a.due_date.localeCompare(b.due_date))
       .map((item) => ({
         ...item,
@@ -76,7 +85,7 @@ export default function DashboardPage() {
     const budgetOverruns = expenseCategories.map((category) => {
       const budget = budgets.find((item) => Number(item.month) === monthNumber && Number(item.year) === yearNumber && item.category_id === category.id);
       const spent = validTransactions
-        .filter((item) => item.type === 'expense' && item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd) && (item.category === category.slug || item.category === category.id))
+        .filter((item) => item.type === 'expense' && item.payable_id && item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd) && (item.category === category.slug || item.category === category.id))
         .reduce((sum, item) => sum + Number(item.amount || 0), 0);
       const limit = Number(budget?.amount || 0);
       return { slug: category.slug, name: category.name || normalizeCategoryLabel(category.slug), budget: limit, spent, overrun: spent - limit };
@@ -87,19 +96,17 @@ export default function DashboardPage() {
     const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
       const cells = pipelineMonths.map((date) => {
         const key = formatMonthKey(date);
-        const monthShifts = shifts.filter((shift) => shift.hospital_id === hospital.id && (shift.status === 'done' || shift.status === 'scheduled') && shift.date?.startsWith(key));
         const receivableMatches = receivables.filter((item) => item.income_source_id === hospital.income_source_id && (item.competencia || '').startsWith(`${key}-`));
-        const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0) || monthShifts.reduce((sum, shift) => sum + Number(shift.valor || 0), 0);
+        const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
         const hasReceived = receivableMatches.some((item) => item.status === 'received');
-        const hasPending = receivableMatches.some((item) => item.status !== 'received');
+        const hasPending = receivableMatches.some((item) => item.status === 'pending' || item.status === 'overdue');
         const expectedDate = hospital.payment_day ? formatDateKey(new Date(date.getFullYear(), date.getMonth() + Number(hospital.payment_months_offset || 1), Math.min(Number(hospital.payment_day || 1), 28))) : null;
-        const isFuture = key > currentMonthKey;
         let status = 'futuro';
         if (hasReceived && !hasPending) status = 'recebido';
         else if (hasReceived && hasPending) status = 'parcial';
-        else if (expectedDate && expectedDate < formatDateKey(now) && amount > 0) status = 'vencido';
-        else if (amount > 0) status = isFuture ? 'futuro' : 'a_receber';
+        else if (expectedDate && expectedDate < todayKey && amount > 0) status = 'vencido';
+        else if (amount > 0) status = 'a_receber';
         return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
       });
 
@@ -136,7 +143,7 @@ export default function DashboardPage() {
       pipelineTotals,
       hasHospitals: hospitals.length > 0,
     };
-  }, [transactions, payables, receivables, budgets, categories, hospitals, shifts]);
+  }, [transactions, payables, receivables, budgets, categories, hospitals, todayKey, currentMonthKey, monthStart, monthEnd, previousMonthDate, pipelineMonths]);
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-6">

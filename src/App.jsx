@@ -19,6 +19,7 @@ import CalendarPage from '@/pages/CalendarPage';
 import CardInvoices from '@/pages/CardInvoices';
 import Planning from '@/pages/Planning';
 import LinkHub from '@/pages/LinkHub';
+import DataReview from '@/pages/DataReview';
 
 const routeTitles = {
   '/': 'Início — FinançasZap',
@@ -26,6 +27,7 @@ const routeTitles = {
   '/hospitais': 'Hospitais — FinançasZap',
   '/calendario': 'Calendário — FinançasZap',
   '/planejamento': 'Planejamento — FinançasZap',
+  '/revisao-dados': 'Revisão de Dados — FinançasZap',
   '/transacoes': 'Transações — FinançasZap',
   '/contas-pagar': 'Contas a Pagar — FinançasZap',
   '/contas-receber': 'Contas a Receber — FinançasZap',
@@ -71,6 +73,7 @@ const AuthenticatedApp = () => {
         <Route path="/calendario" element={<CalendarPage />} />
         <Route path="/faturas-cartao" element={<CardInvoices />} />
         <Route path="/planejamento" element={<Planning />} />
+        <Route path="/revisao-dados" element={<DataReview />} />
         <Route path="/hub-amarracao" element={<LinkHub />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />

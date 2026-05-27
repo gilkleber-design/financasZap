@@ -32,6 +32,35 @@ function makeGroupId() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function resolveAmounts({ totalAmountInput, installmentAmountInput, installmentCount }) {
+  const totalAmount = Number(totalAmountInput);
+  const installmentAmount = Number(installmentAmountInput);
+  const hasTotal = Number.isFinite(totalAmount) && totalAmount > 0;
+  const hasInstallment = Number.isFinite(installmentAmount) && installmentAmount > 0;
+
+  if (hasTotal) {
+    return {
+      totalAmount,
+      installmentAmount,
+      amountSource: 'total',
+    };
+  }
+
+  if (hasInstallment) {
+    return {
+      totalAmount: Math.round(installmentAmount * installmentCount * 100) / 100,
+      installmentAmount,
+      amountSource: 'installment',
+    };
+  }
+
+  return {
+    totalAmount: NaN,
+    installmentAmount: NaN,
+    amountSource: null,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -42,6 +71,7 @@ Deno.serve(async (req) => {
     const {
       description,
       total_amount,
+      installment_amount,
       installment_count,
       category,
       date,
@@ -52,11 +82,15 @@ Deno.serve(async (req) => {
 
     const cleanDescription = String(description || '').trim();
     const purchaseDate = toDateOnly(date || new Date().toISOString());
-    const totalAmount = Number(total_amount);
     const installmentCount = Number(installment_count);
+    const { totalAmount, installmentAmount, amountSource } = resolveAmounts({
+      totalAmountInput: total_amount,
+      installmentAmountInput: installment_amount,
+      installmentCount,
+    });
 
     if (!cleanDescription || !Number.isFinite(totalAmount) || totalAmount <= 0) {
-      return Response.json({ error: 'Descrição e valor total válidos são obrigatórios' }, { status: 400 });
+      return Response.json({ error: 'Descrição e valor válido da compra são obrigatórios' }, { status: 400 });
     }
 
     if (!Number.isInteger(installmentCount) || installmentCount < 2) {
@@ -99,6 +133,9 @@ Deno.serve(async (req) => {
       total_amount: totalAmount,
       total_amount_formatted: formatCurrency(totalAmount),
       installment_count: installmentCount,
+      amount_source: amountSource,
+      informed_installment_amount: Number.isFinite(installmentAmount) && installmentAmount > 0 ? installmentAmount : null,
+      informed_installment_amount_formatted: Number.isFinite(installmentAmount) && installmentAmount > 0 ? formatCurrency(installmentAmount) : null,
       average_installment_amount_formatted: formatCurrency(perInstallmentRaw),
       installments: installments.map((item) => ({
         ...item,
@@ -116,7 +153,7 @@ Deno.serve(async (req) => {
         `• Compra: ${cleanDescription}`,
         `• Cartão: ${card.name}`,
         `• Valor total: ${formatCurrency(totalAmount)}`,
-        `• Parcelamento: ${installmentCount}x`,
+        `• Parcelamento: ${installmentCount}x${amountSource === 'installment' && Number.isFinite(installmentAmount) ? ` de ${formatCurrency(installmentAmount)}` : ''}`,
         '',
         '*Parcelas previstas:*',
         ...installments.map((item) => `• ${item.number}/${installmentCount} — ${formatCurrency(item.amount)} — fatura de ${item.invoice_month_label}`),

@@ -275,7 +275,6 @@ export default function Payables() {
 
   const monthKey = format(currentMonth, 'yyyy-MM');
 
-  // Backend traz TODAS as contas do mês para que os KPIs e abas funcionem sem engasgos
   const { data: payablesResponse } = useQuery({
     queryKey: ['payables-list', monthKey, listFilter],
     queryFn: () =>
@@ -297,23 +296,32 @@ export default function Payables() {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
-  // Filtro de listagem instantâneo (ignora pagos para não bagunçar as gavetas)
+  // Correção Aplicada: Filtro instantâneo não exige mais estritamente p.status === 'pending'
   const filtered = useMemo(() => {
     return payablesItems.filter((p) => {
+      // Regra de Ouro: Nunca mostramos contas pagas no painel aberto
       if (p.status === 'paid') return false;
 
       const isCard = p.origin_type === 'card';
-      const isPending = p.status === 'pending';
       const isProvisioned = p.status === 'provisioned';
-      const dueDate = parseItemDate(p.due_date || p.competencia);
-      const isOverdue = dueDate && dueDate < todayStart;
 
-      if (creditCardOnly) return isCard && (isPending || isProvisioned);
-      if (activeTab === 'todas') return isPending;
-      if (isCard) return false;
-      if (activeTab === 'parceladas') return isPending && isOverdue;
+      // Lógica da view de Cartão
+      if (creditCardOnly) {
+        return isCard && (p.status === 'pending' || isProvisioned);
+      }
 
-      return isPending;
+      // Lógica das Abas Padrão (Oculta tudo do cartão)
+      if (isCard || isProvisioned) return false;
+
+      if (activeTab === 'parceladas') {
+        const dueDate = parseItemDate(p.due_date || p.competencia);
+        const isOverdue = dueDate && dueDate < todayStart;
+        return isOverdue;
+      }
+
+      // Para 'todas', 'fixas' e 'avulsas', mostramos tudo que está em aberto.
+      // Como já barramos 'paid', 'card' e 'provisioned' acima, tudo que descer entra na lista.
+      return true;
     });
   }, [payablesItems, activeTab, creditCardOnly, todayStart]);
 
@@ -323,7 +331,6 @@ export default function Payables() {
     localStorage.setItem('contas_mes', format(currentMonth, 'yyyy-MM'));
   }
 
-  // KPIs agora espelham o total do banco (incluindo o que já foi pago)
   const kpis = useMemo(() => {
     const baseItems = creditCardOnly ? payablesItems.filter(p => p.origin_type === 'card') : payablesItems;
 

@@ -316,7 +316,7 @@ export default function Payables() {
   const payablesItems = payablesResponse?.data?.items || [];
 
   const filtered = creditCardOnly
-    ? payablesItems.filter((p) => (p.origin_type === 'card' || !!p.installment_group_id) && ['pending', 'provisioned'].includes(p.status))
+    ? payablesItems.filter((p) => p.origin_type === 'card' && p.status !== 'paid')
     : payablesItems.filter((p) => p.status === 'pending');
 
   const getStatus = (p) => {
@@ -381,7 +381,7 @@ export default function Payables() {
 
     if (creditCardOnly) {
       return [
-        { key: 'month', title: 'Cartão de crédito no mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => ['pending', 'provisioned'].includes(item.original.status)) },
+        { key: 'month', title: 'Cartão de crédito', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.origin_type === 'card' && item.original.status !== 'paid') },
       ].filter((section) => section.items.length > 0);
     }
 

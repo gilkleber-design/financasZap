@@ -357,7 +357,9 @@ export default function Payables() {
       .map((item) => {
         const dueDate = parseItemDate(item.due_date || item.competencia);
         if (!dueDate) return null;
-        const overdue = item.status !== 'paid' && dueDate < todayStart;
+        const isPaid = item.status === 'paid';
+        const isProvisioned = item.status === 'provisioned';
+        const overdue = !isPaid && !isProvisioned && dueDate < todayStart;
         const autoDebit = item.payment_modality === 'automatic_debit';
         return {
           id: item.id,
@@ -367,22 +369,22 @@ export default function Payables() {
           dueDateLabel: format(dueDate, 'dd/MM', { locale: ptBR }),
           amount: Number(item.amount || 0),
           installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
-          pill: item.status === 'paid' ? 'paid' : autoDebit ? 'auto' : overdue ? 'overdue' : 'pending',
-          pillLabel: item.status === 'paid' ? 'Pago' : autoDebit ? 'Automático' : overdue ? 'Vencido' : 'Pendente',
+          pill: isPaid ? 'paid' : isProvisioned ? 'provisioned' : autoDebit ? 'auto' : overdue ? 'overdue' : 'pending',
+          pillLabel: isPaid ? 'Pago' : isProvisioned ? 'Provisionado' : autoDebit ? 'Automático' : overdue ? 'Vencido' : 'Pendente',
           style: overdue ? 'overdue' : (isSameDay(dueDate, todayStart) || isSameDay(dueDate, tomorrow)) ? 'urgent' : 'default',
           autoDebit,
-          canPay: item.status !== 'paid',
+          canPay: !isPaid && !isProvisioned,
           original: item,
         };
       })
       .filter(Boolean);
 
     return [
-      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.original.status !== 'paid' && item.dueDate < todayStart && !item.autoDebit) },
-      { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
-      { key: 'week', title: 'Esta Semana', icon: PAYABLE_SECTION_ICONS.week, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && item.dueDate > tomorrow && item.dueDate <= weekEnd) },
-      { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.status !== 'paid' && !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
-      { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.original.status !== 'paid' && item.autoDebit) },
+      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.original.status === 'pending' && item.dueDate < todayStart && !item.autoDebit) },
+      { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => item.original.status === 'pending' && !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
+      { key: 'week', title: 'Esta Semana', icon: PAYABLE_SECTION_ICONS.week, items: mapped.filter((item) => item.original.status === 'pending' && !item.autoDebit && item.dueDate > tomorrow && item.dueDate <= weekEnd) },
+      { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.status === 'pending' && !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
+      { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.original.status === 'pending' && item.autoDebit) },
       { key: 'paid', title: 'Pagas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: mapped.filter((item) => item.original.status === 'paid'), collapsible: true },
     ].filter((section) => section.items.length > 0);
   }, [filtered, currentMonth]);

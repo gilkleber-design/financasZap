@@ -8,6 +8,7 @@ const STATUS_PILL = {
   overdue: 'bg-[#FFECEC] border-[#E74C3C] text-[#C0392B]',
   pending: 'bg-[#E0F5F5] border-[#0FA3A3] text-[#0A7070]',
   auto: 'bg-[#F0F4F8] border-[#C8D6E0] text-[#7B92A8]',
+  provisioned: 'bg-[#EEF2FF] border-[#7C93FF] text-[#4254C5]',
 };
 
 export default function PayablesOverview({

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -47,7 +48,21 @@ export default function Settings() {
     name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '',
     is_additional: false, principal_card_id: '', assigned_user_id: ''
   });
-  const [hospitalForm, setHospitalForm] = useState({ name: '', sigla: '', income_source_id: '', remuneration_model: 'plantao' });
+  const [hospitalForm, setHospitalForm] = useState({
+    name: '',
+    sigla: '',
+    income_source_id: '',
+    remuneration_model: 'plantao',
+    payment_day: '1',
+    payment_months_offset: '1',
+    has_productivity: false,
+    productivity_separate_date: false,
+    valor_sd_semana: '',
+    valor_sn_semana: '',
+    valor_sd_fds: '',
+    valor_sn_fds: '',
+    valor_sobreaviso: '',
+  });
 
 
   const [editingSourceId, setEditingSourceId] = useState(null);
@@ -102,9 +117,37 @@ export default function Settings() {
     onSuccess: () => {queryClient.invalidateQueries();setEditingSourceId(null);setShowNewSource(false);toast.success('Fonte salva!');}
   });
 
+  const parseHospitalForm = (data) => ({
+    ...data,
+    payment_day: parseInt(data.payment_day) || 1,
+    payment_months_offset: parseInt(data.payment_months_offset) || 1,
+    valor_sd_semana: parseFloat(data.valor_sd_semana) || 0,
+    valor_sn_semana: parseFloat(data.valor_sn_semana) || 0,
+    valor_sd_fds: parseFloat(data.valor_sd_fds) || 0,
+    valor_sn_fds: parseFloat(data.valor_sn_fds) || 0,
+    valor_sobreaviso: parseFloat(data.valor_sobreaviso) || 0,
+  });
+
   const upsertHospital = useMutation({
-    mutationFn: (data) => editingHospitalId ? base44.entities.Hospital.update(editingHospitalId, data) : base44.entities.Hospital.create(data),
-    onSuccess: () => {queryClient.invalidateQueries();setEditingHospitalId(null);setShowNewHospital(false);setHospitalForm({ name: '', sigla: '', income_source_id: '', remuneration_model: 'plantao' });toast.success('Hospital salvo!');}
+    mutationFn: (data) => {
+      const payload = parseHospitalForm(data);
+      return editingHospitalId ? base44.entities.Hospital.update(editingHospitalId, payload) : base44.entities.Hospital.create(payload);
+    },
+    onSuccess: () => {queryClient.invalidateQueries();setEditingHospitalId(null);setShowNewHospital(false);setHospitalForm({
+      name: '',
+      sigla: '',
+      income_source_id: '',
+      remuneration_model: 'plantao',
+      payment_day: '1',
+      payment_months_offset: '1',
+      has_productivity: false,
+      productivity_separate_date: false,
+      valor_sd_semana: '',
+      valor_sn_semana: '',
+      valor_sd_fds: '',
+      valor_sn_fds: '',
+      valor_sobreaviso: '',
+    });toast.success('Hospital salvo!');}
   });
 
 
@@ -310,9 +353,23 @@ export default function Settings() {
          <Button variant="ghost" className="w-full flex justify-between p-4 h-auto text-slate-700 font-bold"><div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-primary" /> Hospitais</div>{openSections.hospitals ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</Button>
        </CollapsibleTrigger>
        <CollapsibleContent className="p-4 border-t space-y-4">
-         <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => {setHospitalForm({ name: '', sigla: '', income_source_id: '', remuneration_model: 'plantao' });setShowNewHospital(true)}}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Hospital</Button></div>
+         <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => {setHospitalForm({
+           name: '',
+           sigla: '',
+           income_source_id: '',
+           remuneration_model: 'plantao',
+           payment_day: '1',
+           payment_months_offset: '1',
+           has_productivity: false,
+           productivity_separate_date: false,
+           valor_sd_semana: '',
+           valor_sn_semana: '',
+           valor_sd_fds: '',
+           valor_sn_fds: '',
+           valor_sobreaviso: '',
+         });setShowNewHospital(true)}}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Hospital</Button></div>
          {(showNewHospital || editingHospitalId) &&
-          <div className="p-4 bg-accent/20 rounded-lg space-y-3 border border-primary/10">
+          <div className="p-4 bg-accent/20 rounded-lg space-y-4 border border-primary/10">
              <div><Label>Nome *</Label><Input value={hospitalForm.name || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, name: e.target.value })} placeholder="Nome do hospital" /></div>
              <div><Label>Sigla *</Label><Input value={hospitalForm.sigla || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, sigla: e.target.value })} placeholder="Ex: HCB" /></div>
              <div><Label>Fonte de Renda</Label>
@@ -330,6 +387,51 @@ export default function Settings() {
                  </SelectContent>
                </Select>
              </div>
+
+             {hospitalForm.remuneration_model === 'plantao' && (
+               <>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div>
+                     <Label>Dia do pagamento</Label>
+                     <Input type="number" min="1" max="31" value={hospitalForm.payment_day || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, payment_day: e.target.value })} />
+                   </div>
+                   <div>
+                     <Label>Meses após competência</Label>
+                     <Select value={String(hospitalForm.payment_months_offset || '1')} onValueChange={(v) => setHospitalForm({ ...hospitalForm, payment_months_offset: v })}>
+                       <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="0">0 (mês atual)</SelectItem>
+                         <SelectItem value="1">1 mês</SelectItem>
+                         <SelectItem value="2">2 meses</SelectItem>
+                         <SelectItem value="3">3 meses</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-3">
+                   <div><Label>SD Seg–Sex</Label><CurrencyInput value={hospitalForm.valor_sd_semana} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_sd_semana: value })} /></div>
+                   <div><Label>SN Seg–Sex</Label><CurrencyInput value={hospitalForm.valor_sn_semana} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_sn_semana: value })} /></div>
+                   <div><Label>SD Fim de Semana</Label><CurrencyInput value={hospitalForm.valor_sd_fds} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_sd_fds: value })} /></div>
+                   <div><Label>SN Fim de Semana</Label><CurrencyInput value={hospitalForm.valor_sn_fds} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_sn_fds: value })} /></div>
+                   <div><Label>Adicional Sobreaviso</Label><CurrencyInput value={hospitalForm.valor_sobreaviso} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_sobreaviso: value })} /></div>
+                 </div>
+
+                 <div className="space-y-3 border border-border rounded-xl p-3 bg-white">
+                   <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">Tem produtividade?</span>
+                     <Switch checked={!!hospitalForm.has_productivity} onCheckedChange={(v) => setHospitalForm({ ...hospitalForm, has_productivity: v })} />
+                   </div>
+                   {hospitalForm.has_productivity && (
+                     <div className="flex items-center justify-between pt-3 border-t border-border">
+                       <span className="text-sm font-medium">Recebe em data separada?</span>
+                       <Switch checked={!!hospitalForm.productivity_separate_date} onCheckedChange={(v) => setHospitalForm({ ...hospitalForm, productivity_separate_date: v })} />
+                     </div>
+                   )}
+                 </div>
+               </>
+             )}
+
              <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingHospitalId(null);setShowNewHospital(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertHospital.mutate({ ...hospitalForm, active: true })}>Salvar</Button></div>
            </div>
           }
@@ -339,7 +441,16 @@ export default function Settings() {
                 <span className="text-sm font-bold">{h.name}</span>
                 <span className="text-[10px] text-muted-foreground font-bold uppercase">{h.sigla} • {h.remuneration_model === 'producao' ? 'Produção' : 'Plantão'}</span>
              </div>
-             <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingHospitalId(h.id);setHospitalForm(h);setShowNewHospital(true);}}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('Hospital', h.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
+             <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingHospitalId(h.id);setHospitalForm({
+               ...h,
+               payment_day: String(h.payment_day || 1),
+               payment_months_offset: String(h.payment_months_offset || 1),
+               valor_sd_semana: String(h.valor_sd_semana || ''),
+               valor_sn_semana: String(h.valor_sn_semana || ''),
+               valor_sd_fds: String(h.valor_sd_fds || ''),
+               valor_sn_fds: String(h.valor_sn_fds || ''),
+               valor_sobreaviso: String(h.valor_sobreaviso || ''),
+             });setShowNewHospital(true);}}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('Hospital', h.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
            </div>
           )}
        </CollapsibleContent>

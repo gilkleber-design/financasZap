@@ -23,6 +23,10 @@ export default function DashboardPage() {
   const previousMonthDate = subMonths(now, 1);
   const pipelineMonths = Array.from({ length: 4 }, (_, index) => subMonths(now, 3 - index));
 
+  // Lógica da saudação dinâmica
+  const hour = now.getHours();
+  const greeting = (hour >= 5 && hour < 12) ? 'bom dia' : (hour >= 12 && hour < 18) ? 'boa tarde' : 'boa noite';
+
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const { data: transactions = [] } = useQuery({ queryKey: ['dashboard-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
   const { data: payables = [] } = useQuery({ queryKey: ['dashboard-payables'], queryFn: () => base44.entities.Payable.list('-due_date', 1000) });
@@ -162,7 +166,7 @@ export default function DashboardPage() {
       <div className="md:hidden bg-sidebar px-4 pb-5 pt-4 text-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <DashboardLogo className="h-7 w-7" />
+            <DashboardLogo className="h-10 w-10" />
             <div className="text-base font-bold"><span>Finanças</span><span className="text-primary">Zap</span></div>
           </div>
           <div className="flex items-center gap-3">
@@ -171,17 +175,17 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="mt-4">
-          <p className="text-[11px] text-white/60">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'}</p>
+          <p className="text-[11px] text-white/60">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'} — {greeting}</p>
           <p className="mt-1 text-sm font-semibold capitalize text-white">{format(now, 'MMMM yyyy', { locale: ptBR })}</p>
         </div>
       </div>
 
       <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3">
         <div className="flex items-center gap-3">
-          <DashboardLogo className="h-5 w-5" />
+          <DashboardLogo className="h-8 w-8" />
           <div className="text-lg font-bold"><span className="text-foreground">Finanças</span><span className="text-primary">Zap</span></div>
           <span className="h-5 w-px bg-border" />
-          <p className="text-sm text-muted-foreground">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'} — bom dia</p>
+          <p className="text-sm text-muted-foreground">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'} — {greeting}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold capitalize text-foreground">{format(now, 'MMMM yyyy', { locale: ptBR })}</span>

@@ -309,6 +309,7 @@ export default function Payables() {
         filter: listFilter,
         status: listStatus,
         sort: filterBy,
+        creditCardOnly,
       }),
     enabled: viewMode === 'mensal',
   });

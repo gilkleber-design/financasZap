@@ -39,6 +39,11 @@ function monthMatches(item, month, sortBy) {
   return monthKeyFromDate(field) === month;
 }
 
+function cardMatches(item, creditCardOnly) {
+  if (!creditCardOnly) return true;
+  return item.origin_type === 'card';
+}
+
 async function materializeCurrentMonth(base44, month) {
   if (month !== currentMonthKey()) return;
 
@@ -103,6 +108,7 @@ Deno.serve(async (req) => {
     const filter = body.filter || 'TODAS';
     const status = body.status || 'EM_ABERTO';
     const sortBy = body.sort || 'due_date';
+    const creditCardOnly = body.creditCardOnly === true;
 
     await materializeCurrentMonth(base44, month);
 
@@ -112,19 +118,20 @@ Deno.serve(async (req) => {
     let items = [];
 
     if (status === 'VENCIDAS') {
-      items = payables.filter(p => p.status === 'pending' && toDateOnly(p.due_date) < todayKey() && typeMatches(p, filter));
+      items = payables.filter(p => p.status === 'pending' && toDateOnly(p.due_date) < todayKey() && typeMatches(p, filter) && cardMatches(p, creditCardOnly));
     } else if (status === 'PAGAS') {
-      items = payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter));
+      items = payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter) && cardMatches(p, creditCardOnly));
     } else {
-      const realOpen = payables.filter(p => ['pending', 'provisioned'].includes(p.status) && monthMatches(p, month, sortBy));
+      const realOpen = payables.filter(p => ['pending', 'provisioned'].includes(p.status) && monthMatches(p, month, sortBy) && cardMatches(p, creditCardOnly));
       const projections = future && filter !== 'PARCELADAS' && filter !== 'AVULSAS'
         ? recurrences
             .filter(r => r.active !== false)
+            .filter(r => cardMatches(r, creditCardOnly))
             .filter(r => !payables.some(p => p.recurrence_id === r.id && monthKeyFromDate(p.competencia || p.due_date) === month))
             .map(r => makeProjection(r, month))
         : [];
 
-      items = [...realOpen, ...projections].filter(item => typeMatches(item, filter));
+      items = [...realOpen, ...projections].filter(item => typeMatches(item, filter) && cardMatches(item, creditCardOnly));
     }
 
     items.sort((a, b) => {

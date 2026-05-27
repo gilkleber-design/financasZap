@@ -60,6 +60,10 @@
     {
       "function_name": "getCategoryBudgetStatus",
       "description": "Retorna o status do or\u00e7amento de uma categoria: planejado, gasto, utiliza\u00e7\u00e3o e dispon\u00edvel. DEVE ser chamada no PASSO 6 para gerar o resumo final."
+    },
+    {
+      "function_name": "findPayableMatchForAgent",
+      "description": "Busca matches plaus\u00edveis em Payables e Receivables para concilia\u00e7\u00e3o antes do registro."
     }
   ],
   "context_files": [],

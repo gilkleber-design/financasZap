@@ -97,12 +97,13 @@ Deno.serve(async (req) => {
       for (let i = 0; i <= installmentCount - installmentNumber; i++) {
         const currentNumber = installmentNumber + i;
         const installmentDueDate = addMonths(dueDate, currentNumber - 1);
+        const isCardOrigin = basePayload.origin_type === 'card';
         const payable = {
           ...basePayload,
           description: `${basePayload.description} (${currentNumber}/${installmentCount})`,
           due_date: `${installmentDueDate}T12:00:00`,
           competencia: installmentDueDate,
-          status: shouldPayNow && i === 0 ? 'paid' : 'provisioned',
+          status: isCardOrigin ? 'provisioned' : (shouldPayNow && i === 0 ? 'paid' : 'pending'),
           recurrent: false,
           installment_total_amount: totalAmount,
           installment_count: installmentCount,
@@ -110,7 +111,7 @@ Deno.serve(async (req) => {
           installment_group_id: groupId,
         };
 
-        if (shouldPayNow && i === 0) {
+        if (shouldPayNow && i === 0 && !isCardOrigin) {
           const firstPayable = await base44.entities.Payable.create(payable);
           await createPaidTransaction(base44, firstPayable, toDateOnly(body.payment_date), body.origin_id);
           created.push(firstPayable);
@@ -131,6 +132,7 @@ Deno.serve(async (req) => {
     if (!dueDate) return Response.json({ error: 'Vencimento obrigatório' }, { status: 400 });
 
     const isPaid = !!body.payment_date;
+    const isCardOrigin = basePayload.origin_type === 'card';
     if (isPaid && !body.origin_id) {
       return Response.json({ error: 'Origem do pagamento obrigatória para marcar como pago' }, { status: 400 });
     }
@@ -139,11 +141,11 @@ Deno.serve(async (req) => {
       ...basePayload,
       due_date: `${dueDate}T12:00:00`,
       competencia: toDateOnly(body.competencia || dueDate),
-      status: isPaid ? 'paid' : 'pending',
+      status: isCardOrigin ? 'provisioned' : (isPaid ? 'paid' : 'pending'),
       recurrent: false,
     });
 
-    if (isPaid) await createPaidTransaction(base44, payable, toDateOnly(body.payment_date), body.origin_id);
+    if (isPaid && !isCardOrigin) await createPaidTransaction(base44, payable, toDateOnly(body.payment_date), body.origin_id);
 
     return Response.json({ status: 'success', type: 'avulsa', payable });
   } catch (error) {

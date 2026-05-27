@@ -61,8 +61,11 @@ Deno.serve(async (req) => {
                     transaction_id: tx.id
                 });
             } else {
+                const pays = await base44.entities.Payable.filter({ id: conciliate_id });
+                const payable = pays && pays.length > 0 ? pays[0] : null;
+                const nextStatus = payable?.origin_type === 'card' ? 'conciliated' : 'paid';
                 await base44.entities.Payable.update(conciliate_id, {
-                    status: 'paid',
+                    status: nextStatus,
                     transaction_id: tx.id
                 });
             }

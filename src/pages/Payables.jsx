@@ -382,7 +382,7 @@ export default function Payables() {
     }).filter(Boolean);
 
     const paidItems = tabItems
-      .filter(p => p.status === 'paid')
+      .filter(p => p.status === 'paid' || p.status === 'conciliated')
       .map((item) => {
         const dueDate = parseItemDate(item.due_date || item.competencia);
         return {
@@ -393,8 +393,8 @@ export default function Payables() {
           dueDateLabel: format(dueDate || new Date(), 'dd/MM', { locale: ptBR }),
           amount: Number(item.amount || 0),
           installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
-          pill: 'paid',
-          pillLabel: 'Pago',
+          pill: item.status === 'conciliated' ? 'paid' : 'paid',
+          pillLabel: item.status === 'conciliated' ? 'Conciliado' : 'Pago',
           style: 'default',
           autoDebit: false,
           canPay: false,

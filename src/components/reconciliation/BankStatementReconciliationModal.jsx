@@ -428,7 +428,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                 notes: 'Pagamento conciliado na mesa',
               });
               await base44.entities.Payable.update(match.id, {
-                status: 'paid',
+                status: match.origin_type === 'card' ? 'conciliated' : 'paid',
                 transaction_id: transaction.id,
               });
             } else if (match.kind === 'receivable') {

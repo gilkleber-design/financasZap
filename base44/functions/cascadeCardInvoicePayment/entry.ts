@@ -1,7 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 // Acionada por automação de entidade quando um Payable com is_card_invoice_payable=true
-// tem seu status alterado para 'paid'. Varre os itens individuais vinculados e marca como 'paid'.
+// tem seu status alterado para 'paid'. Os itens individuais do cartão NÃO viram 'paid':
+// permanecem provisionados até a conciliação da fatura, quando passam a 'conciliated'.
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -48,10 +49,10 @@ Deno.serve(async (req) => {
 
     const provisioned = items.filter(p => p.status === 'provisioned' && !p.is_card_invoice_payable);
 
-    // Atualiza cada item para 'paid'
+    // Atualiza cada item para 'conciliated' mantendo a lógica de cartão
     let updated = 0;
     for (const item of provisioned) {
-      await base44.asServiceRole.entities.Payable.update(item.id, { status: 'paid' });
+      await base44.asServiceRole.entities.Payable.update(item.id, { status: 'conciliated' });
       updated++;
     }
 

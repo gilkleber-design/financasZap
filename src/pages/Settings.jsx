@@ -21,13 +21,14 @@ import InitialBalanceModal from '@/components/settings/InitialBalanceModal';
 export default function Settings() {
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
-  const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: true, rules: false, categories: false });
+  const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: true, hospitals: false, rules: false, categories: false });
 
 
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [showNewSource, setShowNewSource] = useState(false);
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [showNewCard, setShowNewCard] = useState(false);
+  const [showNewHospital, setShowNewHospital] = useState(false);
   const [showInitialBalance, setShowInitialBalance] = useState(false);
 
 
@@ -46,11 +47,13 @@ export default function Settings() {
     name: '', holder_name: '', type: 'credit', bank: '', closing_day: '', due_day: '',
     is_additional: false, principal_card_id: '', assigned_user_id: ''
   });
+  const [hospitalForm, setHospitalForm] = useState({ name: '', sigla: '', income_source_id: '', remuneration_model: 'plantao' });
 
 
   const [editingSourceId, setEditingSourceId] = useState(null);
   const [editingAccountId, setEditingAccountId] = useState(null);
   const [editingCardId, setEditingCardId] = useState(null);
+  const [editingHospitalId, setEditingHospitalId] = useState(null);
 
 
   const setCard = (k, v) => setCardForm((p) => ({ ...p, [k]: v }));
@@ -60,6 +63,7 @@ export default function Settings() {
   const { data: allCards = [] } = useQuery({ queryKey: ['cards'], queryFn: () => base44.entities.Card.list() });
   const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: () => base44.entities.Account.list() });
   const { data: sources = [] } = useQuery({ queryKey: ['income_sources'], queryFn: () => base44.entities.IncomeSource.list() });
+  const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: () => base44.entities.Hospital.list() });
 
 
   const cards = currentUser?.role === 'admin' ? allCards : allCards.filter((c) => !c.assigned_user_id || c.assigned_user_id === currentUser?.id);
@@ -96,6 +100,11 @@ export default function Settings() {
   const upsertSource = useMutation({
     mutationFn: (data) => editingSourceId ? base44.entities.IncomeSource.update(editingSourceId, data) : base44.entities.IncomeSource.create(data),
     onSuccess: () => {queryClient.invalidateQueries();setEditingSourceId(null);setShowNewSource(false);toast.success('Fonte salva!');}
+  });
+
+  const upsertHospital = useMutation({
+    mutationFn: (data) => editingHospitalId ? base44.entities.Hospital.update(editingHospitalId, data) : base44.entities.Hospital.create(data),
+    onSuccess: () => {queryClient.invalidateQueries();setEditingHospitalId(null);setShowNewHospital(false);setHospitalForm({ name: '', sigla: '', income_source_id: '', remuneration_model: 'plantao' });toast.success('Hospital salvo!');}
   });
 
 
@@ -295,7 +304,48 @@ export default function Settings() {
      </Collapsible>
 
 
-     {/* 5. REGRAS & CATEGORIAS */}
+     {/* 5. HOSPITAIS */}
+     <Collapsible open={openSections.hospitals} onOpenChange={() => toggleSection('hospitals')} className="border rounded-xl bg-card shadow-sm">
+       <CollapsibleTrigger asChild>
+         <Button variant="ghost" className="w-full flex justify-between p-4 h-auto text-slate-700 font-bold"><div className="flex items-center gap-2"><Building2 className="w-4 h-4 text-primary" /> Hospitais</div>{openSections.hospitals ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</Button>
+       </CollapsibleTrigger>
+       <CollapsibleContent className="p-4 border-t space-y-4">
+         <div className="flex justify-end"><Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => {setHospitalForm({ name: '', sigla: '', income_source_id: '', remuneration_model: 'plantao' });setShowNewHospital(true)}}><Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Hospital</Button></div>
+         {(showNewHospital || editingHospitalId) &&
+          <div className="p-4 bg-accent/20 rounded-lg space-y-3 border border-primary/10">
+             <div><Label>Nome *</Label><Input value={hospitalForm.name || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, name: e.target.value })} placeholder="Nome do hospital" /></div>
+             <div><Label>Sigla *</Label><Input value={hospitalForm.sigla || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, sigla: e.target.value })} placeholder="Ex: HCB" /></div>
+             <div><Label>Fonte de Renda</Label>
+               <Select value={hospitalForm.income_source_id || ''} onValueChange={(v) => setHospitalForm({ ...hospitalForm, income_source_id: v })}>
+                 <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                 <SelectContent>{sources.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+               </Select>
+             </div>
+             <div><Label>Modelo Remuneração</Label>
+               <Select value={hospitalForm.remuneration_model || 'plantao'} onValueChange={(v) => setHospitalForm({ ...hospitalForm, remuneration_model: v })}>
+                 <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="plantao">Plantão</SelectItem>
+                   <SelectItem value="producao">Produção</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingHospitalId(null);setShowNewHospital(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertHospital.mutate({ ...hospitalForm, active: true })}>Salvar</Button></div>
+           </div>
+          }
+         {hospitals.map((h) =>
+          <div key={h.id} className={`flex items-center justify-between p-3 rounded-lg border ${h.active === false ? 'bg-slate-50 opacity-60' : 'bg-white shadow-sm'}`}>
+             <div className="flex flex-col">
+                <span className="text-sm font-bold">{h.name}</span>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase">{h.sigla} • {h.remuneration_model === 'producao' ? 'Produção' : 'Plantão'}</span>
+             </div>
+             <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingHospitalId(h.id);setHospitalForm(h);setShowNewHospital(true);}}><Pencil className="w-3.5 h-3.5" /></Button><Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteEntity('Hospital', h.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div>
+           </div>
+          )}
+       </CollapsibleContent>
+     </Collapsible>
+
+     {/* 6. REGRAS & CATEGORIAS */}
      <Collapsible open={openSections.rules} onOpenChange={() => toggleSection('rules')} className="border rounded-xl bg-card shadow-sm">
        <CollapsibleTrigger asChild><Button variant="ghost" className="w-full flex justify-between p-4 h-auto text-slate-700 font-bold"><div className="flex items-center gap-2"><Tag className="w-4 h-4 text-primary" /> Regras de Categorização</div>{openSections.rules ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</Button></CollapsibleTrigger>
        <CollapsibleContent className="p-4 border-t"><CategoryRuleManager /></CollapsibleContent>
@@ -308,7 +358,7 @@ export default function Settings() {
      </Collapsible>
 
 
-     {/* 6. WHATSAPP */}
+     {/* 7. WHATSAPP */}
      <Card className="border border-green-200 shadow-sm bg-green-50/30">
        <CardContent className="p-4 flex items-center justify-between">
          <div className="flex items-center gap-3"><MessageSquare className="w-5 h-5 text-green-600" />

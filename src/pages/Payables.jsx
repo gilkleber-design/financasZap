@@ -3,19 +3,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Plus,
   Trash2,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Edit2,
-  Undo2,
   Settings,
   ToggleLeft,
   ToggleRight,
   CreditCard,
+  Bell,
 } from 'lucide-react';
 import { format, isPast, isToday, addMonths, subMonths, isSameDay, addDays, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -36,27 +34,12 @@ import { useCategories } from '@/hooks/useCategories';
 import PayablesOverview, { PAYABLE_SECTION_ICONS } from '@/components/payables/PayablesOverview';
 import DashboardLogo from '@/components/dashboard/DashboardLogo';
 import { getInitials } from '@/components/dashboard/financaszapTheme';
-import { Bell } from 'lucide-react';
 
 const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(v || 0);
-
-const STATUS_LABELS = {
-  pending: 'Pendente',
-  paid: 'Pago',
-  overdue: 'Vencido',
-  provisioned: 'Provisionado',
-};
-
-const STATUS_COLORS = {
-  pending: 'bg-amber-100 text-amber-700',
-  paid: 'bg-emerald-100 text-emerald-700',
-  overdue: 'bg-red-100 text-red-700',
-  provisioned: 'bg-blue-100 text-blue-700',
-};
 
 function RecurrencesTab({ onEdit }) {
   const [showForm, setShowForm] = useState(false);
@@ -276,8 +259,6 @@ export default function Payables() {
     return stored ? new Date(`${stored}-01T12:00:00`) : new Date();
   });
   const [paidSectionOpen, setPaidSectionOpen] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('open');
-  const [filterBy, setFilterBy] = useState('due_date');
   const [creditCardOnly, setCreditCardOnly] = useState(false);
 
   const queryClient = useQueryClient();
@@ -292,47 +273,49 @@ export default function Payables() {
       ? 'AVULSAS'
       : 'TODAS';
 
-  const listStatus =
-    filterStatus === 'open'
-      ? 'EM_ABERTO'
-      : filterStatus === 'overdue'
-      ? 'VENCIDAS'
-      : 'PAGAS';
-
   const monthKey = format(currentMonth, 'yyyy-MM');
 
+  // Backend traz TODAS as contas do mês para que os KPIs e abas funcionem sem engasgos
   const { data: payablesResponse } = useQuery({
-    queryKey: ['payables-list', monthKey, listFilter, listStatus, filterBy, creditCardOnly],
+    queryKey: ['payables-list', monthKey, listFilter],
     queryFn: () =>
       base44.functions.invoke('listPayables', {
         month: monthKey,
         filter: listFilter,
-        status: listStatus,
-        sort: filterBy,
-        creditCardOnly,
+        status: 'TODAS',
       }),
     enabled: viewMode === 'mensal',
   });
 
   const payablesItems = payablesResponse?.data?.items || [];
+  const todayStart = useMemo(() => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 0, 0, 0), []);
 
-  const filtered = creditCardOnly
-    ? payablesItems.filter((p) => p.origin_type === 'card' && p.status !== 'paid')
-    : payablesItems.filter((p) => p.status === 'pending');
-
-  const getStatus = (p) => {
-    if (p.status === 'paid') return 'paid';
-
-    if (
-      p.due_date &&
-      isPast(new Date(p.due_date)) &&
-      !isToday(new Date(p.due_date))
-    ) {
-      return 'overdue';
-    }
-
-    return p.status || 'pending';
+  const parseItemDate = (value) => {
+    if (!value) return null;
+    const normalized = String(value).includes('T') ? String(value) : `${value}T12:00:00`;
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
+
+  // Filtro de listagem instantâneo (ignora pagos para não bagunçar as gavetas)
+  const filtered = useMemo(() => {
+    return payablesItems.filter((p) => {
+      if (p.status === 'paid') return false;
+
+      const isCard = p.origin_type === 'card';
+      const isPending = p.status === 'pending';
+      const isProvisioned = p.status === 'provisioned';
+      const dueDate = parseItemDate(p.due_date || p.competencia);
+      const isOverdue = dueDate && dueDate < todayStart;
+
+      if (creditCardOnly) return isCard && (isPending || isProvisioned);
+      if (activeTab === 'todas') return isPending;
+      if (isCard) return false;
+      if (activeTab === 'parceladas') return isPending && isOverdue;
+
+      return isPending;
+    });
+  }, [payablesItems, activeTab, creditCardOnly, todayStart]);
 
   const totalFiltered = filtered.reduce((s, p) => s + (p.amount || 0), 0);
 
@@ -340,84 +323,91 @@ export default function Payables() {
     localStorage.setItem('contas_mes', format(currentMonth, 'yyyy-MM'));
   }
 
+  // KPIs agora espelham o total do banco (incluindo o que já foi pago)
+  const kpis = useMemo(() => {
+    const baseItems = creditCardOnly ? payablesItems.filter(p => p.origin_type === 'card') : payablesItems;
+
+    return {
+      expected: baseItems.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      paid: baseItems.filter(p => p.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      open: baseItems.filter(p => p.status !== 'paid' && (() => {
+        const date = parseItemDate(p.due_date || p.competencia);
+        return date && date >= todayStart;
+      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      overdue: baseItems.filter(p => p.status !== 'paid' && (() => {
+        const date = parseItemDate(p.due_date || p.competencia);
+        return date && date < todayStart;
+      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    };
+  }, [payablesItems, creditCardOnly, todayStart]);
+
   const urgencySections = useMemo(() => {
     const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
     const tomorrow = addDays(todayStart, 1);
     const weekEnd = endOfWeek(todayStart, { weekStartsOn: 0 });
     const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 12, 0, 0);
 
-    const parseItemDate = (value) => {
-      if (!value) return null;
-      const normalized = String(value).includes('T') ? String(value) : `${value}T12:00:00`;
-      const parsed = new Date(normalized);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    };
+    const mapped = filtered.map((item) => {
+      const dueDate = parseItemDate(item.due_date || item.competencia);
+      if (!dueDate) return null;
+      const isProvisioned = item.status === 'provisioned';
+      const overdue = !isProvisioned && dueDate < todayStart;
+      const autoDebit = item.payment_modality === 'automatic_debit';
+      
+      return {
+        id: item.id,
+        description: item.description,
+        category: item.category,
+        dueDate,
+        dueDateLabel: format(dueDate, 'dd/MM', { locale: ptBR }),
+        amount: Number(item.amount || 0),
+        installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
+        pill: isProvisioned ? 'provisioned' : autoDebit ? 'auto' : overdue ? 'overdue' : 'pending',
+        pillLabel: isProvisioned ? 'Provisionado' : autoDebit ? 'Automático' : overdue ? 'Vencido' : 'Pendente',
+        style: overdue ? 'overdue' : (isSameDay(dueDate, todayStart) || isSameDay(dueDate, tomorrow)) ? 'urgent' : 'default',
+        autoDebit,
+        canPay: true,
+        original: item,
+      };
+    }).filter(Boolean);
 
-    const mapped = filtered
+    const paidItems = payablesItems
+      .filter(p => p.status === 'paid' && (!creditCardOnly || p.origin_type === 'card'))
       .map((item) => {
         const dueDate = parseItemDate(item.due_date || item.competencia);
-        if (!dueDate) return null;
-        const isPaid = item.status === 'paid';
-        const isProvisioned = item.status === 'provisioned';
-        const overdue = !isPaid && !isProvisioned && dueDate < todayStart;
-        const autoDebit = item.payment_modality === 'automatic_debit';
         return {
           id: item.id,
           description: item.description,
           category: item.category,
           dueDate,
-          dueDateLabel: format(dueDate, 'dd/MM', { locale: ptBR }),
+          dueDateLabel: format(dueDate || new Date(), 'dd/MM', { locale: ptBR }),
           amount: Number(item.amount || 0),
           installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
-          pill: isPaid ? 'paid' : isProvisioned ? 'provisioned' : autoDebit ? 'auto' : overdue ? 'overdue' : 'pending',
-          pillLabel: isPaid ? 'Pago' : isProvisioned ? 'Provisionado' : autoDebit ? 'Automático' : overdue ? 'Vencido' : 'Pendente',
-          style: overdue ? 'overdue' : (isSameDay(dueDate, todayStart) || isSameDay(dueDate, tomorrow)) ? 'urgent' : 'default',
-          autoDebit,
-          canPay: !isPaid && !isProvisioned,
+          pill: 'paid',
+          pillLabel: 'Pago',
+          style: 'default',
+          autoDebit: false,
+          canPay: false,
           original: item,
         };
-      })
-      .filter(Boolean);
+      });
 
     if (creditCardOnly) {
       return [
-        { key: 'month', title: 'Cartão de crédito', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.origin_type === 'card' && item.original.status !== 'paid') },
+        { key: 'month', title: 'Cartão de crédito', icon: PAYABLE_SECTION_ICONS.auto, items: mapped },
+        { key: 'paid', title: 'Faturas Pagas', icon: PAYABLE_SECTION_ICONS.paid, items: paidItems, collapsible: true }
       ].filter((section) => section.items.length > 0);
     }
 
     return [
-      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.original.status === 'pending' && item.dueDate < todayStart && !item.autoDebit) },
-      { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => item.original.status === 'pending' && !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
-      { key: 'week', title: 'Esta Semana', icon: PAYABLE_SECTION_ICONS.week, items: mapped.filter((item) => item.original.status === 'pending' && !item.autoDebit && item.dueDate > tomorrow && item.dueDate <= weekEnd) },
-      { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => item.original.status === 'pending' && !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
-      { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.original.status === 'pending' && item.autoDebit) },
-      { key: 'paid', title: 'Pagas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: mapped.filter((item) => item.original.status === 'paid'), collapsible: true },
+      { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.dueDate < todayStart && !item.autoDebit) },
+      { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
+      { key: 'week', title: 'Esta Semana', icon: PAYABLE_SECTION_ICONS.week, items: mapped.filter((item) => !item.autoDebit && item.dueDate > tomorrow && item.dueDate <= weekEnd) },
+      { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
+      { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.autoDebit) },
+      { key: 'paid', title: 'Pagas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: paidItems, collapsible: true },
     ].filter((section) => section.items.length > 0);
-  }, [filtered, currentMonth, creditCardOnly]);
-
-  const kpis = useMemo(() => {
-    const todayStart = new Date(new Date().toDateString());
-    const parseItemDate = (value) => {
-      if (!value) return null;
-      const normalized = String(value).includes('T') ? String(value) : `${value}T12:00:00`;
-      const parsed = new Date(normalized);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    };
-
-    return {
-      expected: filtered.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      paid: 0,
-      open: filtered.filter((item) => item.status === 'pending' && (() => {
-        const date = parseItemDate(item.due_date || item.competencia);
-        return date && date >= todayStart;
-      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      overdue: filtered.filter((item) => item.status === 'pending' && (() => {
-        const date = parseItemDate(item.due_date || item.competencia);
-        return date && date < todayStart;
-      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
-    };
-  }, [filtered]);
+  }, [filtered, payablesItems, currentMonth, creditCardOnly, todayStart]);
 
   const updatePayableMutation = useMutation({
     mutationFn: async ({ payable, updatedData }) => {
@@ -504,23 +494,6 @@ export default function Payables() {
     },
   });
 
-  const undoPaymentMutation = useMutation({
-    mutationFn: async (p) => {
-      if (p.transaction_id) {
-        await base44.entities.Transaction.delete(p.transaction_id);
-      }
-
-      return await base44.entities.Payable.update(p.id, {
-        status: 'pending',
-        transaction_id: null,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payables-list'] });
-      toast.success('Pagamento desfeito.');
-    },
-  });
-
   return (
     <div className="p-6 space-y-6 font-sora text-slate-800">
       <div className="flex items-center justify-between">
@@ -535,11 +508,9 @@ export default function Payables() {
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
               {creditCardOnly
                 ? `Cartão de Crédito · ${fmt(totalFiltered)}`
-                : filterStatus === 'open'
-                ? `Pendentes · ${fmt(totalFiltered)}`
-                : filterStatus === 'overdue'
-                ? `Vencidas · ${fmt(totalFiltered)}`
-                : `Pagas · ${fmt(totalFiltered)}`}
+                : activeTab === 'todas'
+                ? `Total da Seleção · ${fmt(totalFiltered)}`
+                : `${activeTab} · ${fmt(totalFiltered)}`}
             </p>
           ) : (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
@@ -601,8 +572,11 @@ export default function Payables() {
               {['todas', 'fixas', 'parceladas', 'avulsas'].map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white shadow text-primary' : 'text-slate-500 bg-slate-100'}`}
+                  onClick={() => {
+                    setActiveTab(tab);
+                    setCreditCardOnly(false);
+                  }}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab && !creditCardOnly ? 'bg-white shadow text-primary' : 'text-slate-500 bg-slate-100'}`}
                 >
                   {tab}
                 </button>

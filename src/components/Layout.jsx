@@ -24,6 +24,7 @@ const navItems = [
   { path: '/calendario', label: 'Plantões', icon: CalendarDays },
   { path: '/contas-pagar', label: 'Contas', icon: Receipt },
   { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { path: '/revisao-dados', label: 'Revisão', icon: Eye },
 ];
 
 const mobileNavItems = [

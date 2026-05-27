@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
     } else if (status === 'PAGAS') {
       items = payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter) && cardMatches(p, creditCardOnly));
     } else {
-      const realOpen = payables.filter(p => ['pending', 'provisioned'].includes(p.status) && monthMatches(p, month, sortBy) && cardMatches(p, creditCardOnly));
+      const monthItems = payables.filter(p => ['pending', 'provisioned', 'paid', 'conciliated'].includes(p.status) && monthMatches(p, month, sortBy) && cardMatches(p, creditCardOnly));
       const projections = future && filter !== 'PARCELADAS' && filter !== 'AVULSAS'
         ? recurrences
             .filter(r => r.active !== false)
@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
             .map(r => makeProjection(r, month))
         : [];
 
-      items = [...realOpen, ...projections].filter(item => typeMatches(item, filter) && cardMatches(item, creditCardOnly));
+      items = [...monthItems, ...projections].filter(item => typeMatches(item, filter) && cardMatches(item, creditCardOnly));
     }
 
     items.sort((a, b) => {

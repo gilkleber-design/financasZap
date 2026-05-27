@@ -1,215 +1,228 @@
-import { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { 
-  Home, 
-  HandCoins, 
-  CalendarDays, 
-  Receipt, 
-  BarChart3, 
-  Settings, 
-  Menu, 
-  X, 
-  LogOut, 
-  UserCircle, 
-  Plus 
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/lib/AuthContext';
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Bell, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, isPast, isToday } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { base44 } from '@/api/base44Client';
 import DashboardLogo from '@/components/dashboard/DashboardLogo';
+import MonthBalanceCard from '@/components/dashboard/MonthBalanceCard';
+import AttentionCard from '@/components/dashboard/AttentionCard';
+import ReceivablesPipelineCard from '@/components/dashboard/ReceivablesPipelineCard';
+import { getInitials, normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
-const navItems = [
-  { path: '/', label: 'Início', icon: Home },
-  { path: '/recebimentos', label: 'Receb.', icon: HandCoins },
-  { path: '/calendario', label: 'Plantões', icon: CalendarDays },
-  { path: '/contas-pagar', label: 'Contas', icon: Receipt },
-  { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
-];
+const formatMonthKey = (date) => format(date, 'yyyy-MM');
+const formatDateKey = (date) => format(date, 'yyyy-MM-dd');
 
-const mobileNavItems = [
-  { path: '/', label: 'Início', icon: Home },
-  { path: '/recebimentos', label: 'Recebimentos', icon: HandCoins },
-  { path: '/contas-pagar', label: 'Contas', icon: Receipt },
-  { path: '/configuracoes', label: 'Config', icon: Settings },
-];
+export default function DashboardPage() {
+  const now = new Date();
+  
+  // Lógica da saudação dinâmica
+  const horaAtual = now.getHours();
+  const saudacao = horaAtual < 12 ? 'bom dia' : horaAtual < 18 ? 'boa tarde' : 'boa noite';
 
-export default function Layout() {
-  const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
+  const todayKey = formatDateKey(now);
+  const currentMonthKey = formatMonthKey(now);
+  const previousMonthDate = subMonths(now, 1);
+  const pipelineMonths = Array.from({ length: 4 }, (_, index) => subMonths(now, 3 - index));
+
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
+  const { data: transactions = [] } = useQuery({ queryKey: ['dashboard-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
+  const { data: payables = [] } = useQuery({ queryKey: ['dashboard-payables'], queryFn: () => base44.entities.Payable.list('-due_date', 1000) });
+  const { data: receivables = [] } = useQuery({ queryKey: ['dashboard-receivables'], queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
+  const { data: budgets = [] } = useQuery({ queryKey: ['dashboard-budgets'], queryFn: () => base44.entities.Budget.list('-year', 500) });
+  const { data: categories = [] } = useQuery({ queryKey: ['dashboard-categories'], queryFn: () => base44.entities.Category.list('name', 500) });
+  const { data: hospitals = [] } = useQuery({ queryKey: ['dashboard-hospitals'], queryFn: () => base44.entities.Hospital.list('name', 500) });
+
+  const dashboardData = useMemo(() => {
+    const validTransactions = transactions.filter((item) => item.status !== 'ignored' && item.status !== 'diverged');
+
+    const currentMonthTransactions = validTransactions.filter((item) => item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd));
+    const previousMonthRangeStart = formatDateKey(startOfMonth(previousMonthDate));
+    const previousMonthRangeEnd = formatDateKey(endOfMonth(previousMonthDate));
+    const previousMonthTransactions = validTransactions.filter((item) => item.date >= previousMonthRangeStart && item.date <= previousMonthRangeEnd);
+
+    const receivedIncome = currentMonthTransactions
+      .filter((item) => item.type === 'income')
+      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+    const paidExpense = currentMonthTransactions
+      .filter((item) => item.type === 'expense')
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const previousBalance = previousMonthTransactions
+      .filter((item) => item.type === 'income')
+      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0)
+      - previousMonthTransactions
+        .filter((item) => item.type === 'expense')
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    const currentMonthReceivables = receivables.filter((item) => (item.competencia || item.due_date || '').startsWith(currentMonthKey));
+    const toReceive = currentMonthReceivables
+      .filter((item) => item.status !== 'received')
+      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+    const balance = receivedIncome - paidExpense;
+    const variation = previousBalance === 0 ? (balance === 0 ? 0 : 100) : ((balance - previousBalance) / Math.abs(previousBalance)) * 100;
+
+    const overdueReceivables = receivables
+      .filter((item) => item.status !== 'received' && item.due_date && isPast(new Date(`${item.due_date}T12:00:00`)) && !isToday(new Date(`${item.due_date}T12:00:00`)))
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .map((item) => ({
+        ...item,
+        amount: Number(item.net_amount || item.amount || 0),
+        hospital_name: hospitals.find((hospital) => hospital.income_source_id === item.income_source_id)?.name || item.description,
+        competencia_label: item.competencia ? format(new Date(`${item.competencia}T12:00:00`), "MMM/yy", { locale: ptBR }) : 'Sem competência',
+      }));
+
+    const urgentPayables = payables
+      .filter((item) => item.status !== 'paid' && item.status !== 'provisioned' && item.due_date && isPast(new Date(`${item.due_date}T12:00:00`)) || (item.status !== 'paid' && item.status !== 'provisioned' && item.due_date && isToday(new Date(`${item.due_date}T12:00:00`))))
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .map((item) => ({
+        ...item,
+        amount: Number(item.amount || 0),
+        category_slug: item.category || categories.find((category) => category.id === item.category_id)?.slug,
+      }));
+
+    const monthNumber = now.getMonth() + 1;
+    const yearNumber = now.getFullYear();
+    const expenseCategories = categories.filter((item) => item.type === 'expense');
+    const budgetOverruns = expenseCategories.map((category) => {
+      const budget = budgets.find((item) => Number(item.month) === monthNumber && Number(item.year) === yearNumber && item.category_id === category.id);
+      const spent = validTransactions
+        .filter((item) => item.type === 'expense' && item.date >= formatDateKey(monthStart) && item.date <= formatDateKey(monthEnd) && (item.category === category.slug || item.category === category.id))
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const limit = Number(budget?.amount || 0);
+      return { slug: category.slug, name: category.name || normalizeCategoryLabel(category.slug), budget: limit, spent, overrun: spent - limit };
+    }).filter((item) => item.budget > 0 && item.spent > item.budget).sort((a, b) => b.overrun - a.overrun);
+
+    const pipelineMonthHeaders = pipelineMonths.map((date) => ({ key: formatMonthKey(date), label: format(date, 'MMM', { locale: ptBR }).toUpperCase() }));
+
+    const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
+      const hospitalMatchers = [hospital.sigla, hospital.name].filter(Boolean).map((value) => value.toLowerCase());
+      const hospitalReceivables = receivables.filter((item) => {
+        const description = String(item.description || '').toLowerCase();
+        return hospitalMatchers.some((matcher) => description.includes(matcher));
+      });
+
+      const cells = pipelineMonths.map((date) => {
+        const key = formatMonthKey(date);
+        const receivableMatches = hospitalReceivables.filter((item) => (item.competencia || item.due_date || '').slice(0, 7) === key);
+        const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+        const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+        const hasReceived = receivableMatches.some((item) => item.status === 'received');
+        const hasPending = receivableMatches.some((item) => item.status !== 'received');
+        const hasOverdue = receivableMatches.some((item) => item.status === 'overdue' || (item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey));
+        let status = 'futuro';
+        if (hasReceived && !hasPending) status = 'recebido';
+        else if (hasReceived && hasPending) status = 'parcial';
+        else if (!amount) status = 'futuro';
+        else if (hasOverdue) status = 'vencido';
+        else status = 'a_receber';
+        return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
+      });
+
+      const monthsWithValue = new Set(hospitalReceivables.map((item) => (item.competencia || item.due_date || '').slice(0, 7)).filter(Boolean));
+      const recurringScore = monthsWithValue.size >= 2 ? 0 : monthsWithValue.size === 1 ? 1 : 2;
+
+      return { hospitalId: hospital.id, hospitalName: hospital.name, cells, recurringScore };
+    }).sort((a, b) => {
+      if (a.recurringScore !== b.recurringScore) return a.recurringScore - b.recurringScore;
+      return a.hospitalName.localeCompare(b.hospitalName, 'pt-BR');
+    });
+
+    const pipelineTotals = pipelineMonthHeaders.map((month) => {
+      const columnCells = pipelineRows.map((row) => row.cells.find((cell) => cell.key.endsWith(month.key))).filter(Boolean);
+      const amount = columnCells.reduce((sum, cell) => sum + Number(cell.amount || 0), 0);
+      return {
+        key: month.key,
+        amount,
+        hasOverdue: columnCells.some((cell) => cell.status === 'vencido'),
+        allReceived: columnCells.length > 0 && columnCells.every((cell) => cell.status === 'recebido'),
+        allFuture: columnCells.length > 0 && columnCells.every((cell) => cell.status === 'futuro'),
+      };
+    });
+
+    return {
+      balance,
+      receivedIncome,
+      paidExpense,
+      toReceive,
+      variation: Number.isFinite(variation) ? variation : 0,
+      previousMonthLabel: format(previousMonthDate, 'MMMM', { locale: ptBR }),
+      hasActivity: receivedIncome > 0 || paidExpense > 0,
+      overdueReceivables,
+      overdueReceivablesTotal: overdueReceivables.reduce((sum, item) => sum + item.amount, 0),
+      urgentPayables,
+      urgentPayablesTotal: urgentPayables.reduce((sum, item) => sum + item.amount, 0),
+      budgetOverruns,
+      pipelineMonthHeaders,
+      pipelineRows,
+      pipelineTotals,
+      hasHospitals: hospitals.length > 0,
+    };
+  }, [transactions, payables, receivables, budgets, categories, hospitals, todayKey, currentMonthKey, monthStart, monthEnd, previousMonthDate, pipelineMonths]);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      
-      {/* Sidebar Desktop */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 w-14 flex-col items-center bg-[#0D3B66] py-3 text-white">
-        <Link to="/" className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl text-white">
-          <DashboardLogo className="h-10 w-10" />
-        </Link>
-
-        <nav className="flex flex-1 flex-col items-center gap-3">
-          {navItems.map(({ path, label, icon: Icon }) => {
-            const active = location.pathname === path;
-            return (
-              <Link key={path} to={path} className="flex flex-col items-center gap-1 text-center">
-                <span className={cn(
-                  'flex h-14 w-14 items-center justify-center rounded-[10px] transition-colors',
-                  active 
-                    ? 'bg-[rgba(15,163,163,0.25)] text-[#0FA3A3]' 
-                    : 'text-[rgba(255,255,255,0.45)] hover:bg-white/10 hover:text-white'
-                )}>
-                  <Icon className="h-7 w-7" />
-                </span>
-                <span className="text-[7px] font-bold tracking-[0.02em] text-inherit">
-                  {label}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto flex flex-col items-center gap-3">
-          <Link to="/configuracoes" className="flex flex-col items-center gap-1 text-center text-[rgba(255,255,255,0.45)] hover:text-white">
-            <span className={cn(
-              'flex h-14 w-14 items-center justify-center rounded-[10px] transition-colors',
-              location.pathname === '/configuracoes' 
-                ? 'bg-[rgba(15,163,163,0.25)] text-[#0FA3A3]' 
-                : 'hover:bg-white/10'
-            )}>
-              <Settings className="h-7 w-7" />
-            </span>
-          </Link>
-          <button 
-            onClick={() => logout()} 
-            className="flex h-14 w-14 items-center justify-center rounded-[10px] text-[rgba(255,255,255,0.45)] transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <LogOut className="h-7 w-7" />
-          </button>
+    <div className="min-h-screen bg-background pb-24 md:pb-6">
+      <div className="md:hidden bg-sidebar px-4 pb-5 pt-4 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DashboardLogo className="h-7 w-7" />
+            <div className="text-base font-bold"><span>Finanças</span><span className="text-primary">Zap</span></div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative"><Bell className="h-4 w-4" /><span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" /></div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold">{getInitials(me?.full_name)}</div>
+          </div>
         </div>
-      </aside>
-
-      {/* Mobile Top Bar */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar flex items-center justify-between px-4 h-14">
-        <div className="flex items-center gap-2">
-          <DashboardLogo className="w-7 h-7" />
-          <span className="font-sora font-bold text-white text-base">
-            <span>Finanças</span>
-            <span className="text-primary">Zap</span>
-          </span>
+        <div className="mt-4">
+          <p className="text-[11px] text-white/60">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'} — {saudacao}</p>
+          <p className="mt-1 text-sm font-semibold capitalize text-white">{format(now, 'MMMM yyyy', { locale: ptBR })}</p>
         </div>
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="text-white p-1"
-          aria-label="Abrir menu"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-      </header>
+      </div>
 
-      {/* Mobile Side Dock Overlay */}
-      {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex" onClick={() => setMobileOpen(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <aside 
-            className="relative ml-auto flex h-full w-72 flex-col bg-sidebar shadow-2xl" 
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-5 border-b border-sidebar-border">
-              <div className="flex items-center gap-2">
-                <DashboardLogo className="w-8 h-8" />
-                <span className="font-sora font-bold text-white text-base">
-                  <span>Finanças</span>
-                  <span className="text-primary">Zap</span>
-                </span>
-              </div>
-              <button onClick={() => setMobileOpen(false)} className="text-sidebar-foreground/70 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-              {[...navItems, { path: '/configuracoes', label: 'Configurações', icon: Settings }].map(({ path, label, icon: Icon }) => (
-                <Link
-                  key={path}
-                  to={path}
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-150',
-                    location.pathname === path 
-                      ? 'bg-sidebar-primary text-white' 
-                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                  {label}
-                </Link>
-              ))}
-            </nav>
-            
-            <div className="p-4 border-t border-sidebar-border">
-              <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent p-3 mb-2">
-                <UserCircle className="w-8 h-8 text-sidebar-foreground/70 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-white truncate">
-                    {user?.full_name || 'Usuário'}
-                  </p>
-                  <p className="text-[10px] text-sidebar-foreground/50 truncate">
-                    {user?.email || ''}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => logout()} 
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Sair
-              </button>
-            </div>
-          </aside>
+      <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3">
+        <div className="flex items-center gap-3">
+          <DashboardLogo className="h-5 w-5" />
+          <div className="text-lg font-bold"><span className="text-foreground">Finanças</span><span className="text-primary">Zap</span></div>
+          <span className="h-5 w-px bg-border" />
+          <p className="text-sm text-muted-foreground">Olá, Dr. {me?.full_name?.split(' ')[0] || 'Usuário'} — {saudacao}</p>
         </div>
-      )}
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold capitalize text-foreground">{format(now, 'MMMM yyyy', { locale: ptBR })}</span>
+          <div className="relative"><Bell className="h-4 w-4 text-muted-foreground" /><span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" /></div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar text-xs font-bold text-white">{getInitials(me?.full_name)}</div>
+        </div>
+      </div>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-24px)] max-w-sm -translate-x-1/2 items-end justify-between rounded-full border border-border bg-card px-4 py-2 shadow-lg md:hidden">
-        {mobileNavItems.slice(0, 2).map(({ path, label, icon: Icon }) => (
-          <Link 
-            key={path} 
-            to={path} 
-            className={cn(
-              'flex flex-col items-center gap-1 text-[9px] font-semibold', 
-              location.pathname === path ? 'text-primary' : 'text-muted-foreground'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            <span>{label}</span>
-          </Link>
-        ))}
-        
-        {/* Floating Action Button - Transações */}
-        <Link to="/transacoes" className="-mt-6 flex h-11 w-11 items-center justify-center rounded-full bg-sidebar text-white shadow-lg">
-          <Plus className="h-5 w-5" />
-        </Link>
-        
-        {mobileNavItems.slice(2).map(({ path, label, icon: Icon }) => (
-          <Link 
-            key={path} 
-            to={path} 
-            className={cn(
-              'flex flex-col items-center gap-1 text-[9px] font-semibold', 
-              location.pathname === path ? 'text-primary' : 'text-muted-foreground'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            <span>{label}</span>
-          </Link>
-        ))}
-      </nav>
+      <div className="space-y-3 p-4 md:p-4">
+        <div className="grid gap-3 lg:grid-cols-2">
+          <MonthBalanceCard data={dashboardData} />
+          <AttentionCard data={dashboardData} />
+        </div>
+        <ReceivablesPipelineCard
+          months={dashboardData.pipelineMonthHeaders}
+          rows={dashboardData.pipelineRows}
+          totals={dashboardData.pipelineTotals}
+          hasHospitals={dashboardData.hasHospitals}
+        />
+      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 pt-14 md:ml-14 md:pt-0 md:pb-0 pb-20">
-        <Outlet />
-      </main>
-
+      <div className="fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-24px)] max-w-sm -translate-x-1/2 items-end justify-between rounded-full border border-border bg-card px-4 py-2 shadow-lg md:hidden">
+        <BottomItem to="/" label="Início" active />
+        <BottomItem to="/relatorios" label="Relatórios" />
+        <Link to="/transacoes" className="-mt-6 flex h-11 w-11 items-center justify-center rounded-full bg-sidebar text-white shadow-lg"><Plus className="h-5 w-5" /></Link>
+        <BottomItem to="/calendario" label="Calendário" />
+        <BottomItem to="/configuracoes" label="Config" />
+      </div>
     </div>
+  );
+}
+
+function BottomItem({ to, label, active = false }) {
+  return (
+    <Link to={to} className={`flex flex-col items-center gap-1 text-[9px] font-semibold ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+      <span>{label}</span>
+    </Link>
   );
 }

@@ -46,32 +46,43 @@ export default function Recebimentos() {
     const todayKey = format(now, 'yyyy-MM-dd');
     const filteredReceivables = receivables.filter((item) => monthKeys.includes((item.competencia || item.due_date || '').slice(0, 7)));
 
-    const pipelineRows = hospitals.filter((hospital) => hospital.active !== false).map((hospital) => {
-      const hospitalMatchers = [hospital.sigla, hospital.name].filter(Boolean).map((value) => value.toLowerCase());
-      const hospitalReceivables = filteredReceivables.filter((item) => {
-        const description = String(item.description || '').toLowerCase();
-        return hospitalMatchers.some((matcher) => description.includes(matcher));
-      });
+    const pipelineRows = hospitals
+      .filter((hospital) => hospital.active !== false)
+      .map((hospital) => {
+        const hospitalMatchers = [hospital.sigla, hospital.name]
+          .filter(Boolean)
+          .map((value) => String(value).toLowerCase());
 
-      const cells = months.map((date) => {
-        const key = format(date, 'yyyy-MM');
-        const receivableMatches = hospitalReceivables.filter((item) => (item.competencia || item.due_date || '').slice(0, 7) === key);
-        const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-        const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
-        const hasReceived = receivableMatches.some((item) => item.status === 'received');
-        const hasPending = receivableMatches.some((item) => item.status !== 'received');
-        const hasOverdue = receivableMatches.some((item) => item.status === 'overdue' || (item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey));
-        let status = 'futuro';
-        if (hasReceived && !hasPending) status = 'recebido';
-        else if (hasReceived && hasPending) status = 'parcial';
-        else if (!amount) status = 'futuro';
-        else if (hasOverdue) status = 'vencido';
-        else status = 'a_receber';
-        return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
-      });
+        const hospitalReceivables = filteredReceivables.filter((item) => {
+          const description = String(item.description || '').toLowerCase();
+          return hospitalMatchers.some((matcher) => description.includes(matcher));
+        });
 
-      return { hospitalId: hospital.id, hospitalName: hospital.name, cells };
-    }).filter((row) => row.cells.some((cell) => cell.amount > 0));
+        const cells = months.map((date) => {
+          const key = format(date, 'yyyy-MM');
+          const receivableMatches = hospitalReceivables.filter((item) => (item.competencia || item.due_date || '').slice(0, 7) === key);
+          const amount = receivableMatches.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+          const receivedAmount = receivableMatches.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+          const hasReceived = receivableMatches.some((item) => item.status === 'received');
+          const hasPending = receivableMatches.some((item) => item.status !== 'received');
+          const hasOverdue = receivableMatches.some((item) => item.status === 'overdue' || (item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey));
+          let status = 'futuro';
+          if (hasReceived && !hasPending) status = 'recebido';
+          else if (hasReceived && hasPending) status = 'parcial';
+          else if (!amount) status = 'futuro';
+          else if (hasOverdue) status = 'vencido';
+          else status = 'a_receber';
+          return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
+        });
+
+        return {
+          hospitalId: hospital.id,
+          hospitalName: hospital.sigla || hospital.name,
+          cells,
+          hasMovements: cells.some((cell) => cell.amount > 0),
+        };
+      })
+      .sort((a, b) => Number(b.hasMovements) - Number(a.hasMovements) || a.hospitalName.localeCompare(b.hospitalName));
 
     const pipelineTotals = months.map((month) => {
       const key = format(month, 'yyyy-MM');
@@ -195,7 +206,7 @@ export default function Recebimentos() {
           months={months.map((month) => ({ key: format(month, 'yyyy-MM'), label: format(month, 'MMM/yy', { locale: ptBR }).toUpperCase() }))}
           rows={data.pipelineRows}
           totals={data.pipelineTotals}
-          hasHospitals={data.pipelineRows.length > 0}
+          hasHospitals={hospitals.filter((hospital) => hospital.active !== false).length > 0}
         />
 
         <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm">

@@ -1,5 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
+const ALLOWED_VARIANCE = 5.00; // Margem de segurança para valores
+
 const normalizeText = (value) =>
   String(value || '')
     .normalize('NFD')
@@ -9,42 +11,32 @@ const normalizeText = (value) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+// Tokeniza mantendo palavras relevantes
 const tokenize = (value) => normalizeText(value).split(' ').filter((token) => token.length > 2);
 
-const isCloseDate = (baseDate, dueDate) => {
-  if (!baseDate || !dueDate) return false;
-  const base = new Date(`${baseDate}T12:00:00`);
-  const due = new Date(String(dueDate).slice(0, 10) + 'T12:00:00');
-  const diffDays = Math.abs((due.getTime() - base.getTime()) / (1000 * 60 * 60 * 24));
-  return diffDays <= 35;
-};
-
-const scoreOpenItem = ({ item, amount, description, date, originId, originType, kind }) => {
+const scoreOpenItem = ({ item, amount, description, kind }) => {
   const data = item || {};
   let score = 0;
 
   const itemAmount = kind === 'receivable' && data.net_amount ? Number(data.net_amount) : Number(data.amount);
-  if (itemAmount !== Number(amount)) return -1;
-  score += 50;
+  
+  // 1. Verificação de Valor (com margem de erro)
+  const diff = Math.abs(itemAmount - Number(amount));
+  if (diff > ALLOWED_VARIANCE) return -1;
+  score += 60; // Peso alto para o valor
 
+  // 2. Verificação de Descrição (Match parcial inteligente)
   const inputTokens = tokenize(description);
   const itemText = normalizeText(data.description);
+  
   const matchedTokens = inputTokens.filter((token) => itemText.includes(token));
-
-  if (matchedTokens.length === 0) return -1;
-  score += matchedTokens.length * 15;
-
-  if (isCloseDate(date, data.due_date)) score += 20;
-
-  if (originId) {
-    if (kind === 'payable' && data.origin_id === originId) score += 25;
-    if (kind === 'receivable' && data.account_id === originId) score += 25;
+  
+  // Se não houver nenhum match de palavra, penalizamos forte, mas não descartamos imediatamente
+  if (matchedTokens.length === 0) {
+    score -= 30;
+  } else {
+    score += matchedTokens.length * 20;
   }
-
-  if (originType && kind === 'payable' && data.origin_type === originType) score += 15;
-
-  if (data.installment_number) score += 5;
-  if (data.installment_count) score += 5;
 
   return score;
 };
@@ -53,85 +45,35 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
-
-    if (!user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const payload = await req.json();
-    const { amount, description, date, origin_id, origin_type } = payload;
-
-    if (!amount || !description) {
-      return Response.json({ error: 'Missing required fields' }, { status: 400 });
-    }
+    const { amount, description } = payload; // Agora você só precisa enviar esses dois
 
     const [payables, receivables] = await Promise.all([
       base44.entities.Payable.filter({}),
       base44.entities.Receivable.filter({}),
     ]);
 
-    const openPayables = payables.filter((item) => {
-      const status = item?.status;
-      return status === 'pending' || status === 'provisioned';
-    });
-
-    const openReceivables = receivables.filter((item) => item?.status === 'pending');
-
     const ranked = [
-      ...openPayables.map((item) => ({
+      ...payables.filter(i => ['pending', 'provisioned'].includes(i?.status)).map((item) => ({
         kind: 'payable',
         item,
-        score: scoreOpenItem({
-          item,
-          amount,
-          description,
-          date,
-          originId: origin_id,
-          originType: origin_type,
-          kind: 'payable',
-        }),
+        score: scoreOpenItem({ item, amount, description, kind: 'payable' }),
       })),
-      ...openReceivables.map((item) => ({
+      ...receivables.filter(i => i?.status === 'pending').map((item) => ({
         kind: 'receivable',
         item,
-        score: scoreOpenItem({
-          item,
-          amount,
-          description,
-          date,
-          originId: origin_id,
-          originType: origin_type,
-          kind: 'receivable',
-        }),
+        score: scoreOpenItem({ item, amount, description, kind: 'receivable' }),
       })),
     ]
-      .filter((item) => item.score >= 70)
+      .filter((item) => item.score > 40) // Filtra apenas o que tem pontuação aceitável
       .sort((a, b) => b.score - a.score);
 
-    const matches = ranked.map(({ kind, item, score }) => ({
-      id: item.id,
-      match_type: kind,
-      score,
-      description: item.description || '',
-      amount: kind === 'receivable' && item.net_amount ? item.net_amount : (item.amount || 0),
-      gross_amount: kind === 'receivable' ? (item.amount || 0) : null,
-      due_date: item.due_date || null,
-      status: item.status || null,
-      installment_number: item.installment_number || null,
-      installment_count: item.installment_count || null,
-      origin_id: kind === 'payable' ? (item.origin_id || null) : (item.account_id || null),
-      origin_type: kind === 'payable' ? (item.origin_type || null) : 'account',
-      category: item.category || null,
-      category_id: item.category_id || null,
-      account_id: item.account_id || null,
-      income_source_id: item.income_source_id || null,
-    }));
-
-    return Response.json({
-      success: true,
-      found: matches.length > 0,
-      best_match: matches[0] || null,
-      matches,
+    return Response.json({ 
+      success: true, 
+      best_match: ranked[0] || null, 
+      matches: ranked 
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

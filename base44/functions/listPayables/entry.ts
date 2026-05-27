@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     } else if (status === 'PAGAS') {
       items = payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter));
     } else {
-      const realOpen = payables.filter(p => p.status === 'pending' && monthMatches(p, month, sortBy));
+      const realOpen = payables.filter(p => ['pending', 'provisioned'].includes(p.status) && monthMatches(p, month, sortBy));
       const projections = future && filter !== 'PARCELADAS' && filter !== 'AVULSAS'
         ? recurrences
             .filter(r => r.active !== false)

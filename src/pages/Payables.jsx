@@ -302,7 +302,7 @@ export default function Payables() {
   const monthKey = format(currentMonth, 'yyyy-MM');
 
   const { data: payablesResponse } = useQuery({
-    queryKey: ['payables-list', monthKey, listFilter, listStatus, filterBy],
+    queryKey: ['payables-list', monthKey, listFilter, listStatus, filterBy, creditCardOnly],
     queryFn: () =>
       base44.functions.invoke('listPayables', {
         month: monthKey,
@@ -532,12 +532,13 @@ export default function Payables() {
 
           {viewMode === 'mensal' ? (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
-              {filterStatus === 'open'
+              {creditCardOnly
+                ? `Cartão de Crédito · ${fmt(totalFiltered)}`
+                : filterStatus === 'open'
                 ? `Pendentes · ${fmt(totalFiltered)}`
                 : filterStatus === 'overdue'
                 ? `Vencidas · ${fmt(totalFiltered)}`
                 : `Pagas · ${fmt(totalFiltered)}`}
-              {creditCardOnly ? ' · Cartão de Crédito' : ''}
             </p>
           ) : (
             <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">

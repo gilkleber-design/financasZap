@@ -31,13 +31,17 @@ export default function ReviewTable({ title, columns, rows, getColumnOptions, on
                   <tr key={row.id} className="border-b border-border last:border-0">
                     {columns.map((column) => (
                       <td key={column.key} className="px-4 py-3 align-top text-foreground">
-                        <EditableReviewCell
-                          column={column}
-                          row={row}
-                          options={getColumnOptions?.(column, row) || []}
-                          onChange={onCellChange}
-                          isSaving={savingCellKey === `${row.id}:${column.key}`}
-                        />
+                        {column.render ? (
+                          column.render(row)
+                        ) : (
+                          <EditableReviewCell
+                            column={column}
+                            row={row}
+                            options={getColumnOptions?.(column, row) || []}
+                            onChange={onCellChange}
+                            isSaving={savingCellKey === `${row.id}:${column.key}`}
+                          />
+                        )}
                       </td>
                     ))}
                   </tr>

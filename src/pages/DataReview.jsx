@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import ReviewFilters from '@/components/data-review/ReviewFilters';
 import ReviewTable from '@/components/data-review/ReviewTable';
@@ -158,6 +160,17 @@ export default function DataReview() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (row) => {
+      const entityApi = base44.entities[currentConfig.entityName];
+      return entityApi.delete(row.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: currentConfig.queryKey });
+      toast.success('Registro excluído.');
+    },
+  });
+
   const getColumnOptions = (column) => {
     if (column.key === 'category') {
       return flatForSelect.map((item) => ({ value: item.value, label: item.label }));
@@ -212,6 +225,10 @@ export default function DataReview() {
     updateMutation.mutate({ row, column, value });
   };
 
+  const handleDelete = (row) => {
+    deleteMutation.mutate(row);
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm md:flex-row md:items-end md:justify-between">
@@ -247,7 +264,24 @@ export default function DataReview() {
       ) : (
         <ReviewTable
           title={currentConfig.title}
-          columns={currentConfig.columns}
+          columns={[
+            ...currentConfig.columns,
+            {
+              key: 'actions',
+              label: 'Ações',
+              render: (row) => (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-red-500 hover:text-red-700"
+                  onClick={() => handleDelete(row)}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              ),
+            },
+          ]}
           rows={filteredRows}
           getColumnOptions={getColumnOptions}
           onCellChange={handleCellChange}

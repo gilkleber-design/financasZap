@@ -42,8 +42,8 @@ export default function Layout() {
       
       {/* Sidebar Desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 w-14 flex-col items-center bg-[#0D3B66] py-3 text-white">
-        <Link to="/" className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-white">
-          <DashboardLogo className="h-8 w-8" />
+        <Link to="/" className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl text-white">
+          <DashboardLogo className="h-10 w-10" />
         </Link>
 
         <nav className="flex flex-1 flex-col items-center gap-3">
@@ -52,12 +52,12 @@ export default function Layout() {
             return (
               <Link key={path} to={path} className="flex flex-col items-center gap-1 text-center">
                 <span className={cn(
-                  'flex h-12 w-12 items-center justify-center rounded-[10px] transition-colors',
+                  'flex h-14 w-14 items-center justify-center rounded-[10px] transition-colors',
                   active 
                     ? 'bg-[rgba(15,163,163,0.25)] text-[#0FA3A3]' 
                     : 'text-[rgba(255,255,255,0.45)] hover:bg-white/10 hover:text-white'
                 )}>
-                  <Icon className="h-6 w-6" />
+                  <Icon className="h-7 w-7" />
                 </span>
                 <span className="text-[7px] font-bold tracking-[0.02em] text-inherit">
                   {label}
@@ -70,19 +70,19 @@ export default function Layout() {
         <div className="mt-auto flex flex-col items-center gap-3">
           <Link to="/configuracoes" className="flex flex-col items-center gap-1 text-center text-[rgba(255,255,255,0.45)] hover:text-white">
             <span className={cn(
-              'flex h-12 w-12 items-center justify-center rounded-[10px] transition-colors',
+              'flex h-14 w-14 items-center justify-center rounded-[10px] transition-colors',
               location.pathname === '/configuracoes' 
                 ? 'bg-[rgba(15,163,163,0.25)] text-[#0FA3A3]' 
                 : 'hover:bg-white/10'
             )}>
-              <Settings className="h-6 w-6" />
+              <Settings className="h-7 w-7" />
             </span>
           </Link>
           <button 
             onClick={() => logout()} 
-            className="flex h-12 w-12 items-center justify-center rounded-[10px] text-[rgba(255,255,255,0.45)] transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-14 w-14 items-center justify-center rounded-[10px] text-[rgba(255,255,255,0.45)] transition-colors hover:bg-white/10 hover:text-white"
           >
-            <LogOut className="h-6 w-6" />
+            <LogOut className="h-7 w-7" />
           </button>
         </div>
       </aside>

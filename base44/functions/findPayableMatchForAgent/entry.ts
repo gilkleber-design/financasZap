@@ -19,24 +19,29 @@ const isCloseDate = (baseDate, dueDate) => {
   return diffDays <= 35;
 };
 
-const scorePayable = ({ payable, amount, description, date, originId, originType }) => {
-  const data = payable || {};
+const scoreOpenItem = ({ item, amount, description, date, originId, originType, kind }) => {
+  const data = item || {};
   let score = 0;
 
-  if (Number(data.amount) !== Number(amount)) return -1;
+  const itemAmount = kind === 'receivable' && data.net_amount ? Number(data.net_amount) : Number(data.amount);
+  if (itemAmount !== Number(amount)) return -1;
   score += 50;
 
   const inputTokens = tokenize(description);
-  const payableText = normalizeText(data.description);
-  const matchedTokens = inputTokens.filter((token) => payableText.includes(token));
+  const itemText = normalizeText(data.description);
+  const matchedTokens = inputTokens.filter((token) => itemText.includes(token));
 
   if (matchedTokens.length === 0) return -1;
   score += matchedTokens.length * 15;
 
   if (isCloseDate(date, data.due_date)) score += 20;
 
-  if (originId && data.origin_id === originId) score += 25;
-  if (originType && data.origin_type === originType) score += 15;
+  if (originId) {
+    if (kind === 'payable' && data.origin_id === originId) score += 25;
+    if (kind === 'receivable' && data.account_id === originId) score += 25;
+  }
+
+  if (originType && kind === 'payable' && data.origin_type === originType) score += 15;
 
   if (data.installment_number) score += 5;
   if (data.installment_count) score += 5;
@@ -60,40 +65,66 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const payables = await base44.entities.Payable.filter({});
+    const [payables, receivables] = await Promise.all([
+      base44.entities.Payable.filter({}),
+      base44.entities.Receivable.filter({}),
+    ]);
+
     const openPayables = payables.filter((item) => {
       const status = item?.status;
       return status === 'pending' || status === 'provisioned';
     });
 
-    const ranked = openPayables
-      .map((payable) => ({
-        payable,
-        score: scorePayable({
-          payable,
+    const openReceivables = receivables.filter((item) => item?.status === 'pending');
+
+    const ranked = [
+      ...openPayables.map((item) => ({
+        kind: 'payable',
+        item,
+        score: scoreOpenItem({
+          item,
           amount,
           description,
           date,
           originId: origin_id,
           originType: origin_type,
+          kind: 'payable',
         }),
-      }))
+      })),
+      ...openReceivables.map((item) => ({
+        kind: 'receivable',
+        item,
+        score: scoreOpenItem({
+          item,
+          amount,
+          description,
+          date,
+          originId: origin_id,
+          originType: origin_type,
+          kind: 'receivable',
+        }),
+      })),
+    ]
       .filter((item) => item.score >= 70)
       .sort((a, b) => b.score - a.score);
 
-    const matches = ranked.map(({ payable, score }) => ({
-      id: payable.id,
+    const matches = ranked.map(({ kind, item, score }) => ({
+      id: item.id,
+      match_type: kind,
       score,
-      description: payable.description || '',
-      amount: payable.amount || 0,
-      due_date: payable.due_date || null,
-      status: payable.status || null,
-      installment_number: payable.installment_number || null,
-      installment_count: payable.installment_count || null,
-      origin_id: payable.origin_id || null,
-      origin_type: payable.origin_type || null,
-      category: payable.category || null,
-      category_id: payable.category_id || null,
+      description: item.description || '',
+      amount: kind === 'receivable' && item.net_amount ? item.net_amount : (item.amount || 0),
+      gross_amount: kind === 'receivable' ? (item.amount || 0) : null,
+      due_date: item.due_date || null,
+      status: item.status || null,
+      installment_number: item.installment_number || null,
+      installment_count: item.installment_count || null,
+      origin_id: kind === 'payable' ? (item.origin_id || null) : (item.account_id || null),
+      origin_type: kind === 'payable' ? (item.origin_type || null) : 'account',
+      category: item.category || null,
+      category_id: item.category_id || null,
+      account_id: item.account_id || null,
+      income_source_id: item.income_source_id || null,
     }));
 
     return Response.json({

@@ -28,10 +28,10 @@ function dueDateForMonth(monthKey, dueDay) {
 }
 
 function typeMatches(item, filter) {
-  if (filter === 'FIXAS') return !!item.recurrence_id || !!item.recurrent;
-  if (filter === 'PARCELADAS') return !!item.installment_group_id;
-  if (filter === 'AVULSAS') return !item.recurrence_id && !item.recurrent && !item.installment_group_id;
-  return true;
+  if (filter === 'FIXAS') return (!!item.recurrence_id || !!item.recurrent) && item.status === 'pending';
+  if (filter === 'PARCELADAS') return !!item.installment_group_id && item.status === 'pending' && toDateOnly(item.due_date) < todayKey();
+  if (filter === 'AVULSAS') return !item.recurrence_id && !item.recurrent && !item.installment_group_id && item.status === 'pending';
+  return item.status === 'pending';
 }
 
 function monthMatches(item, month, sortBy) {
@@ -112,11 +112,11 @@ Deno.serve(async (req) => {
     let items = [];
 
     if (status === 'VENCIDAS') {
-      items = payables.filter(p => p.status !== 'paid' && toDateOnly(p.due_date) < todayKey() && typeMatches(p, filter));
+      items = payables.filter(p => p.status === 'pending' && toDateOnly(p.due_date) < todayKey() && typeMatches(p, filter));
     } else if (status === 'PAGAS') {
       items = payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter));
     } else {
-      const realOpen = payables.filter(p => ['pending', 'provisioned'].includes(p.status) && monthMatches(p, month, sortBy));
+      const realOpen = payables.filter(p => p.status === 'pending' && monthMatches(p, month, sortBy));
       const projections = future && filter !== 'PARCELADAS' && filter !== 'AVULSAS'
         ? recurrences
             .filter(r => r.active !== false)

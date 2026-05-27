@@ -316,7 +316,7 @@ export default function Payables() {
   const payablesItems = payablesResponse?.data?.items || [];
 
   const filtered = creditCardOnly
-    ? payablesItems.filter((p) => p.origin_type === 'card' || !!p.installment_group_id)
+    ? payablesItems.filter((p) => p.origin_type === 'card')
     : payablesItems;
 
   const getStatus = (p) => {
@@ -588,17 +588,19 @@ export default function Payables() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {['todas', 'fixas', 'parceladas', 'avulsas'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white shadow text-primary' : 'text-slate-500 bg-slate-100'}`}
-              >
-                {tab}
-              </button>
-            ))}
-            <Button variant={creditCardOnly ? 'secondary' : 'outline'} size="sm" onClick={() => setCreditCardOnly((prev) => !prev)} className="text-[10px] font-black uppercase h-7 tracking-tighter">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              {['todas', 'fixas', 'parceladas', 'avulsas'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === tab ? 'bg-white shadow text-primary' : 'text-slate-500 bg-slate-100'}`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+            <Button variant={creditCardOnly ? 'secondary' : 'outline'} size="sm" onClick={() => setCreditCardOnly((prev) => !prev)} className="text-[10px] font-black uppercase h-7 tracking-tighter ml-auto">
               <CreditCard className="w-3 h-3 mr-1" /> Cartão de Crédito
             </Button>
           </div>

@@ -21,13 +21,13 @@ Deno.serve(async (req) => {
 
         const isAccount = origin_type === 'account';
         const isCard = origin_type === 'card';
-        const safeType = type === 'receipt' ? 'income' : type; // defensive fallback
+        const safeType = type === 'receipt' ? 'income' : type;
+        const actualAmount = Number(amount);
 
-        // Create transaction with proper reconciliation status
         const txData = {
             description,
-            amount,
-            net_amount: amount,
+            amount: actualAmount,
+            net_amount: actualAmount,
             type: safeType,
             category: category || undefined,
             date: date || new Date().toISOString().split('T')[0],
@@ -39,34 +39,46 @@ Deno.serve(async (req) => {
             notes: notes || 'Gerado via Assistente'
         };
 
+        let predictedAmount = null;
+        let conciliationRecord = null;
+
         if (conciliate_id) {
             if (safeType === 'income') {
-                txData.receivable_id = conciliate_id;
                 const recs = await base44.entities.Receivable.filter({ id: conciliate_id });
-                if (recs && recs.length > 0) txData.description = recs[0].description;
+                conciliationRecord = recs?.[0] || null;
+                if (conciliationRecord) {
+                    txData.description = conciliationRecord.description;
+                    predictedAmount = Number(conciliationRecord.net_amount ?? conciliationRecord.amount);
+                }
+                txData.receivable_id = conciliate_id;
             } else {
-                txData.payable_id = conciliate_id;
                 const pays = await base44.entities.Payable.filter({ id: conciliate_id });
-                if (pays && pays.length > 0) txData.description = pays[0].description;
+                conciliationRecord = pays?.[0] || null;
+                if (conciliationRecord) {
+                    txData.description = conciliationRecord.description;
+                    predictedAmount = Number(conciliationRecord.amount);
+                }
+                txData.payable_id = conciliate_id;
             }
         }
 
         const tx = await base44.entities.Transaction.create(txData);
 
-        // Auto-update conciliation target if ID was provided
         if (conciliate_id) {
+            const amountChanged = predictedAmount !== null && predictedAmount !== actualAmount;
+
             if (safeType === 'income') {
                 await base44.entities.Receivable.update(conciliate_id, {
                     status: 'received',
-                    transaction_id: tx.id
+                    transaction_id: tx.id,
+                    ...(amountChanged && { net_amount: actualAmount, amount: actualAmount }),
                 });
             } else {
-                const pays = await base44.entities.Payable.filter({ id: conciliate_id });
-                const payable = pays && pays.length > 0 ? pays[0] : null;
-                const nextStatus = payable?.origin_type === 'card' ? 'conciliated' : 'paid';
+                const nextStatus = conciliationRecord?.origin_type === 'card' ? 'conciliated' : 'paid';
                 await base44.entities.Payable.update(conciliate_id, {
                     status: nextStatus,
-                    transaction_id: tx.id
+                    transaction_id: tx.id,
+                    ...(amountChanged && { amount: actualAmount }),
                 });
             }
         }
@@ -91,6 +103,8 @@ Deno.serve(async (req) => {
                 amount: tx.amount,
                 description: tx.description,
                 status: tx.status,
+                predicted_amount: predictedAmount,
+                amount_updated: predictedAmount !== null && predictedAmount !== actualAmount,
             }
         });
     } catch (error) {

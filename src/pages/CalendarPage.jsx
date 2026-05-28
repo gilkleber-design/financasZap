@@ -285,18 +285,18 @@ export default function CalendarPage() {
       const plantaoCategory = categories?.[0] || null;
       const rec = await createReceivableMutation.mutateAsync({
         description: label,
-        amount: isPdt ? 0 : totalBruto,
-        net_amount: isPdt ? 0 : total,
+        amount: totalBruto,
+        net_amount: total,
         due_date: format(dueDate, 'yyyy-MM-dd'),
         competencia: format(startOfMonth(new Date(hshifts[0].date + 'T12:00:00')), 'yyyy-MM-dd'),
         income_source_id: hospital.income_source_id || source?.id || '',
         hospital_id: hospital?.id,
         category: 'plantoes',
         category_id: plantaoCategory?.id,
-        tax_rate: isPdt ? 0 : (taxRate || 0),
+        tax_rate: taxRate || 0,
         status: 'pending',
         notes: isPdt
-          ? `PDT — aguardando valor (${hshifts.length} plantão(s))`
+          ? `PDT — valor estimado (${hshifts.length} plantão(s))`
           : `Fechamento automático: ${hshifts.length} plantão(s)`,
       });
 

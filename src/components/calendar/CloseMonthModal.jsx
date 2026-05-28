@@ -391,7 +391,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                       }`}>
                         {r.label}
                         {r.isExtra && <span className="ml-2 text-xs font-normal text-violet-600">(Receita Extra)</span>}
-                        {r.isPdt && <span className="ml-2 text-xs font-normal text-blue-600">(PDT — aguarda valor)</span>}
+                        {r.isPdt && <span className="ml-2 text-xs font-normal text-blue-600">(PDT Estimado)</span>}
                       </p>
                       <p className={`text-xs mt-0.5 ${
                         r.isExtra ? 'text-violet-600' : r.isPdt ? 'text-blue-600' : r.isProducao ? 'text-purple-600' : 'text-emerald-600'
@@ -404,12 +404,12 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                     </div>
                     <div className="text-right">
                       <p className={`text-base font-bold ${
-                        r.isExtra ? 'text-violet-700' : r.isPdt ? 'text-blue-400' : r.isProducao ? 'text-purple-700' : 'text-emerald-700'
+                        r.isExtra ? 'text-violet-700' : r.isPdt ? 'text-blue-700' : r.isProducao ? 'text-purple-700' : 'text-emerald-700'
                       }`}>
-                        {r.isPdt ? 'R$ —' : fmt(r.total)}
+                        {fmt(r.total)}
                       </p>
-                      {r.taxRate > 0 && !r.isPdt && (
-                        <p className={`text-xs ${r.isExtra ? 'text-violet-500' : r.isProducao ? 'text-purple-500' : 'text-emerald-500'}`}>{fmt(r.totalBruto)} bruto</p>
+                      {r.taxRate > 0 && (
+                        <p className={`text-xs ${r.isExtra ? 'text-violet-500' : r.isPdt ? 'text-blue-500' : r.isProducao ? 'text-purple-500' : 'text-emerald-500'}`}>{fmt(r.totalBruto)} bruto</p>
                       )}
                     </div>
                   </div>

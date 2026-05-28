@@ -11,7 +11,7 @@ import { resolveHospitalPaymentModel } from '@/lib/shifts';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-const kindLabel = { regular: '🫐 Regular', extra: '🍌 Extra', sobreaviso: '🍅 Sobreaviso' };
+const kindLabel = { regular: 'Regular', extra: 'Extra', sobreaviso: 'Sobreaviso' };
 const kindColor = {
   regular: 'bg-blue-100 text-blue-700',
   extra: 'bg-yellow-100 text-yellow-700',
@@ -22,10 +22,12 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(null); // { count, total }
   const [statuses, setStatuses] = useState(() =>
-    Object.fromEntries(shifts.map(s => [
-      s.id,
-      (s.status === 'cancelled' || s.status === 'passed' || s.shift_kind === 'avista') ? s.status : 'done'
-    ]))
+    Object.fromEntries(shifts.map(s => {
+      let st = 'done';
+      if (s.status === 'cancelled' || s.status === 'passed') st = 'cancelled'; // Trata passed como cancelled visualmente no checkbox
+      else if (s.shift_kind === 'avista') st = 'avista';
+      return [s.id, st];
+    }))
   );
   const [extraIncomes, setExtraIncomes] = useState([]);
   const [showExtraForm, setShowExtraForm] = useState(false);
@@ -310,7 +312,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
 
           {/* Lista de plantões — excluindo os "à vista" que já têm recebível próprio e os já passados */}
           <div className="space-y-2">
-            {shifts.filter(s => s.shift_kind !== 'avista' && s.status !== 'passed').map(s => {
+            {shifts.filter(s => s.shift_kind !== 'avista').map(s => {
               const hospital = hospitals.find(h => h.id === s.hospital_id);
               const source = sources.find(src => src.id === hospital?.income_source_id);
               const taxRate = source?.default_tax_rate || 0;
@@ -337,8 +339,14 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{hospital?.sigla}</span>
                       <Badge className={`text-xs py-0 h-4 px-1.5 border-0 ${kindColor[s.shift_kind] || 'bg-gray-100 text-gray-600'}`}>
-                        {isProducao ? 'Produção' : `${s.type} ${kindLabel[s.shift_kind]}`}
+                        {isProducao ? 'Produção' : `${s.type} ${kindLabel[s.shift_kind] || s.shift_kind}`}
                       </Badge>
+                      {s.is_turno && (
+                        <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-slate-100 text-slate-700">Turno</Badge>
+                      )}
+                      {s.status === 'passed' && (
+                        <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-purple-100 text-purple-700">Passado</Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {format(new Date(s.date + 'T12:00:00'), "dd/MM/yyyy (EEEE)", { locale: ptBR })}

@@ -117,9 +117,16 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
           <div className="bg-muted/30 rounded-xl p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-base">{hospital?.sigla} — {hospital?.name}</span>
-              <Badge className={`text-xs border ${kindColor[shift.shift_kind] || 'bg-gray-100 text-gray-600'}`}>
-                {shift.type} {kindLabel[shift.shift_kind] || shift.shift_kind}
-              </Badge>
+              <div className="flex items-center gap-1">
+                {shift.is_turno && (
+                  <Badge className="text-[10px] uppercase tracking-wider bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200">
+                    Turno
+                  </Badge>
+                )}
+                <Badge className={`text-xs border ${kindColor[shift.shift_kind] || 'bg-gray-100 text-gray-600'}`}>
+                  {shift.type} {kindLabel[shift.shift_kind] || shift.shift_kind}
+                </Badge>
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>

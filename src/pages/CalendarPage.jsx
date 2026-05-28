@@ -408,10 +408,15 @@ export default function CalendarPage() {
                       <div
                         key={s.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
-                        className={`text-xs px-1.5 py-0.5 rounded border truncate cursor-pointer hover:opacity-80 ${displayStyle}`}
+                        className={`text-xs px-1.5 py-0.5 rounded border truncate flex items-center justify-between cursor-pointer hover:opacity-80 ${displayStyle}`}
                       >
-                        {h?.sigla} {s.type}
-                        {s.status === 'passed' && ' ↗'}
+                        <span className="truncate">
+                          {h?.sigla} {s.type}
+                          {s.status === 'passed' && ' ↗'}
+                        </span>
+                        {s.is_turno && styleKey !== 'cancelled' && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-500/50 flex-shrink-0 ml-1" title="Turno (meio plantão)" />
+                        )}
                       </div>
                     );
                   })}
@@ -439,6 +444,7 @@ export default function CalendarPage() {
       <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-purple-200 border border-purple-300" /><span>Produção</span></div>
       <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-200 border border-green-300" /><span>À Vista</span></div>
       <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300 border border-gray-400" /><span>Cancelado / Passado</span></div>
+      <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-500/50" /><span>Turno</span></div>
       </div>
 
       {(selectedDate || editingShift) && (

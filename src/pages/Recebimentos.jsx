@@ -57,13 +57,11 @@ export default function Recebimentos() {
           .map((value) => String(value).trim().toLowerCase());
 
         const hospitalReceivables = filteredReceivables.filter((item) => {
+          // 1) Amarração direta por hospital_id (novos receivables)
+          if (item.hospital_id) return item.hospital_id === hospital.id;
+          // 2) Fallback para receivables antigos sem hospital_id: casar por sigla/nome na descrição
           const description = String(item.description || '').trim().toLowerCase();
-          return hospitalMatchers.some((matcher) => {
-            if (!matcher) return false;
-            const escapedMatcher = matcher.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const pattern = new RegExp(`(^|[^a-z0-9])${escapedMatcher}([^a-z0-9]|$)`);
-            return pattern.test(description);
-          });
+          return hospitalMatchers.some((matcher) => description.includes(matcher));
         });
 
         const cells = months.map((date) => {

@@ -22,7 +22,7 @@ import InitialBalanceModal from '@/components/settings/InitialBalanceModal';
 export default function Settings() {
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
-  const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: true, hospitals: false, rules: false, categories: false });
+  const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: false, hospitals: false, rules: false, categories: false });
 
 
   const [showInviteForm, setShowInviteForm] = useState(false);

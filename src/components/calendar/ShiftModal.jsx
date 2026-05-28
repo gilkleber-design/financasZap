@@ -18,22 +18,25 @@ const kindStyle = {
   sobreaviso: 'border-red-300 bg-red-50 text-red-800',
 };
 
-export default function ShiftModal({ date, hospitals, sources = [], existingShifts = [], onSave, onClose, onCancelShift }) {
-  const [hospitalId, setHospitalId] = useState('');
-  const [shiftType, setShiftType] = useState('SD');
-  const [shiftKind, setShiftKind] = useState('regular');
+export default function ShiftModal({ date, hospitals, sources = [], existingShifts = [], editingShift = null, onSave, onUpdateScope, onClose, onCancelShift }) {
+  const [hospitalId, setHospitalId] = useState(editingShift?.hospital_id || '');
+  const [shiftType, setShiftType] = useState(editingShift?.type || 'SD');
+  const [shiftKind, setShiftKind] = useState(editingShift?.shift_kind || 'regular');
   const [repeat, setRepeat] = useState('none');
-  const [isAvista, setIsAvista] = useState(false);
-  const [isTurno, setIsTurno] = useState(false);
-  const [valorProducao, setValorProducao] = useState('');
-  const [notes, setNotes] = useState('');
+  const [isAvista, setIsAvista] = useState(editingShift?.is_avista || false);
+  const [isTurno, setIsTurno] = useState(editingShift?.is_turno || false);
+  const [valorProducao, setValorProducao] = useState(editingShift?.valor_producao || '');
+  const [notes, setNotes] = useState(editingShift?.notes || '');
+  const [editScope, setEditScope] = useState(null);
 
+  const shiftDate = editingShift ? editingShift.date : date;
+  
   const hospital = hospitals.find(h => h.id === hospitalId);
   const source = hospital ? sources.find(s => s.id === hospital.income_source_id) : null;
   const paymentModel = resolveHospitalPaymentModel(hospital);
   const isSoProducao = paymentModel === 'so_producao';
   const valueResult = hospital
-    ? calculateShiftValue({ hospital, shiftDate: date, type: shiftType, isTurno, valorProducao })
+    ? calculateShiftValue({ hospital, shiftDate: shiftDate, type: shiftType, isTurno, valorProducao })
     : { value: null, error: null };
   const bruto = valueResult.value;
   const liquido = bruto != null ? calcLiquido(bruto, source) : null;
@@ -41,8 +44,26 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
 
   const activeShifts = existingShifts.filter(s => s.status !== 'cancelled');
 
+  const submitEdit = (scope) => {
+    const updatedData = {
+      hospital_id: hospitalId,
+      type: shiftType,
+      shift_kind: shiftKind,
+      is_avista: isAvista,
+      is_turno: isTurno,
+      valor_producao: isSoProducao ? Number(valorProducao) : null,
+      notes,
+    };
+    onUpdateScope(editingShift, updatedData, scope, hospital);
+  };
+
   const handleSave = () => {
     if (!hospitalId || valueResult.error || bruto == null) return;
+
+    if (editingShift) {
+      setEditScope('ask');
+      return;
+    }
 
     const shifts = [];
     const base = {
@@ -77,12 +98,31 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
     onSave(shifts, { isAvista, hospital, source, bruto, liquido, taxRate, date });
   };
 
+  if (editScope === 'ask') {
+    return (
+      <Dialog open onOpenChange={onClose}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Como deseja salvar as alterações?</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 py-4">
+            <Button variant="outline" onClick={() => submitEdit('only_this')} className="w-full justify-start font-medium text-foreground">Somente esse</Button>
+            <Button variant="outline" onClick={() => submitEdit('from_here')} className="w-full justify-start font-medium text-foreground">Daqui pra frente</Button>
+            <Button variant="outline" onClick={() => submitEdit('all')} className="w-full justify-start font-medium text-primary hover:bg-primary/5 border-primary/20">Todos</Button>
+            <Button variant="ghost" onClick={() => setEditScope(null)} className="w-full mt-2">Voltar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>
-            Plantão — {format(new Date(date + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+            {editingShift ? 'Editar Plantão — ' : 'Plantão — '}
+            {format(new Date(shiftDate + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
           </DialogTitle>
         </DialogHeader>
 
@@ -183,7 +223,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
             </div>
           )}
 
-          {!isAvista && !isSoProducao && hospital && (
+          {!isAvista && !isSoProducao && hospital && !editingShift && (
             <div>
               <Label>Repetição</Label>
               <Select value={repeat} onValueChange={setRepeat}>
@@ -225,7 +265,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
             </div>
           )}
 
-          {repeat !== 'none' && !isAvista && !isSoProducao && (
+          {repeat !== 'none' && !isAvista && !isSoProducao && !editingShift && (
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
               {repeat === 'weekly'
                 ? 'Serão criados ~104 plantões (toda semana pelos próximos 2 anos).'
@@ -249,7 +289,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
         <div className="flex gap-2">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
           <Button onClick={handleSave} disabled={!hospitalId || !!valueResult.error || bruto == null} className="flex-1">
-            {repeat !== 'none' && !isAvista ? 'Criar Plantões' : 'Criar Plantão'}
+            {editingShift ? 'Salvar' : repeat !== 'none' && !isAvista ? 'Criar Plantões' : 'Criar Plantão'}
           </Button>
         </div>
       </DialogContent>

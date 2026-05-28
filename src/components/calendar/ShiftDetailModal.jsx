@@ -11,7 +11,7 @@ import { UserCheck, Trash2, AlertTriangle } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-const kindLabel = { regular: '🫐 Regular', extra: '🍌 Extra', sobreaviso: '🍅 Sobreaviso' };
+const kindLabel = { regular: 'Regular', extra: 'Extra', sobreaviso: 'Sobreaviso' };
 const kindColor = {
   regular: 'bg-blue-100 text-blue-700 border-blue-200',
   extra: 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -24,7 +24,7 @@ const statusLabel = {
   passed: '🩶 Passado',
 };
 
-export default function ShiftDetailModal({ shift, hospital, source, onClose, onPass, onDeleteFromHere }) {
+export default function ShiftDetailModal({ shift, hospital, source, onClose, onPass, onDeleteScope, onEdit }) {
   const [view, setView] = useState('detail');
   const [passedTo, setPassedTo] = useState('');
   const [passedDate, setPassedDate] = useState(shift.date);
@@ -84,24 +84,22 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="w-5 h-5" />
-              Deletar plantão fixo
+              Deletar plantão
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <p className="text-sm text-muted-foreground">
-              Isso irá deletar <strong>todos os plantões agendados</strong> de{' '}
-              <strong>{hospital?.sigla} {shift.type} ({kindLabel[shift.shift_kind]})</strong>{' '}
-              a partir de <strong>{format(new Date(shift.date + 'T12:00:00'), "dd/MM/yyyy")}</strong>.
+              Como deseja deletar este plantão?
             </p>
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
               Apenas plantões <strong>ainda não fechados</strong> serão removidos. Contas a receber já geradas continuam intactas.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setView('detail')} className="flex-1">Cancelar</Button>
-            <Button variant="destructive" onClick={() => onDeleteFromHere(shift)} className="flex-1">
-              Sim, deletar
-            </Button>
+          <div className="flex flex-col gap-2">
+            <Button variant="outline" onClick={() => onDeleteScope(shift, 'only_this')} className="w-full justify-start font-medium text-foreground">Apenas esse</Button>
+            <Button variant="outline" onClick={() => onDeleteScope(shift, 'from_here')} className="w-full justify-start font-medium text-foreground">Daqui pra frente</Button>
+            <Button variant="outline" onClick={() => onDeleteScope(shift, 'all')} className="w-full justify-start font-medium text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/20">Todos</Button>
+            <Button variant="ghost" onClick={() => setView('detail')} className="w-full mt-2">Cancelar</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -170,11 +168,18 @@ export default function ShiftDetailModal({ shift, hospital, source, onClose, onP
               </Button>
               <Button
                 variant="outline"
+                onClick={() => onEdit(shift)}
+                className="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 border-blue-200"
+              >
+                Editar
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setView('delete_confirm')}
                 className="w-full text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Deletar plantão fixo (daqui pra frente)
+                Deletar
               </Button>
             </>
           )}

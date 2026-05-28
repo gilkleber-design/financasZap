@@ -12,6 +12,7 @@ import ShiftModal from '@/components/calendar/ShiftModal';
 import CloseMonthModal from '@/components/calendar/CloseMonthModal';
 import ShiftDetailModal from '@/components/calendar/ShiftDetailModal';
 import MonthlyHospitalSummary from '@/components/calendar/MonthlyHospitalSummary';
+import { calculateShiftValue } from '@/lib/shifts';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -30,6 +31,7 @@ export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedShift, setSelectedShift] = useState(null);
+  const [editingShift, setEditingShift] = useState(null);
   const [showClose, setShowClose] = useState(false);
   const [reopening, setReopening] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false); // confirmação de reabrir mês
@@ -176,21 +178,63 @@ export default function CalendarPage() {
     });
   };
 
-  const handleDeleteFromHere = async (shift) => {
-    // Busca todos os shifts futuros (inclusive além do mês visível)
-    const allFuture = await base44.entities.Shift.filter({
-      hospital_id: shift.hospital_id,
-      type: shift.type,
-      shift_kind: shift.shift_kind,
-      date: { $gte: shift.date },
-      status: 'scheduled',
-    });
-    // Deleta apenas os que NÃO têm recebível vinculado (ou seja, não foram fechados/pagos)
-    const toDelete = allFuture.filter(s => !s.receivable_id);
+  const handleDeleteScope = async (shift, scope) => {
+    let toDelete = [];
+    if (scope === 'only_this') {
+      toDelete = [shift];
+    } else {
+      const filterParams = {
+        hospital_id: shift.hospital_id,
+        type: shift.type,
+        shift_kind: shift.shift_kind,
+        status: 'scheduled',
+      };
+      if (scope === 'from_here') {
+        filterParams.date = { $gte: shift.date };
+      }
+      const allMatches = await base44.entities.Shift.filter(filterParams);
+      toDelete = allMatches.filter(s => !s.receivable_id);
+    }
+
     await Promise.all(toDelete.map(s => base44.entities.Shift.delete(s.id)));
     queryClient.invalidateQueries({ queryKey: ['shifts'] });
     setSelectedShift(null);
-    toast.success(`${toDelete.length} plantão(s) futuro(s) deletado(s). Recebíveis preservados.`);
+    toast.success(`${toDelete.length} plantão(s) deletado(s). Recebíveis preservados.`);
+  };
+
+  const handleUpdateScope = async (originalShift, updatedData, scope, hospital) => {
+    let toUpdate = [];
+    if (scope === 'only_this') {
+      toUpdate = [originalShift];
+    } else {
+      const filterParams = {
+        hospital_id: originalShift.hospital_id,
+        type: originalShift.type,
+        shift_kind: originalShift.shift_kind,
+        status: 'scheduled',
+      };
+      if (scope === 'from_here') {
+        filterParams.date = { $gte: originalShift.date };
+      }
+      const allMatches = await base44.entities.Shift.filter(filterParams);
+      toUpdate = allMatches.filter(s => !s.receivable_id);
+    }
+
+    await Promise.all(toUpdate.map(s => {
+      const valResult = calculateShiftValue({
+        hospital,
+        shiftDate: s.date,
+        type: updatedData.type,
+        isTurno: updatedData.is_turno,
+        valorProducao: updatedData.valor_producao
+      });
+      const finalData = { ...updatedData, valor: valResult.value };
+      return base44.entities.Shift.update(s.id, finalData);
+    }));
+
+    queryClient.invalidateQueries({ queryKey: ['shifts'] });
+    setEditingShift(null);
+    toast.success(`${toUpdate.length} plantão(s) atualizado(s).`);
   };
 
   // Reabrir mês: verifica pagamentos já realizados antes de reverter
@@ -397,15 +441,17 @@ export default function CalendarPage() {
       <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300 border border-gray-400" /><span>Cancelado / Passado</span></div>
       </div>
 
-      {selectedDate && (
+      {(selectedDate || editingShift) && (
         <ShiftModal
           date={selectedDate}
+          editingShift={editingShift}
           hospitals={hospitals}
           sources={sources}
-          existingShifts={shifts.filter(s => s.date === selectedDate)}
+          existingShifts={selectedDate ? shifts.filter(s => s.date === selectedDate) : []}
           onSave={handleSaveShifts}
+          onUpdateScope={handleUpdateScope}
           onCancelShift={handleCancelShift}
-          onClose={() => setSelectedDate(null)}
+          onClose={() => { setSelectedDate(null); setEditingShift(null); }}
         />
       )}
 
@@ -416,7 +462,8 @@ export default function CalendarPage() {
           source={sources.find(s => s.id === hospitals.find(h => h.id === selectedShift.hospital_id)?.income_source_id)}
           onClose={() => setSelectedShift(null)}
           onPass={handlePassShift}
-          onDeleteFromHere={handleDeleteFromHere}
+          onDeleteScope={handleDeleteScope}
+          onEdit={(shift) => { setEditingShift(shift); setSelectedShift(null); }}
         />
       )}
 

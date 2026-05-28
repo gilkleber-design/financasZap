@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
         const payload = await req.json();
         const {
             description, amount, type, date, origin_id, origin_type,
-            category_id, conciliate_id, notes
+            category, category_id, conciliate_id, notes
         } = payload;
 
         if (!description || !amount || !type || !origin_id || !origin_type) {
@@ -41,36 +41,43 @@ Deno.serve(async (req) => {
             }
         }
 
-        // 2. Resolver category_id: payload > registro conciliado
-        const resolvedCategoryId = category_id || conciliationRecord?.category_id || null;
-
-        // 3. Buscar nome da categoria para o resumo
+        // 2. Resolver categoria: category_id > slug > herdado da conciliação
         let categoryRecord = null;
-        if (resolvedCategoryId) {
-            const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
-            categoryRecord = cats?.[0] || null;
+
+        if (category_id) {
+            const results = await base44.entities.Category.filter({ id: category_id });
+            categoryRecord = results?.[0] || null;
+        } else if (category) {
+            const results = await base44.entities.Category.filter({ slug: category });
+            categoryRecord = results?.[0] || null;
+        } else if (conciliationRecord?.category_id) {
+            const results = await base44.entities.Category.filter({ id: conciliationRecord.category_id });
+            categoryRecord = results?.[0] || null;
+        } else if (conciliationRecord?.category) {
+            const results = await base44.entities.Category.filter({ slug: conciliationRecord.category });
+            categoryRecord = results?.[0] || null;
         }
 
-        // 4. Criar a transação
+        // 3. Criar a transação
         const tx = await base44.entities.Transaction.create({
             description: conciliationRecord?.description || description,
             amount: actualAmount,
             net_amount: actualAmount,
             type: safeType,
             category: categoryRecord?.slug || null,
-            category_id: resolvedCategoryId,
+            category_id: categoryRecord?.id || null,
             date: date || new Date().toISOString().split('T')[0],
             source: 'whatsapp_text',
             account_id: isAccount ? origin_id : undefined,
             card_id: !isAccount ? origin_id : undefined,
             reconciled: !!conciliate_id,
-            status: conciliate_id ? 'conciliated' : 'registered',
+            status: 'registered',
             notes: notes || 'Gerado via Assistente',
             ...(conciliate_id && safeType === 'income' && { receivable_id: conciliate_id }),
             ...(conciliate_id && safeType !== 'income' && { payable_id: conciliate_id }),
         });
 
-        // 5. Quitar o título conciliado
+        // 4. Quitar o título conciliado
         if (conciliate_id && conciliationRecord) {
             const amountChanged = predictedAmount !== null && predictedAmount !== actualAmount;
             const service = safeType === 'income' ? base44.entities.Receivable : base44.entities.Payable;
@@ -81,7 +88,7 @@ Deno.serve(async (req) => {
             });
         }
 
-        // 6. Buscar origem para o resumo
+        // 5. Buscar origem para o resumo
         const originResults = isAccount
             ? await base44.entities.Account.filter({ id: origin_id })
             : await base44.entities.Card.filter({ id: origin_id });

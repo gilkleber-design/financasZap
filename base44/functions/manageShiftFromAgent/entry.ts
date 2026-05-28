@@ -55,21 +55,26 @@ const buildRecurringDates = (date, recurrence) => {
 
 const normalizeHospitalText = (value) => String(value || '').toLowerCase().trim();
 
+const tokenizeHospitalText = (value) => String(value || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+  .split(/\s+/)
+  .filter(Boolean);
+
 const findHospitalMatches = (hospitals, hospitalText) => {
-  const normalizedHospitalText = normalizeHospitalText(hospitalText);
-  if (!normalizedHospitalText) return [];
+  const queryTokens = tokenizeHospitalText(hospitalText);
+  if (queryTokens.length === 0) return [];
 
-  const exactSiglaMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.sigla) === normalizedHospitalText);
-  const exactNameMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.name) === normalizedHospitalText);
-  const siglaPrefixMatches = hospitals.filter((hospital) => {
-    const normalizedName = normalizeHospitalText(hospital.name);
-    return normalizedName.startsWith(`${normalizedHospitalText} `) || normalizedName.startsWith(`${normalizedHospitalText}-`);
+  return hospitals.filter((hospital) => {
+    const sigla = normalizeHospitalText(hospital.sigla);
+    const nameTokens = tokenizeHospitalText(hospital.name);
+    const allTokens = new Set([sigla, ...nameTokens]);
+
+    return queryTokens.every((token) => Array.from(allTokens).some((candidate) => candidate.includes(token) || token.includes(candidate)));
   });
-  const partialNameMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.name).includes(normalizedHospitalText));
-
-  return [...exactSiglaMatches, ...exactNameMatches, ...siglaPrefixMatches, ...partialNameMatches].filter(
-    (hospital, index, list) => list.findIndex((item) => item.id === hospital.id) === index
-  );
 };
 
 Deno.serve(async (req) => {

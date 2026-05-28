@@ -13,16 +13,24 @@ Deno.serve(async (req) => {
     const hospitals = await base44.entities.Hospital.list();
     const normalizedQuery = String(query || '').toLowerCase().trim();
 
-    const exactSiglaMatches = hospitals.filter((hospital) => hospital.sigla?.toLowerCase() === normalizedQuery);
-    const exactNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase() === normalizedQuery);
-    const siglaPrefixMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase().startsWith(`${normalizedQuery} `) || hospital.name?.toLowerCase().startsWith(`${normalizedQuery}-`));
-    const partialNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase().includes(normalizedQuery));
+    const tokenize = (value) => String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
 
-    const uniqueMatches = [...exactSiglaMatches, ...exactNameMatches, ...siglaPrefixMatches, ...partialNameMatches].filter(
-      (hospital, index, list) => list.findIndex((item) => item.id === hospital.id) === index
-    );
+    const queryTokens = tokenize(normalizedQuery);
 
-    const matches = uniqueMatches;
+    const matches = hospitals.filter((hospital) => {
+      const sigla = String(hospital.sigla || '').toLowerCase().trim();
+      const nameTokens = tokenize(hospital.name);
+      const allTokens = new Set([sigla, ...nameTokens]);
+
+      return queryTokens.every((token) => Array.from(allTokens).some((candidate) => candidate.includes(token) || token.includes(candidate)));
+    });
 
     const instruction =
       matches.length === 0

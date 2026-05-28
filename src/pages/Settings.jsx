@@ -444,15 +444,31 @@ export default function Settings() {
                </div>
              )}
 
-             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingHospitalId(null);setShowNewHospital(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertHospital.mutate({ ...hospitalForm, active: true })}>Salvar</Button></div>
-           </div>
-          }
-         {hospitals.map((h) =>
-          <div key={h.id} className={`flex items-center justify-between p-3 rounded-lg border ${h.active === false ? 'bg-slate-50 opacity-60' : 'bg-white shadow-sm'}`}>
-             <div className="flex flex-col">
-                <span className="text-sm font-bold">{h.name}</span>
-                <span className="text-[10px] text-muted-foreground font-bold uppercase">{h.sigla} • {h.payment_model === 'so_producao' ? 'Só produção' : h.payment_model === 'plantao_producao' ? 'Plantão + produção' : 'Só plantão'}</span>
+             <div className="flex items-center justify-between p-3 bg-white rounded-lg border">
+               <div>
+                 <span className="text-sm font-medium">Hospital ativo</span>
+                 <p className="text-xs text-muted-foreground mt-0.5">Desative para ocultar de novos plantões sem perder o histórico.</p>
+               </div>
+               <Switch checked={hospitalForm.active !== false} onCheckedChange={(v) => setHospitalForm({ ...hospitalForm, active: v })} />
              </div>
+
+             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingHospitalId(null);setShowNewHospital(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertHospital.mutate({ ...hospitalForm, active: hospitalForm.active !== false })}>Salvar</Button></div>
+             </div>
+             }
+             {[...hospitals].sort((a, b) => {
+               const aActive = a.active !== false;
+               const bActive = b.active !== false;
+               if (aActive !== bActive) return aActive ? -1 : 1;
+               return (a.sigla || '').localeCompare(b.sigla || '');
+             }).map((h) =>
+              <div key={h.id} className={`flex items-center justify-between p-3 rounded-lg border ${h.active === false ? 'bg-slate-50 opacity-50' : 'bg-white shadow-sm'}`}>
+                 <div className="flex flex-col">
+                    <span className="text-sm font-bold flex items-center gap-2">
+                      {h.name}
+                      {h.active === false && <Badge className="text-[9px] py-0 h-4 px-1.5 border-0 bg-slate-200 text-slate-600">Inativo</Badge>}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase">{h.sigla} • {h.payment_model === 'so_producao' ? 'Só produção' : h.payment_model === 'plantao_producao' ? 'Plantão + produção' : 'Só plantão'}</span>
+                 </div>
              <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingHospitalId(h.id);setHospitalForm({
                ...h,
                payment_model: h.payment_model || 'so_plantao',

@@ -53,6 +53,18 @@ const buildRecurringDates = (date, recurrence) => {
   return dates;
 };
 
+const normalizeHospitalText = (value) => String(value || '').toLowerCase().trim();
+
+const findHospitalMatches = (hospitals, hospitalText) => {
+  const normalizedHospitalText = normalizeHospitalText(hospitalText);
+  if (!normalizedHospitalText) return [];
+
+  return hospitals.filter((hospital) =>
+    normalizeHospitalText(hospital.sigla) === normalizedHospitalText ||
+    normalizeHospitalText(hospital.name).includes(normalizedHospitalText)
+  );
+};
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -63,7 +75,7 @@ Deno.serve(async (req) => {
     }
 
     const payload = await req.json().catch(() => ({}));
-    const { action, shift_id, hospital_id, date, type, shift_kind, valor, notes, status, recurrence } = payload;
+    const { action, shift_id, hospital_id, hospital_query, hospital_confirmed, date, type, shift_kind, valor, notes, status, recurrence } = payload;
 
     if (!action) {
       return Response.json({ error: 'action is required' }, { status: 400 });
@@ -75,6 +87,24 @@ Deno.serve(async (req) => {
       }
 
       const hospital = await base44.entities.Hospital.get(hospital_id);
+      const hospitals = await base44.entities.Hospital.list();
+      const matches = findHospitalMatches(hospitals, hospital_query || hospital.name || hospital.sigla);
+
+      if (!hospital_confirmed) {
+        return Response.json({
+          error: 'hospital_confirmation_required',
+          message: 'Confirmação explícita do hospital é obrigatória antes de criar o plantão.',
+          matches: matches.map((item) => ({ id: item.id, name: item.name, sigla: item.sigla })),
+        }, { status: 400 });
+      }
+
+      if (matches.length !== 1 || matches[0].id !== hospital_id) {
+        return Response.json({
+          error: 'ambiguous_hospital',
+          message: 'O hospital informado está ambíguo ou não corresponde ao hospital confirmado.',
+          matches: matches.map((item) => ({ id: item.id, name: item.name, sigla: item.sigla })),
+        }, { status: 400 });
+      }
       const normalizedDate = normalizeDate(date);
       const normalizedKind = shift_kind || 'regular';
       const dates = buildRecurringDates(normalizedDate, normalizedKind === 'regular' ? recurrence : 'none');

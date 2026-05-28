@@ -16,7 +16,7 @@ const getTodayString = () => {
   const now = new Date();
   return format(now, 'yyyy-MM-dd');
 };
-import { Landmark, Repeat, Layers, Receipt } from 'lucide-react';
+import { Bell, Landmark, Repeat, Layers, Receipt } from 'lucide-react';
 
 const EXPENSE_TYPES = [
   { value: 'avulsa', label: 'Avulsa', icon: Receipt, desc: 'Despesa única, sem repetição' },
@@ -28,7 +28,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const [expenseType, setExpenseType] = useState('avulsa');
   const [form, setForm] = useState({
     description: '', amount: '', due_date: getTodayString(), category: '', notes: '',
-    origin_id: '', origin_type: '', payment_modality: 'manual', payment_date: '',
+    origin_id: '', origin_type: '', payment_modality: 'manual', payment_date: '', due_alert_whatsapp: false,
     // Parcelada
     installment_total_amount: '', installment_count: '', installment_number: '1',
     // Fixa
@@ -97,7 +97,8 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
         installment_count: form.installment_count ? parseInt(form.installment_count) : undefined,
         installment_number: form.installment_number ? parseInt(form.installment_number) : undefined,
         notes: form.notes || undefined,
-      });
+        due_alert_whatsapp: form.due_alert_whatsapp,
+        });
 
       toast.success(expenseType === 'fixa' ? 'Despesa fixa salva.' : 'Despesa criada com sucesso.');
       setSaving(false);
@@ -266,6 +267,21 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               )}
             </div>
           )}
+
+          <div className="border border-border rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2 cursor-pointer">
+                <Bell className="w-4 h-4 text-primary" /> Alerta de vencimento no WhatsApp
+              </Label>
+              <button
+                type="button"
+                onClick={() => set('due_alert_whatsapp', !form.due_alert_whatsapp)}
+                className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.due_alert_whatsapp ? 'bg-primary' : 'bg-slate-300'}`}
+              >
+                <span className={`h-5 w-5 rounded-full bg-white transition-transform ${form.due_alert_whatsapp ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+          </div>
 
           {/* Observação */}
           <div>

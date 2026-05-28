@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { CategorySelect } from '@/components/ui/category-select';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Loader2, X } from 'lucide-react';
+import { Bell, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function EditPayableModal({ payable, onClose, onSaved }) {
@@ -20,6 +20,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
     competencia: payable?.competencia ? payable.competencia.split('T')[0] : '',
     category: payable?.category || '',
     notes: payable?.notes || '',
+    due_alert_whatsapp: payable?.due_alert_whatsapp === true,
   });
   const [saving, setSaving] = useState(false);
   const [updateScope, setUpdateScope] = useState(null);
@@ -44,6 +45,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
         competencia,
         category: form.category,
         notes: form.notes || undefined,
+        due_alert_whatsapp: form.due_alert_whatsapp,
       });
     } else if (updateScope === 'all') {
       const allPayables = await base44.entities.Payable.list('-due_date', 500);
@@ -55,6 +57,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           competencia: form.competencia || p.due_date,
           category: form.category,
           notes: form.notes || undefined,
+          due_alert_whatsapp: form.due_alert_whatsapp,
         });
       }
     } else if (updateScope === 'forward') {
@@ -69,6 +72,7 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           competencia: form.competencia || p.due_date,
           category: form.category,
           notes: form.notes || undefined,
+          due_alert_whatsapp: form.due_alert_whatsapp,
         });
       }
     }
@@ -160,6 +164,21 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
               className="mt-1"
             />
             <p className="text-xs text-muted-foreground mt-1">Se não preenchido, usa a data de vencimento</p>
+          </div>
+
+          <div className="border border-border rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2 cursor-pointer">
+                <Bell className="w-4 h-4 text-primary" /> Alerta de vencimento no WhatsApp
+              </Label>
+              <button
+                type="button"
+                onClick={() => set('due_alert_whatsapp', !form.due_alert_whatsapp)}
+                className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.due_alert_whatsapp ? 'bg-primary' : 'bg-slate-300'}`}
+              >
+                <span className={`h-5 w-5 rounded-full bg-white transition-transform ${form.due_alert_whatsapp ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
           </div>
 
           <div>

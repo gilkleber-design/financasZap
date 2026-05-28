@@ -92,6 +92,11 @@
       "type": "string",
       "description": "ID do lan\u00e7amento que conciliou"
     },
+    "due_alert_whatsapp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Se deve enviar alerta de vencimento no WhatsApp"
+    },
     "notes": {
       "type": "string"
     }

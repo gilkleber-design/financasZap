@@ -24,80 +24,72 @@ Deno.serve(async (req) => {
         const safeType = type === 'receipt' ? 'income' : type;
         const actualAmount = Number(amount);
 
-        // Resolver categoria: slug direto > category_id > herdado da conciliação
+        // Helper para desestruturar entidades do Base44 que vêm no formato { id, data: {...} }
+        const unwrap = (item) => item?.data ? { id: item.id, ...item.data } : (item || null);
+
+        // 1. Definição inicial da categoria
         let resolvedCategory = category === 'plantoes_pj' ? 'plantoes' : (category || undefined);
         let resolvedCategoryId = category_id || undefined;
         let resolvedCategoryRecord = null;
 
-        if (resolvedCategory) {
-            const cats = await base44.entities.Category.filter({ slug: resolvedCategory });
-            resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
-            if (!resolvedCategoryId) {
-                resolvedCategoryId = resolvedCategoryRecord?.id || undefined;
-            }
-            if (!resolvedCategory && resolvedCategoryRecord?.slug) {
+        // 2. Busca inicial de categoria
+        if (resolvedCategory || resolvedCategoryId) {
+            const filter = resolvedCategory ? { slug: resolvedCategory } : { id: resolvedCategoryId };
+            const results = await base44.entities.Category.filter(filter);
+            resolvedCategoryRecord = unwrap(results?.[0]);
+            if (resolvedCategoryRecord) {
                 resolvedCategory = resolvedCategoryRecord.slug;
+                resolvedCategoryId = resolvedCategoryRecord.id;
             }
         }
 
-        if (!resolvedCategoryRecord && resolvedCategory === 'plantoes') {
-            const legacyCats = await base44.entities.Category.filter({ slug: 'plantoes_pj' });
-            resolvedCategoryRecord = legacyCats?.[0]?.data ? { id: legacyCats[0].id, ...legacyCats[0].data } : (legacyCats?.[0] || null);
-            resolvedCategoryId = resolvedCategoryId || resolvedCategoryRecord?.id || undefined;
-        }
-
-        if (!resolvedCategory && resolvedCategoryId) {
-            const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
-            resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
-            resolvedCategory = resolvedCategoryRecord?.slug || undefined;
-        }
-
-        // Buscar registro conciliado (necessário antes de txData)
+        // 3. Busca e vinculação de registro para conciliação
         let predictedAmount = null;
         let conciliationRecord = null;
 
         if (conciliate_id) {
-            if (safeType === 'income') {
-                const recs = await base44.entities.Receivable.filter({ id: conciliate_id });
-                conciliationRecord = recs?.[0] || null;
-            } else {
-                const pays = await base44.entities.Payable.filter({ id: conciliate_id });
-                conciliationRecord = pays?.[0] || null;
-            }
+            const service = safeType === 'income' ? base44.entities.Receivable : base44.entities.Payable;
+            const recs = await service.filter({ id: conciliate_id });
+            conciliationRecord = unwrap(recs?.[0]);
+
             if (conciliationRecord) {
                 predictedAmount = Number(
-                    safeType === 'income' && conciliationRecord.net_amount
+                    safeType === 'income' && conciliationRecord.net_amount !== undefined
                         ? conciliationRecord.net_amount
                         : conciliationRecord.amount
                 );
-                // Fallback: herda categoria do registro conciliado se ainda não resolvida
-                if (!resolvedCategory && conciliationRecord.category) {
-                    resolvedCategory = conciliationRecord.category === 'plantoes_pj' ? 'plantoes' : conciliationRecord.category;
-                }
-                if (!resolvedCategoryId && conciliationRecord.category_id) {
-                    resolvedCategoryId = conciliationRecord.category_id;
-                }
-                if (!resolvedCategoryRecord && resolvedCategoryId) {
-                    const cats = await base44.entities.Category.filter({ id: resolvedCategoryId });
-                    resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
-                    resolvedCategory = resolvedCategoryRecord?.slug || resolvedCategory;
-                }
-                if (!resolvedCategoryRecord && resolvedCategory) {
-                    const cats = await base44.entities.Category.filter({ slug: resolvedCategory });
-                    resolvedCategoryRecord = cats?.[0]?.data ? { id: cats[0].id, ...cats[0].data } : (cats?.[0] || null);
-                    resolvedCategoryId = resolvedCategoryId || resolvedCategoryRecord?.id || undefined;
+
+                // Herança de categoria caso não tenha vindo no payload
+                if (!resolvedCategoryRecord && (conciliationRecord.category || conciliationRecord.category_id)) {
+                    const catId = conciliationRecord.category_id;
+                    const catSlug = conciliationRecord.category === 'plantoes_pj' ? 'plantoes' : conciliationRecord.category;
+                    
+                    // Assume imediatamente a categoria do registro conciliado (fallback seguro)
+                    resolvedCategory = catSlug || resolvedCategory;
+                    resolvedCategoryId = catId || resolvedCategoryId;
+                    
+                    const filter = catId ? { id: catId } : { slug: catSlug };
+                    const results = await base44.entities.Category.filter(filter);
+                    resolvedCategoryRecord = unwrap(results?.[0]);
+                    
+                    if (resolvedCategoryRecord) {
+                        resolvedCategory = resolvedCategoryRecord.slug || resolvedCategory;
+                        resolvedCategoryId = resolvedCategoryRecord.id || resolvedCategoryId;
+                    }
                 }
             }
         }
 
+        // 4. Fallback final para legado 'plantoes'
         if (!resolvedCategoryRecord && resolvedCategory === 'plantoes') {
-            const fallbackCats = await base44.entities.Category.filter({ slug: 'plantoes_pj' });
-            resolvedCategoryRecord = fallbackCats?.[0]?.data ? { id: fallbackCats[0].id, ...fallbackCats[0].data } : (fallbackCats?.[0] || null);
+            const legacy = await base44.entities.Category.filter({ slug: 'plantoes_pj' });
+            resolvedCategoryRecord = unwrap(legacy?.[0]);
+            if (resolvedCategoryRecord) {
+                resolvedCategoryId = resolvedCategoryRecord.id;
+            }
         }
 
-        resolvedCategoryId = resolvedCategoryId || resolvedCategoryRecord?.id || undefined;
-        resolvedCategory = resolvedCategory || resolvedCategoryRecord?.slug || undefined;
-
+        // 5. Criação da transação
         const txData = {
             description: conciliationRecord?.description || description,
             amount: actualAmount,
@@ -118,9 +110,9 @@ Deno.serve(async (req) => {
 
         const tx = await base44.entities.Transaction.create(txData);
 
-        if (conciliate_id) {
+        // 6. Atualização do registro conciliado
+        if (conciliate_id && conciliationRecord) {
             const amountChanged = predictedAmount !== null && predictedAmount !== actualAmount;
-
             if (safeType === 'income') {
                 await base44.entities.Receivable.update(conciliate_id, {
                     status: 'received',
@@ -128,33 +120,26 @@ Deno.serve(async (req) => {
                     ...(amountChanged && { net_amount: actualAmount, amount: actualAmount }),
                 });
             } else {
-                const nextStatus = conciliationRecord?.origin_type === 'card' ? 'conciliated' : 'paid';
                 await base44.entities.Payable.update(conciliate_id, {
-                    status: nextStatus,
+                    status: conciliationRecord.origin_type === 'card' ? 'conciliated' : 'paid',
                     transaction_id: tx.id,
                     ...(amountChanged && { amount: actualAmount }),
                 });
             }
         }
 
-        const fetchedCategory = resolvedCategory
-            ? (await base44.entities.Category.filter({ slug: resolvedCategory }))?.[0] || null
-            : null;
-        const categoryRecord = resolvedCategoryRecord || (fetchedCategory?.data
-            ? { id: fetchedCategory.id, ...fetchedCategory.data }
-            : fetchedCategory);
-
+        // 7. Resposta de contexto
         const originList = isAccount
             ? await base44.entities.Account.filter({ id: origin_id })
             : await base44.entities.Card.filter({ id: origin_id });
-        const originRecord = originList?.[0] || null;
+        const originRecord = unwrap(originList?.[0]);
 
         return Response.json({
             success: true,
             transaction: tx,
             summary_context: {
-                category_slug: categoryRecord?.slug || resolvedCategory || null,
-                category_name: categoryRecord?.name || null,
+                category_slug: resolvedCategoryRecord?.slug || resolvedCategory || null,
+                category_name: resolvedCategoryRecord?.name || null,
                 origin_name: originRecord?.name || originRecord?.holder_name || null,
                 institution_name: originRecord?.bank || null,
                 event_date: tx.date,

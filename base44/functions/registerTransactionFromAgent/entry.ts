@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
         const payload = await req.json();
         const {
             description, amount, type, date, origin_id, origin_type,
-            category, category_id, conciliate_id, notes
+            category, category_id, conciliate_id, conciliate_type, notes
         } = payload;
 
         if (!description || !amount || !type || !origin_id || !origin_type) {
@@ -28,7 +28,9 @@ Deno.serve(async (req) => {
         let predictedAmount = null;
 
         if (conciliate_id) {
-            const service = safeType === 'income' ? base44.entities.Receivable : base44.entities.Payable;
+            const service = conciliate_type === 'receivable'
+                ? base44.entities.Receivable
+                : base44.entities.Payable;
             const results = await service.filter({ id: conciliate_id });
             conciliationRecord = results?.[0] || null;
 
@@ -73,16 +75,18 @@ Deno.serve(async (req) => {
             reconciled: !!conciliate_id,
             status: 'registered',
             notes: notes || 'Gerado via Assistente',
-            ...(conciliate_id && safeType === 'income' && { receivable_id: conciliate_id }),
-            ...(conciliate_id && safeType !== 'income' && { payable_id: conciliate_id }),
+            ...(conciliate_id && conciliate_type === 'receivable' && { receivable_id: conciliate_id }),
+            ...(conciliate_id && conciliate_type !== 'receivable' && { payable_id: conciliate_id }),
         });
 
         // 4. Quitar o título conciliado
         if (conciliate_id && conciliationRecord) {
             const amountChanged = predictedAmount !== null && predictedAmount !== actualAmount;
-            const service = safeType === 'income' ? base44.entities.Receivable : base44.entities.Payable;
+            const service = conciliate_type === 'receivable'
+                ? base44.entities.Receivable
+                : base44.entities.Payable;
             await service.update(conciliate_id, {
-                status: safeType === 'income' ? 'received' : (conciliationRecord.origin_type === 'card' ? 'conciliated' : 'paid'),
+                status: conciliate_type === 'receivable' ? 'received' : (conciliationRecord.origin_type === 'card' ? 'conciliated' : 'paid'),
                 transaction_id: tx.id,
                 ...(amountChanged && { amount: actualAmount, net_amount: actualAmount }),
             });

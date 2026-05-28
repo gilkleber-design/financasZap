@@ -24,10 +24,16 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const today = toDateString(now);
-    const tomorrowDate = new Date(now);
-    tomorrowDate.setUTCDate(now.getUTCDate() + 1);
-    const tomorrow = toDateString(tomorrowDate);
     const currentTime = toTimeString(now);
+    const alertEnabled = user.whatsapp_alert_enabled !== false;
+    const alertDaysBefore = Number(user.whatsapp_alert_days_before ?? 1);
+    const alertTimes = Array.isArray(user.whatsapp_alert_times) && user.whatsapp_alert_times.length > 0
+      ? user.whatsapp_alert_times
+      : ['08:00', '11:00', '17:00', '23:00'];
+
+    if (!alertEnabled) {
+      return Response.json({ success: true, groups: [], alerts: [], settings: { enabled: false, days_before: alertDaysBefore, times: alertTimes } });
+    }
 
     const payables = await base44.entities.Payable.list('-due_date', 500);
     const alerts = [];
@@ -38,36 +44,26 @@ Deno.serve(async (req) => {
       if (!item.due_date) continue;
 
       const dueDate = String(item.due_date).split('T')[0];
+      const diffDays = Math.round((new Date(`${dueDate}T12:00:00Z`).getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86400000);
 
-      if (dueDate === tomorrow) {
+      if (diffDays < 0 || diffDays > alertDaysBefore) continue;
+
+      const sendSlots = diffDays === 0
+        ? alertTimes.filter((time) => time >= currentTime)
+        : alertTimes;
+
+      const timing = diffDays === 0 ? 'due_today' : `days_before_${diffDays}`;
+
+      for (const sendSlot of sendSlots) {
         alerts.push({
           id: item.id,
           description: item.description,
           amount: Number(item.amount || 0),
           due_date: dueDate,
-          timing: 'day_before',
-          send_slot: '08:00',
+          timing,
+          send_slot: sendSlot,
         });
-        continue;
       }
-
-      if (dueDate !== today) continue;
-
-      let sendSlot = null;
-      if (currentTime <= '11:00') sendSlot = '11:00';
-      else if (currentTime <= '17:00') sendSlot = '17:00';
-      else if (currentTime <= '23:00') sendSlot = '23:00';
-
-      if (!sendSlot) continue;
-
-      alerts.push({
-        id: item.id,
-        description: item.description,
-        amount: Number(item.amount || 0),
-        due_date: dueDate,
-        timing: 'due_today',
-        send_slot: sendSlot,
-      });
     }
 
     alerts.sort((a, b) => a.due_date.localeCompare(b.due_date) || a.description.localeCompare(b.description, 'pt-BR'));
@@ -89,6 +85,11 @@ Deno.serve(async (req) => {
       success: true,
       groups: Object.values(groupedMap),
       alerts,
+      settings: {
+        enabled: alertEnabled,
+        days_before: alertDaysBefore,
+        times: alertTimes,
+      },
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

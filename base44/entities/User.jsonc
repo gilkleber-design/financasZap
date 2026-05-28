@@ -1,4 +1,6 @@
 {
+  "name": "User",
+  "type": "object",
   "properties": {
     "role": {
       "type": "string",
@@ -7,11 +9,26 @@
         "admin",
         "user"
       ]
+    },
+    "whatsapp_alert_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Se os alertas de vencimento por WhatsApp est\u00e3o ativos"
+    },
+    "whatsapp_alert_days_before": {
+      "type": "number",
+      "default": 1,
+      "description": "Quantos dias antes do vencimento o alerta deve come\u00e7ar"
+    },
+    "whatsapp_alert_times": {
+      "type": "array",
+      "description": "Hor\u00e1rios dos alertas no formato HH:MM",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [
     "role"
-  ],
-  "name": "User",
-  "type": "object"
+  ]
 }

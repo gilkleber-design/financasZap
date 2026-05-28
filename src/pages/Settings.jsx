@@ -17,12 +17,13 @@ import { toast } from 'sonner';
 import CategoryManager from '@/components/settings/CategoryManager';
 import CategoryRuleManager from '@/components/settings/CategoryRuleManager';
 import InitialBalanceModal from '@/components/settings/InitialBalanceModal';
+import WhatsAppAlertsSection from '@/components/settings/WhatsAppAlertsSection';
 
 
 export default function Settings() {
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
-  const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: false, hospitals: false, rules: false, categories: false });
+  const [openSections, setOpenSections] = useState({ members: false, sources: false, accounts: false, cards: false, hospitals: false, rules: false, categories: false, whatsappAlerts: false });
 
 
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -469,17 +470,7 @@ export default function Settings() {
      </Collapsible>
 
 
-     {/* 7. WHATSAPP */}
-     <Card className="border border-green-200 shadow-sm bg-green-50/30">
-       <CardContent className="p-4 flex items-center justify-between">
-         <div className="flex items-center gap-3"><MessageSquare className="w-5 h-5 text-green-600" />
-           <div><p className="text-sm font-bold text-green-800">WhatsApp FinançasZap</p><p className="text-[10px] text-green-600">Conectado</p></div>
-         </div>
-         <a href={base44.agents.getWhatsAppConnectURL('financas_zap')} target="_blank" rel="noopener noreferrer">
-           <Button size="sm" className="bg-green-600 hover:bg-green-700 font-bold border-none">Conectar</Button>
-         </a>
-       </CardContent>
-     </Card>
+     <WhatsAppAlertsSection open={openSections.whatsappAlerts} onToggle={() => toggleSection('whatsappAlerts')} />
 
      <InitialBalanceModal open={showInitialBalance} onOpenChange={setShowInitialBalance} />
    </div>);

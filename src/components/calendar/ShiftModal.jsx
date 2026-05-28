@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format, addWeeks, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { calculateShiftValue, calcLiquido, resolveHospitalPaymentModel } from '@/lib/shifts';
+import { CurrencyInput } from '@/components/ui/currency-input';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -24,12 +25,16 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
   const [repeat, setRepeat] = useState('none');
   const [isAvista, setIsAvista] = useState(false);
   const [isTurno, setIsTurno] = useState(false);
+  const [valorProducao, setValorProducao] = useState('');
   const [notes, setNotes] = useState('');
 
   const hospital = hospitals.find(h => h.id === hospitalId);
   const source = hospital ? sources.find(s => s.id === hospital.income_source_id) : null;
   const paymentModel = resolveHospitalPaymentModel(hospital);
-  const valueResult = hospital ? calculateShiftValue({ hospital, shiftDate: date, type: shiftType, isTurno }) : { value: null, error: null };
+  const isSoProducao = paymentModel === 'so_producao';
+  const valueResult = hospital
+    ? calculateShiftValue({ hospital, shiftDate: date, type: shiftType, isTurno, valorProducao })
+    : { value: null, error: null };
   const bruto = valueResult.value;
   const liquido = bruto != null ? calcLiquido(bruto, source) : null;
   const taxRate = source?.default_tax_rate || 0;
@@ -52,11 +57,12 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
 
     const addShift = (d) => {
       const dateStr = format(d, 'yyyy-MM-dd');
-      const result = calculateShiftValue({ hospital, shiftDate: dateStr, type: shiftType, isTurno });
-      shifts.push({ ...base, date: dateStr, valor: result.value, ...(notes ? { notes } : {}) });
+      const result = calculateShiftValue({ hospital, shiftDate: dateStr, type: shiftType, isTurno, valorProducao });
+      const extra = isSoProducao ? { valor_producao: Number(valorProducao) } : {};
+      shifts.push({ ...base, date: dateStr, valor: result.value, ...extra, ...(notes ? { notes } : {}) });
     };
 
-    if (repeat === 'none' || isAvista) {
+    if (repeat === 'none' || isAvista || isSoProducao) {
       addShift(startDate);
     } else if (repeat === 'biweekly') {
       const endDate = addMonths(startDate, 24);
@@ -148,20 +154,36 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 rounded-xl border border-border p-3">
+              <div className={`grid ${isSoProducao ? 'grid-cols-1' : 'grid-cols-2'} gap-3 rounded-xl border border-border p-3`}>
                 <div className="flex items-center justify-between gap-3">
                   <Label className="text-sm">À vista</Label>
                   <Switch checked={isAvista} onCheckedChange={(checked) => { setIsAvista(checked); if (checked) setRepeat('none'); }} />
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <Label className="text-sm">Turno (meio plantão)</Label>
-                  <Switch checked={isTurno} onCheckedChange={setIsTurno} />
-                </div>
+                {!isSoProducao && (
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-sm">Turno (meio plantão)</Label>
+                    <Switch checked={isTurno} onCheckedChange={setIsTurno} />
+                  </div>
+                )}
               </div>
+
+              {isSoProducao && (
+                <div>
+                  <Label>Valor da produção *</Label>
+                  <CurrencyInput
+                    value={valorProducao}
+                    onChange={setValorProducao}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Obrigatório. Digite o valor real produzido neste dia.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
-          {!isAvista && hospital && (
+          {!isAvista && !isSoProducao && hospital && (
             <div>
               <Label>Repetição</Label>
               <Select value={repeat} onValueChange={setRepeat}>
@@ -203,7 +225,7 @@ export default function ShiftModal({ date, hospitals, sources = [], existingShif
             </div>
           )}
 
-          {repeat !== 'none' && !isAvista && (
+          {repeat !== 'none' && !isAvista && !isSoProducao && (
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
               {repeat === 'weekly'
                 ? 'Serão criados ~104 plantões (toda semana pelos próximos 2 anos).'

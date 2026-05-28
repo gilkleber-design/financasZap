@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, startOfMonth, addMonths, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { resolveHospitalPaymentModel } from '@/lib/shifts';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -60,7 +61,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   const receivablePreview = Object.entries(byHospital).flatMap(([hid, hshifts]) => {
     const hospital = hospitals.find(h => h.id === hid);
     const source = sources.find(s => s.id === hospital?.income_source_id);
-    const isProducao = hospital?.remuneration_model === 'producao';
+    const paymentModel = resolveHospitalPaymentModel(hospital);
     const taxRate = source?.default_tax_rate || 0;
 
     const refDate = currentMonth || new Date(hshifts[0].date + 'T12:00:00');
@@ -71,62 +72,64 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
 
     const monthLabel = format(refDate, 'MMMM/yyyy', { locale: ptBR });
 
-    if (isProducao) {
-      // Produção: um recebível por evento, vencimento = data do evento (D+0)
-      return hshifts.map(s => {
-        const bruto = s.valor || 0;
-        const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
-        const eventDate = format(new Date(s.date + 'T12:00:00'), 'dd/MM/yyyy');
-        const eventDueDate = new Date(s.date + 'T12:00:00');
-        return {
-          hospital,
-          source,
-          total: liquido,
-          totalBruto: bruto,
-          taxRate,
-          dueDate: eventDueDate,
-          shifts: [s],
-          label: `${hospital.sigla} — Evento ${eventDate}`,
-          isPdt: false,
-          isProducao: true,
-        };
-      });
-    } else {
-      // Plantão: soma todos os shifts do hospital
-      const totalBruto = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
+    if (paymentModel === 'so_producao') {
+      // Só produção: 1 receivable agregado com soma dos valor_producao,
+      // vencimento = hoje + atraso_medio_pdt dias
+      const totalBruto = hshifts.reduce((acc, s) => acc + Number(s.valor_producao || s.valor || 0), 0);
       const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
-      const result = [{
+      const atraso = Number(hospital?.atraso_medio_pdt || 0);
+      const prodDueDate = addDays(new Date(), atraso);
+      return [{
         hospital,
         source,
         total,
         totalBruto,
         taxRate,
-        dueDate,
+        dueDate: prodDueDate,
         shifts: hshifts,
-        label: `${hospital.sigla} — Plantões ${monthLabel}`,
+        label: `Produção ${hospital.sigla} — ${monthLabel}`,
         isPdt: false,
-        isProducao: false,
+        isProducao: true,
       }];
-
-      // Se tem produtividade com data separada, adicionar registro PDT zerado
-      if (hospital?.has_productivity && hospital?.productivity_separate_date) {
-        const pdtDueDate = addDays(dueDate, 15);
-        result.push({
-          hospital,
-          source,
-          total: 0,
-          totalBruto: 0,
-          taxRate: 0,
-          dueDate: pdtDueDate,
-          shifts: hshifts,
-          label: `${hospital.sigla} PDT ${monthLabel}`,
-          isPdt: true,
-          isProducao: false,
-        });
-      }
-
-      return result;
     }
+
+    // Plantão (so_plantao ou plantao_producao): soma todos os shifts do hospital
+    const totalBruto = hshifts.reduce((acc, s) => acc + (s.valor || 0), 0);
+    const total = taxRate > 0 ? totalBruto * (1 - taxRate / 100) : totalBruto;
+    const result = [{
+      hospital,
+      source,
+      total,
+      totalBruto,
+      taxRate,
+      dueDate,
+      shifts: hshifts,
+      label: `${hospital.sigla} — Plantões ${monthLabel}`,
+      isPdt: false,
+      isProducao: false,
+    }];
+
+    // Se for plantao_producao, adicionar PDT estimado separado (mantém comportamento legado)
+    if (paymentModel === 'plantao_producao' && hospital?.valor_medio_pdt) {
+      const atraso = Number(hospital?.atraso_medio_pdt || 15);
+      const pdtDueDate = addDays(dueDate, atraso);
+      const pdtBruto = Number(hospital.valor_medio_pdt) || 0;
+      const pdtLiquido = taxRate > 0 ? pdtBruto * (1 - taxRate / 100) : pdtBruto;
+      result.push({
+        hospital,
+        source,
+        total: pdtLiquido,
+        totalBruto: pdtBruto,
+        taxRate,
+        dueDate: pdtDueDate,
+        shifts: hshifts,
+        label: `${hospital.sigla} PDT ${monthLabel}`,
+        isPdt: true,
+        isProducao: false,
+      });
+    }
+
+    return result;
   });
 
   const handleTemplateSelect = (templateKey) => {
@@ -311,10 +314,11 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
               const hospital = hospitals.find(h => h.id === s.hospital_id);
               const source = sources.find(src => src.id === hospital?.income_source_id);
               const taxRate = source?.default_tax_rate || 0;
-              const bruto = s.valor || 0;
+              const paymentModel = resolveHospitalPaymentModel(hospital);
+              const isProducao = paymentModel === 'so_producao';
+              const bruto = isProducao ? Number(s.valor_producao || s.valor || 0) : (s.valor || 0);
               const liquido = taxRate > 0 ? bruto * (1 - taxRate / 100) : bruto;
               const cancelled = statuses[s.id] === 'cancelled';
-              const isProducao = hospital?.remuneration_model === 'producao';
 
               return (
                 <button

@@ -351,8 +351,8 @@ export default function CalendarPage() {
                     const h = hospitals.find(h => h.id === s.hospital_id);
                     const styleKey = s.status === 'cancelled' ? 'cancelled' : s.status === 'passed' ? 'passed' : s.shift_kind;
                     const hospital = h;
-                    const isProducao = hospital?.remuneration_model === 'producao';
-                    const isAvista = s.shift_kind === 'avista';
+                    const isProducao = hospital?.payment_model === 'so_producao' || hospital?.remuneration_model === 'producao';
+                    const isAvista = s.is_avista || s.shift_kind === 'avista';
                     const displayStyle = isAvista && styleKey !== 'cancelled'
                       ? kindStyle.avista
                       : isProducao && styleKey !== 'cancelled' && styleKey !== 'passed'

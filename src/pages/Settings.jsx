@@ -429,10 +429,18 @@ export default function Settings() {
                </>
              )}
 
-             {hospitalForm.payment_model !== 'so_plantao' && (
+             {hospitalForm.payment_model === 'plantao_producao' && (
                <div className="grid grid-cols-2 gap-3">
                  <div><Label>Valor médio PDT</Label><CurrencyInput value={hospitalForm.valor_medio_pdt} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_medio_pdt: value })} /></div>
                  <div><Label>Atraso médio PDT (dias)</Label><Input type="number" min="0" value={hospitalForm.atraso_medio_pdt || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, atraso_medio_pdt: e.target.value })} /></div>
+               </div>
+             )}
+
+             {hospitalForm.payment_model === 'so_producao' && (
+               <div>
+                 <Label>Atraso médio PDT (dias)</Label>
+                 <Input type="number" min="0" value={hospitalForm.atraso_medio_pdt || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, atraso_medio_pdt: e.target.value })} className="mt-1" />
+                 <p className="text-xs text-muted-foreground mt-1">O valor da produção é digitado por dia no calendário.</p>
                </div>
              )}
 

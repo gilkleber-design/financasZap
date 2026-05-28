@@ -29,10 +29,16 @@ export function getHospitalConfigError(hospital, shiftDate, type) {
   return null;
 }
 
-export function calculateShiftValue({ hospital, shiftDate, type, isTurno = false }) {
+export function calculateShiftValue({ hospital, shiftDate, type, isTurno = false, valorProducao = null }) {
   const paymentModel = resolveHospitalPaymentModel(hospital);
   if (paymentModel === 'so_producao') {
-    return { value: 0, error: null, paymentModel };
+    const parsed = valorProducao === '' || valorProducao === null || valorProducao === undefined
+      ? null
+      : Number(valorProducao);
+    if (parsed == null || Number.isNaN(parsed) || parsed <= 0) {
+      return { value: null, error: 'Informe o valor da produção do dia.', paymentModel };
+    }
+    return { value: parsed, error: null, paymentModel };
   }
 
   const error = getHospitalConfigError(hospital, shiftDate, type);

@@ -54,6 +54,10 @@
       "type": "number",
       "description": "Valor calculado do plant\u00e3o"
     },
+    "valor_producao": {
+      "type": "number",
+      "description": "Valor da produ\u00e7\u00e3o daquele dia (somente para hospitais 'so_producao'). Digitado no modal ao agendar."
+    },
     "passed_to": {
       "type": "string",
       "description": "Nome de quem assumiu o plant\u00e3o (quando passou)"

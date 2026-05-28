@@ -29,7 +29,6 @@ const emptyForm = {
 function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
   const paymentModel = form.payment_model ?? '';
   const showShiftFields = paymentModel !== 'so_producao';
-  const showPdtFields = paymentModel !== 'so_plantao';
   const pjSources = sources.filter(s => s.type === 'pj');
 
   return (
@@ -119,7 +118,7 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
         </>
       )}
 
-      {showPdtFields && (
+      {paymentModel === 'plantao_producao' && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>Valor médio PDT</Label>
@@ -129,6 +128,14 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
             <Label>Atraso médio PDT (dias)</Label>
             <Input type="number" min="0" value={form.atraso_medio_pdt} onChange={e => set('atraso_medio_pdt', e.target.value)} className="mt-1" />
           </div>
+        </div>
+      )}
+
+      {paymentModel === 'so_producao' && (
+        <div>
+          <Label>Atraso médio PDT (dias)</Label>
+          <Input type="number" min="0" value={form.atraso_medio_pdt} onChange={e => set('atraso_medio_pdt', e.target.value)} className="mt-1" />
+          <p className="text-xs text-muted-foreground mt-1">O valor da produção é digitado por dia no calendário.</p>
         </div>
       )}
 

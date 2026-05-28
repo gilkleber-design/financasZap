@@ -101,7 +101,7 @@ export default function DashboardPage() {
       const hospitalReceivables = receivables.filter((item) => {
         // 1) Amarração direta por hospital_id (novos receivables)
         if (item.hospital_id) return item.hospital_id === hospital.id;
-        // 2) Fallback para receivables antigos: casar por sigla/nome na descrição
+        // 2) Fallback para receivables antigos sem hospital_id: casar por sigla/nome na descrição
         const description = String(item.description || '').toLowerCase();
         return hospitalMatchers.some((matcher) => description.includes(matcher));
       });

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,6 +25,7 @@ const emptyForm = {
   payment_day: '1', payment_months_offset: '1',
   valor_medio_pdt: '', atraso_medio_pdt: '',
   valor_sd_semana: '', valor_sn_semana: '', valor_sd_fds: '', valor_sn_fds: '', valor_sobreaviso: '',
+  active: true,
 };
 
 function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
@@ -139,6 +141,14 @@ function HospitalForm({ form, set, sources, onSave, onCancel, saving }) {
         </div>
       )}
 
+      <div className="flex items-center justify-between rounded-xl border border-border p-3">
+        <div>
+          <Label className="text-sm">Hospital ativo</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">Desative para ocultar de novos plantões sem perder o histórico.</p>
+        </div>
+        <Switch checked={form.active !== false} onCheckedChange={(v) => set('active', v)} />
+      </div>
+
       <div className="flex gap-2 pt-1">
         <Button variant="outline" onClick={onCancel} className="flex-1">Cancelar</Button>
         <Button onClick={onSave} disabled={saving} className="flex-1">Salvar Hospital</Button>
@@ -172,6 +182,7 @@ export default function Hospitals() {
       valor_sd_fds: String(h.valor_sd_fds ?? ''),
       valor_sn_fds: String(h.valor_sn_fds ?? ''),
       valor_sobreaviso: String(h.valor_sobreaviso ?? ''),
+      active: h.active !== false,
     });
   };
 
@@ -219,11 +230,12 @@ export default function Hospitals() {
     valor_sd_fds: parseNumberOrUndefined(f.valor_sd_fds),
     valor_sn_fds: parseNumberOrUndefined(f.valor_sn_fds),
     valor_sobreaviso: parseNumberOrUndefined(f.valor_sobreaviso),
+    active: f.active !== false,
   });
 
   const handleCreate = () => {
     if (!form.name || !form.sigla) return toast.error('Nome e sigla são obrigatórios');
-    createMutation.mutate({ ...parseFormData(form), active: true });
+    createMutation.mutate(parseFormData(form));
   };
 
   const handleUpdate = () => {
@@ -231,7 +243,12 @@ export default function Hospitals() {
     updateMutation.mutate({ id: editingId, data: parseFormData(editForm) });
   };
 
-  const sortedHospitals = [...hospitals].sort((a, b) => (a.sigla || '').localeCompare(b.sigla || ''));
+  const sortedHospitals = [...hospitals].sort((a, b) => {
+    const aActive = a.active !== false;
+    const bActive = b.active !== false;
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return (a.sigla || '').localeCompare(b.sigla || '');
+  });
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
@@ -264,9 +281,10 @@ export default function Hospitals() {
           const pj = sources.find(s => s.id === h.income_source_id);
           const isEditing = editingId === h.id;
           const paymentModel = resolveHospitalPaymentModel(h);
+          const isInactive = h.active === false;
 
           return (
-            <Card key={h.id} className="border-0 shadow-sm">
+            <Card key={h.id} className={`border-0 shadow-sm transition-opacity ${isInactive ? 'opacity-50 bg-muted/30' : ''}`}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap flex-1">
@@ -275,6 +293,9 @@ export default function Hospitals() {
                     <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-blue-100 text-blue-700">
                       {paymentModelLabels[paymentModel]}
                     </Badge>
+                    {isInactive && (
+                      <Badge className="text-xs py-0 h-4 px-1.5 border-0 bg-slate-200 text-slate-600">Inativo</Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => { if (isEditing) { setEditingId(null); } else { startEdit(h); } }}>

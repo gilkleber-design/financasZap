@@ -5,6 +5,54 @@ const normalizeDate = (value) => {
   return String(value).split('T')[0];
 };
 
+const addDays = (dateString, days) => {
+  const date = new Date(`${dateString}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return normalizeDate(date.toISOString());
+};
+
+const addMonths = (dateString, months) => {
+  const date = new Date(`${dateString}T12:00:00Z`);
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDay));
+  return normalizeDate(date.toISOString());
+};
+
+const resolveShiftValue = (hospital, shiftType, shiftKind, shiftDate) => {
+  if (shiftKind === 'sobreaviso') {
+    return Number(hospital.valor_sobreaviso || 0);
+  }
+
+  if (shiftKind === 'avista') {
+    return 0;
+  }
+
+  const date = new Date(`${shiftDate}T12:00:00Z`);
+  const weekday = date.getUTCDay();
+  const isWeekend = weekday === 0 || weekday === 6;
+
+  if (shiftType === 'SD') {
+    return Number(isWeekend ? hospital.valor_sd_fds || hospital.valor_sd_semana || 0 : hospital.valor_sd_semana || 0);
+  }
+
+  return Number(isWeekend ? hospital.valor_sn_fds || hospital.valor_sn_semana || 0 : hospital.valor_sn_semana || 0);
+};
+
+const buildRecurringDates = (date, recurrence) => {
+  if (!recurrence || recurrence === 'none') return [date];
+
+  const dates = [date];
+  for (let index = 1; index < 12; index += 1) {
+    if (recurrence === 'weekly') dates.push(addDays(date, index * 7));
+    if (recurrence === 'biweekly') dates.push(addDays(date, index * 14));
+    if (recurrence === 'monthly') dates.push(addMonths(date, index));
+  }
+  return dates;
+};
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -15,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const payload = await req.json().catch(() => ({}));
-    const { action, shift_id, hospital_id, date, type, shift_kind, valor, notes, status } = payload;
+    const { action, shift_id, hospital_id, date, type, shift_kind, valor, notes, status, recurrence } = payload;
 
     if (!action) {
       return Response.json({ error: 'action is required' }, { status: 400 });
@@ -26,22 +74,45 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'hospital_id, date and type are required' }, { status: 400 });
       }
 
-      const shift = await base44.entities.Shift.create({
-        hospital_id,
-        date: normalizeDate(date),
-        type,
-        shift_kind: shift_kind || 'regular',
-        status: status || 'scheduled',
-        valor: Number(valor || 0),
-        notes: notes || undefined,
-      });
+      const hospital = await base44.entities.Hospital.get(hospital_id);
+      const normalizedDate = normalizeDate(date);
+      const normalizedKind = shift_kind || 'regular';
+      const dates = buildRecurringDates(normalizedDate, normalizedKind === 'regular' ? recurrence : 'none');
 
-      return Response.json({ success: true, action: 'create', shift });
+      const shifts = [];
+      for (const shiftDate of dates) {
+        const resolvedValue = valor !== undefined ? Number(valor || 0) : resolveShiftValue(hospital, type, normalizedKind, shiftDate);
+        const shift = await base44.entities.Shift.create({
+          hospital_id,
+          date: shiftDate,
+          type,
+          shift_kind: normalizedKind,
+          status: status || 'scheduled',
+          valor: resolvedValue,
+          notes: notes || undefined,
+        });
+        shifts.push(shift);
+      }
+
+      return Response.json({ success: true, action: 'create', shifts, shift: shifts[0] || null, recurrence: recurrence || 'none' });
     }
 
     if (action === 'update') {
       if (!shift_id) {
         return Response.json({ error: 'shift_id is required' }, { status: 400 });
+      }
+
+      let resolvedValue;
+      if (valor !== undefined) {
+        resolvedValue = Number(valor || 0);
+      } else if (hospital_id || date || type || shift_kind) {
+        const currentShift = await base44.entities.Shift.get(shift_id);
+        const resolvedHospitalId = hospital_id || currentShift.hospital_id;
+        const resolvedDate = normalizeDate(date || currentShift.date);
+        const resolvedType = type || currentShift.type;
+        const resolvedKind = shift_kind || currentShift.shift_kind;
+        const hospital = await base44.entities.Hospital.get(resolvedHospitalId);
+        resolvedValue = resolveShiftValue(hospital, resolvedType, resolvedKind, resolvedDate);
       }
 
       const updateData = {
@@ -50,7 +121,7 @@ Deno.serve(async (req) => {
         ...(type ? { type } : {}),
         ...(shift_kind ? { shift_kind } : {}),
         ...(status ? { status } : {}),
-        ...(valor !== undefined ? { valor: Number(valor || 0) } : {}),
+        ...(resolvedValue !== undefined ? { valor: resolvedValue } : {}),
         ...(notes !== undefined ? { notes: notes || undefined } : {}),
       };
 

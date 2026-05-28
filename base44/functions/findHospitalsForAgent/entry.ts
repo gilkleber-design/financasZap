@@ -15,9 +15,10 @@ Deno.serve(async (req) => {
 
     const exactSiglaMatches = hospitals.filter((hospital) => hospital.sigla?.toLowerCase() === normalizedQuery);
     const exactNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase() === normalizedQuery);
+    const siglaPrefixMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase().startsWith(`${normalizedQuery} `) || hospital.name?.toLowerCase().startsWith(`${normalizedQuery}-`));
     const partialNameMatches = hospitals.filter((hospital) => hospital.name?.toLowerCase().includes(normalizedQuery));
 
-    const uniqueMatches = [...exactSiglaMatches, ...exactNameMatches, ...partialNameMatches].filter(
+    const uniqueMatches = [...exactSiglaMatches, ...exactNameMatches, ...siglaPrefixMatches, ...partialNameMatches].filter(
       (hospital, index, list) => list.findIndex((item) => item.id === hospital.id) === index
     );
 

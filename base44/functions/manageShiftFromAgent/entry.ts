@@ -61,9 +61,13 @@ const findHospitalMatches = (hospitals, hospitalText) => {
 
   const exactSiglaMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.sigla) === normalizedHospitalText);
   const exactNameMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.name) === normalizedHospitalText);
+  const siglaPrefixMatches = hospitals.filter((hospital) => {
+    const normalizedName = normalizeHospitalText(hospital.name);
+    return normalizedName.startsWith(`${normalizedHospitalText} `) || normalizedName.startsWith(`${normalizedHospitalText}-`);
+  });
   const partialNameMatches = hospitals.filter((hospital) => normalizeHospitalText(hospital.name).includes(normalizedHospitalText));
 
-  return [...exactSiglaMatches, ...exactNameMatches, ...partialNameMatches].filter(
+  return [...exactSiglaMatches, ...exactNameMatches, ...siglaPrefixMatches, ...partialNameMatches].filter(
     (hospital, index, list) => list.findIndex((item) => item.id === hospital.id) === index
   );
 };

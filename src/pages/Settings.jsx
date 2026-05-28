@@ -53,11 +53,11 @@ export default function Settings() {
     name: '',
     sigla: '',
     income_source_id: '',
-    remuneration_model: 'plantao',
+    payment_model: 'so_plantao',
     payment_day: '1',
     payment_months_offset: '1',
-    has_productivity: false,
-    productivity_separate_date: false,
+    valor_medio_pdt: '',
+    atraso_medio_pdt: '',
     valor_sd_semana: '',
     valor_sn_semana: '',
     valor_sd_fds: '',
@@ -118,15 +118,23 @@ export default function Settings() {
     onSuccess: () => {queryClient.invalidateQueries();setEditingSourceId(null);setShowNewSource(false);toast.success('Fonte salva!');}
   });
 
+  const parseHospitalNumber = (value) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
+
   const parseHospitalForm = (data) => ({
     ...data,
     payment_day: parseInt(data.payment_day) || 1,
     payment_months_offset: parseInt(data.payment_months_offset) || 1,
-    valor_sd_semana: parseFloat(data.valor_sd_semana) || 0,
-    valor_sn_semana: parseFloat(data.valor_sn_semana) || 0,
-    valor_sd_fds: parseFloat(data.valor_sd_fds) || 0,
-    valor_sn_fds: parseFloat(data.valor_sn_fds) || 0,
-    valor_sobreaviso: parseFloat(data.valor_sobreaviso) || 0,
+    valor_medio_pdt: parseHospitalNumber(data.valor_medio_pdt),
+    atraso_medio_pdt: parseHospitalNumber(data.atraso_medio_pdt),
+    valor_sd_semana: parseHospitalNumber(data.valor_sd_semana),
+    valor_sn_semana: parseHospitalNumber(data.valor_sn_semana),
+    valor_sd_fds: parseHospitalNumber(data.valor_sd_fds),
+    valor_sn_fds: parseHospitalNumber(data.valor_sn_fds),
+    valor_sobreaviso: parseHospitalNumber(data.valor_sobreaviso),
   });
 
   const upsertHospital = useMutation({
@@ -138,11 +146,11 @@ export default function Settings() {
       name: '',
       sigla: '',
       income_source_id: '',
-      remuneration_model: 'plantao',
+      payment_model: 'so_plantao',
       payment_day: '1',
       payment_months_offset: '1',
-      has_productivity: false,
-      productivity_separate_date: false,
+      valor_medio_pdt: '',
+      atraso_medio_pdt: '',
       valor_sd_semana: '',
       valor_sn_semana: '',
       valor_sd_fds: '',
@@ -358,11 +366,11 @@ export default function Settings() {
            name: '',
            sigla: '',
            income_source_id: '',
-           remuneration_model: 'plantao',
+           payment_model: 'so_plantao',
            payment_day: '1',
            payment_months_offset: '1',
-           has_productivity: false,
-           productivity_separate_date: false,
+           valor_medio_pdt: '',
+           atraso_medio_pdt: '',
            valor_sd_semana: '',
            valor_sn_semana: '',
            valor_sd_fds: '',
@@ -380,16 +388,17 @@ export default function Settings() {
                </Select>
              </div>
              <div><Label>Modelo Remuneração</Label>
-               <Select value={hospitalForm.remuneration_model || 'plantao'} onValueChange={(v) => setHospitalForm({ ...hospitalForm, remuneration_model: v })}>
+               <Select value={hospitalForm.payment_model || 'so_plantao'} onValueChange={(v) => setHospitalForm({ ...hospitalForm, payment_model: v })}>
                  <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                  <SelectContent>
-                   <SelectItem value="plantao">Plantão</SelectItem>
-                   <SelectItem value="producao">Produção</SelectItem>
+                   <SelectItem value="so_plantao">Só plantão</SelectItem>
+                   <SelectItem value="plantao_producao">Plantão + produção</SelectItem>
+                   <SelectItem value="so_producao">Só produção</SelectItem>
                  </SelectContent>
                </Select>
              </div>
 
-             {hospitalForm.remuneration_model === 'plantao' && (
+             {hospitalForm.payment_model !== 'so_producao' && (
                <>
                  <div className="grid grid-cols-2 gap-3">
                    <div>
@@ -417,20 +426,14 @@ export default function Settings() {
                    <div><Label>SN Fim de Semana</Label><CurrencyInput value={hospitalForm.valor_sn_fds} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_sn_fds: value })} /></div>
                    <div><Label>Adicional Sobreaviso</Label><CurrencyInput value={hospitalForm.valor_sobreaviso} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_sobreaviso: value })} /></div>
                  </div>
-
-                 <div className="space-y-3 border border-border rounded-xl p-3 bg-white">
-                   <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium">Tem produtividade?</span>
-                     <Switch checked={!!hospitalForm.has_productivity} onCheckedChange={(v) => setHospitalForm({ ...hospitalForm, has_productivity: v })} />
-                   </div>
-                   {hospitalForm.has_productivity && (
-                     <div className="flex items-center justify-between pt-3 border-t border-border">
-                       <span className="text-sm font-medium">Recebe em data separada?</span>
-                       <Switch checked={!!hospitalForm.productivity_separate_date} onCheckedChange={(v) => setHospitalForm({ ...hospitalForm, productivity_separate_date: v })} />
-                     </div>
-                   )}
-                 </div>
                </>
+             )}
+
+             {hospitalForm.payment_model !== 'so_plantao' && (
+               <div className="grid grid-cols-2 gap-3">
+                 <div><Label>Valor médio PDT</Label><CurrencyInput value={hospitalForm.valor_medio_pdt} onChange={(value) => setHospitalForm({ ...hospitalForm, valor_medio_pdt: value })} /></div>
+                 <div><Label>Atraso médio PDT (dias)</Label><Input type="number" min="0" value={hospitalForm.atraso_medio_pdt || ''} onChange={(e) => setHospitalForm({ ...hospitalForm, atraso_medio_pdt: e.target.value })} /></div>
+               </div>
              )}
 
              <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => {setEditingHospitalId(null);setShowNewHospital(false);}}>Cancelar</Button><Button className="flex-1" onClick={() => upsertHospital.mutate({ ...hospitalForm, active: true })}>Salvar</Button></div>
@@ -440,12 +443,15 @@ export default function Settings() {
           <div key={h.id} className={`flex items-center justify-between p-3 rounded-lg border ${h.active === false ? 'bg-slate-50 opacity-60' : 'bg-white shadow-sm'}`}>
              <div className="flex flex-col">
                 <span className="text-sm font-bold">{h.name}</span>
-                <span className="text-[10px] text-muted-foreground font-bold uppercase">{h.sigla} • {h.remuneration_model === 'producao' ? 'Produção' : 'Plantão'}</span>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase">{h.sigla} • {h.payment_model === 'so_producao' ? 'Só produção' : h.payment_model === 'plantao_producao' ? 'Plantão + produção' : 'Só plantão'}</span>
              </div>
              <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => {setEditingHospitalId(h.id);setHospitalForm({
                ...h,
+               payment_model: h.payment_model || 'so_plantao',
                payment_day: String(h.payment_day || 1),
                payment_months_offset: String(h.payment_months_offset || 1),
+               valor_medio_pdt: String(h.valor_medio_pdt || ''),
+               atraso_medio_pdt: String(h.atraso_medio_pdt || ''),
                valor_sd_semana: String(h.valor_sd_semana || ''),
                valor_sn_semana: String(h.valor_sn_semana || ''),
                valor_sd_fds: String(h.valor_sd_fds || ''),

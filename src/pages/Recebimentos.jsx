@@ -421,17 +421,17 @@ function StatusRow({ row, transactions, variant }) {
 
   // Linha 1: competência em MMM/yy
   const competenciaLabel = row.competencia
-    ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), "MMM/yy", { locale: ptBR })
+    ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), "MMM/yy", { locale: ptBR }).toUpperCase()
     : null;
 
   // Linha 2: vencimento em MMM/yy
   const vencLabel = row.due_date
-    ? format(new Date(`${row.due_date.slice(0, 10)}T12:00:00`), "MMM/yy", { locale: ptBR })
+    ? format(new Date(`${row.due_date.slice(0, 10)}T12:00:00`), "MMM/yy", { locale: ptBR }).toUpperCase()
     : null;
 
   // Linha 2: pagamento em dd/MMM
   const pagtoLabel = tx?.date
-    ? format(new Date(`${tx.date.slice(0, 10)}T12:00:00`), "dd/MMM", { locale: ptBR })
+    ? format(new Date(`${tx.date.slice(0, 10)}T12:00:00`), "dd/MMM", { locale: ptBR }).toUpperCase()
     : null;
 
   const titulo = [row.hospital, competenciaLabel].filter(Boolean).join(' - ');
@@ -446,7 +446,7 @@ function StatusRow({ row, transactions, variant }) {
       <div className="flex flex-col gap-0.5 min-w-0">
         <span className="text-sm font-semibold text-[#0D3B66] truncate">{titulo}</span>
         {subtitulo && (
-          <span className="text-[10px] text-[#7B92A8]">{subtitulo}</span>
+          <span className="text-xs text-[#4A6278]">{subtitulo}</span>
         )}
       </div>
       <div className="flex flex-col items-end gap-0.5 ml-4 flex-shrink-0">

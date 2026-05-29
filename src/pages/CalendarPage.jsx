@@ -280,14 +280,14 @@ export default function CalendarPage() {
     await Promise.all(updates);
 
     // Gera Receivables usando exatamente o receivablePreview (já filtrado sem cancelados)
-    for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt, isExtra, sourceId } of receivablePreview) {
-      // Se for receita extra (isExtra), a categoria vai ser identificada pelo source, senao default plantoes_pj
-      const categorySlug = isExtra ? 'salario_bolsas' : 'plantoes_pj';
-      const categories = await base44.entities.Category.filter({ slug: categorySlug });
-      // Se não encontrar, faz fallback pra 'plantoes_pj' ou a primeira disponivel
+    for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt, isExtra, sourceId, categorySlug } of receivablePreview) {
+      // Se for receita extra (isExtra), usamos a categoria escolhida no modal
+      const targetCategorySlug = isExtra ? (categorySlug || 'salario') : 'plantoes_pj';
+      const categories = await base44.entities.Category.filter({ slug: targetCategorySlug });
+      // Se não encontrar, faz fallback pra primeira disponivel
       let finalCategory = categories?.[0];
       if (!finalCategory && isExtra) {
-         const fallbackCategories = await base44.entities.Category.filter({ slug: 'plantoes_pj' });
+         const fallbackCategories = await base44.entities.Category.filter({ slug: 'extras' });
          finalCategory = fallbackCategories?.[0] || null;
       }
       
@@ -299,7 +299,7 @@ export default function CalendarPage() {
         competencia: format(startOfMonth(hshifts?.length > 0 ? new Date(hshifts[0].date + 'T12:00:00') : currentMonth), 'yyyy-MM-dd'),
         income_source_id: hospital?.income_source_id || source?.id || sourceId || '',
         hospital_id: hospital?.id,
-        category: finalCategory?.slug || categorySlug,
+        category: finalCategory?.slug || targetCategorySlug,
         category_id: finalCategory?.id,
         tax_rate: taxRate || 0,
         status: 'pending',

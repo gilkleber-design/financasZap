@@ -31,13 +31,13 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   );
   const [extraIncomes, setExtraIncomes] = useState([]);
   const [showExtraForm, setShowExtraForm] = useState(false);
-  const [extraForm, setExtraForm] = useState({ description: '', amount: '', taxRate: '', sourceId: '' });
+  const [extraForm, setExtraForm] = useState({ description: '', amount: '', categorySlug: 'salario', sourceId: '' });
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
   const extraTemplates = {
-    salario_afya: { description: 'SALÁRIO AFYA', amount: 5199.58, taxRate: 0, sourceId: '' },
-    bolsa_residencia: { description: 'BOLSA PRECEPTORIA RESIDENCIA', amount: 2500, taxRate: 13, sourceId: '' },
-    bolsa_internato: { description: 'BOLSA INTERNATO', amount: '', taxRate: 0, sourceId: '' },
+    salario_afya: { description: 'SALÁRIO AFYA', amount: 5199.58, categorySlug: 'salario', sourceId: '' },
+    bolsa_residencia: { description: 'BOLSA PRECEPTORIA RESIDENCIA', amount: 2500, categorySlug: 'bolsas', sourceId: '' },
+    bolsa_internato: { description: 'BOLSA INTERNATO', amount: '', categorySlug: 'bolsas', sourceId: '' },
   };
 
   const toggle = (id) => {
@@ -137,7 +137,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   const handleTemplateSelect = (templateKey) => {
     if (templateKey === 'outro') {
       setSelectedTemplate('outro');
-      setExtraForm({ description: '', amount: '', taxRate: '', sourceId: '' });
+      setExtraForm({ description: '', amount: '', categorySlug: 'salario', sourceId: '' });
     } else {
       const template = extraTemplates[templateKey];
       setSelectedTemplate(templateKey);
@@ -148,10 +148,8 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
   const addExtraIncome = () => {
     if (!extraForm.description || !extraForm.amount) return;
     const amount = parseFloat(extraForm.amount);
-    const taxRate = parseFloat(extraForm.taxRate) || 0;
-    const netAmount = taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
-    setExtraIncomes([...extraIncomes, { ...extraForm, amount, taxRate, netAmount }]);
-    setExtraForm({ description: '', amount: '', taxRate: '', sourceId: '' });
+    setExtraIncomes([...extraIncomes, { ...extraForm, amount, taxRate: 0, netAmount: amount }]);
+    setExtraForm({ description: '', amount: '', categorySlug: 'salario', sourceId: '' });
     setSelectedTemplate('');
     setShowExtraForm(false);
   };
@@ -164,13 +162,14 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
     description: ei.description,
     total: ei.netAmount,
     totalBruto: ei.amount,
-    taxRate: ei.taxRate,
+    taxRate: ei.taxRate || 0,
     dueDate: currentMonth ? addMonths(startOfMonth(currentMonth), 1) : new Date(),
     label: ei.description,
     isPdt: false,
     isProducao: false,
     isExtra: true,
     sourceId: ei.sourceId,
+    categorySlug: ei.categorySlug,
   }));
 
   const allReceivables = [...receivablePreview, ...extraIncomesPreview];
@@ -242,9 +241,9 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                 {selectedTemplate !== 'outro' && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                     <p className="text-xs font-semibold text-blue-700">{extraForm.description}</p>
-                    {extraForm.taxRate > 0 && (
-                      <p className="text-xs text-blue-600 mt-1">Imposto: {extraForm.taxRate}%</p>
-                    )}
+                    <p className="text-xs text-blue-600 mt-1">
+                      Categoria: {extraForm.categorySlug === 'salario' ? 'Salário' : extraForm.categorySlug === 'bolsas' ? 'Bolsas' : 'Extras'}
+                    </p>
                   </div>
                 )}
                 {selectedTemplate === 'outro' && (
@@ -262,19 +261,21 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                     onChange={(value) => setExtraForm({ ...extraForm, amount: value })}
                     className="px-2 py-1.5 text-sm rounded border border-input bg-background h-auto"
                   />
-                  <input
-                    type="number"
-                    placeholder="Imposto %"
-                    value={extraForm.taxRate}
-                    onChange={e => setExtraForm({ ...extraForm, taxRate: e.target.value })}
+                  <select
+                    value={extraForm.categorySlug}
+                    onChange={e => setExtraForm({ ...extraForm, categorySlug: e.target.value })}
                     className="px-2 py-1.5 text-sm rounded border border-input bg-background"
-                  />
+                  >
+                    <option value="salario">Salário</option>
+                    <option value="bolsas">Bolsas</option>
+                    <option value="extras">Extras</option>
+                  </select>
                   <Button size="sm" onClick={addExtraIncome} className="h-8">Adicionar</Button>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { setSelectedTemplate(''); setExtraForm({ description: '', amount: '', taxRate: '', sourceId: '' }); }}
+                  onClick={() => { setSelectedTemplate(''); setExtraForm({ description: '', amount: '', categorySlug: 'salario', sourceId: '' }); }}
                   className="w-full text-xs"
                 >
                   Voltar
@@ -288,11 +289,10 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                   <div key={idx} className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-violet-800">{ei.description}</p>
-                      <p className="text-xs text-violet-600">{ei.taxRate > 0 ? `${ei.taxRate}% imposto` : 'Sem imposto'}</p>
+                      <p className="text-xs text-violet-600 capitalize">{ei.categorySlug === 'plantoes_pj' ? 'Plantões' : ei.categorySlug}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-violet-700">{fmt(ei.netAmount)}</p>
-                      {ei.taxRate > 0 && <p className="text-xs text-violet-500">{fmt(ei.amount)} bruto</p>}
                     </div>
                     <button
                       onClick={() => removeExtraIncome(idx)}

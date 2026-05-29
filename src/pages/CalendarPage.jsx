@@ -281,8 +281,16 @@ export default function CalendarPage() {
 
     // Gera Receivables usando exatamente o receivablePreview (já filtrado sem cancelados)
     for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt, isExtra, sourceId } of receivablePreview) {
-      const categories = await base44.entities.Category.filter({ slug: 'plantoes' });
-      const plantaoCategory = categories?.[0] || null;
+      // Se for receita extra (isExtra), a categoria vai ser identificada pelo source, senao default plantoes_pj
+      const categorySlug = isExtra ? 'salario_bolsas' : 'plantoes_pj';
+      const categories = await base44.entities.Category.filter({ slug: categorySlug });
+      // Se não encontrar, faz fallback pra 'plantoes_pj' ou a primeira disponivel
+      let finalCategory = categories?.[0];
+      if (!finalCategory && isExtra) {
+         const fallbackCategories = await base44.entities.Category.filter({ slug: 'plantoes_pj' });
+         finalCategory = fallbackCategories?.[0] || null;
+      }
+      
       const rec = await createReceivableMutation.mutateAsync({
         description: label,
         amount: totalBruto,
@@ -291,8 +299,8 @@ export default function CalendarPage() {
         competencia: format(startOfMonth(hshifts?.length > 0 ? new Date(hshifts[0].date + 'T12:00:00') : currentMonth), 'yyyy-MM-dd'),
         income_source_id: hospital?.income_source_id || source?.id || sourceId || '',
         hospital_id: hospital?.id,
-        category: 'plantoes',
-        category_id: plantaoCategory?.id,
+        category: finalCategory?.slug || categorySlug,
+        category_id: finalCategory?.id,
         tax_rate: taxRate || 0,
         status: 'pending',
         notes: isExtra

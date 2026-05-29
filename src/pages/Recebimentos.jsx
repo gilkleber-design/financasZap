@@ -25,9 +25,6 @@ export default function Recebimentos() {
     localStorage.setItem('receb_mes', format(anchorMonth, 'yyyy-MM'));
   }, [anchorMonth]);
 
-  const months = useMemo(() => Array.from({ length: range }, (_, index) => subMonths(anchorMonth, range - 1 - index)), [anchorMonth, range]);
-  const monthKeys = useMemo(() => months.map((date) => format(date, 'yyyy-MM')), [months]);
-
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const { data: receivables = [] } = useQuery({ queryKey: ['recebimentos-receivables'], queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
   const { data: transactions = [] } = useQuery({ queryKey: ['recebimentos-transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
@@ -88,38 +85,42 @@ export default function Recebimentos() {
       rate: stats.produced ? stats.received / stats.produced : 0
     })).sort((a, b) => b.rate - a.rate);
 
-    const filteredReceivables = receivables.filter((item) => monthKeys.includes((item.due_date || item.competencia || '').slice(0, 7)));
-    const pjGroups = incomeSources.map((source) => {
-      const sourceReceivables = filteredReceivables.filter((item) => item.income_source_id === source.id);
-      const rows = sourceReceivables.map((item) => {
-        const gross = Number(item.amount || 0);
-        const net = Number(item.net_amount || item.amount || 0);
-        const tax = gross - net;
-        const overdue = item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < hoje;
-        return {
-          id: item.id,
-          hospital: item.description?.split('—')[0]?.trim() || source.name,
-          competencia: item.competencia || item.due_date,
-          due_date: item.due_date || item.competencia,
-          gross,
-          tax,
-          net,
-          status: item.status === 'received' ? 'recebido' : overdue ? 'vencido' : 'a_receber',
-        };
-      }).sort((a, b) => String(b.due_date || '').localeCompare(String(a.due_date || '')));
+    // Receivables cujo pagamento (Transaction.date) caiu no mês selecionado
+    const recebidosNoMes = enrichedReceivables.filter(item => {
+      if (!item.transaction_id) return false;
+      const tx = transactions.find(t => t.id === item.transaction_id);
+      return tx && (tx.date || '').slice(0, 7) === currentMonthKey;
+    });
 
-      if (!rows.length) return null;
+    // Agrupar por PJ (income_source_id ou pjName)
+    const pjMap = {};
+    recebidosNoMes.forEach(item => {
+      const pjKey = item.income_source_id || item.pjName || 'Outros';
+      if (!pjMap[pjKey]) {
+        pjMap[pjKey] = { id: pjKey, name: item.pjName || pjKey, gross: 0, tax: 0, net: 0, taxRate: 0, rows: [] };
+      }
+      pjMap[pjKey].gross += Number(item.gross_amount || item.amount || 0);
+      pjMap[pjKey].tax   += Number(item.tax_amount || 0);
+      pjMap[pjKey].net   += Number(item.net_amount || item.amount || 0);
+      pjMap[pjKey].rows.push({
+        id: item.id,
+        hospital: item.hospital,
+        competencia: item.competencia || item.due_date,
+        due_date: item.due_date || item.competencia,
+        gross: Number(item.gross_amount || item.amount || 0),
+        tax: Number(item.tax_amount || 0),
+        net: Number(item.net_amount || item.amount || 0),
+        status: 'recebido'
+      });
+    });
 
-      return {
-        id: source.id,
-        name: source.name,
-        rows,
-        gross: rows.reduce((sum, row) => sum + row.gross, 0),
-        tax: rows.reduce((sum, row) => sum + row.tax, 0),
-        net: rows.reduce((sum, row) => sum + row.net, 0),
-        taxRate: rows.reduce((sum, row) => sum + row.gross, 0) ? (rows.reduce((sum, row) => sum + row.tax, 0) / rows.reduce((sum, row) => sum + row.gross, 0)) * 100 : 0,
-      };
-    }).filter(Boolean);
+    Object.values(pjMap).forEach(pj => {
+      pj.taxRate = pj.gross > 0 ? (pj.tax / pj.gross) * 100 : 0;
+    });
+
+    const pjGroups = Object.values(pjMap).sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR')
+    );
 
     return {
       currentMonthKey,
@@ -132,7 +133,7 @@ export default function Recebimentos() {
       bestPayer: hospitalPerformance[0],
       pjGroups,
     };
-  }, [receivables, transactions, hospitals, incomeSources, anchorMonth, monthKeys, now]);
+  }, [receivables, transactions, hospitals, incomeSources, anchorMonth, now]);
 
   const canGoNext = !isAfter(startOfMonth(addOneMonth(anchorMonth)), startOfMonth(now));
 
@@ -155,7 +156,7 @@ export default function Recebimentos() {
         <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-card p-4 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Recebimentos</h1>
-            <p className="text-sm text-muted-foreground">Visão líquida por período e por PJ.</p>
+            <p className="text-sm text-muted-foreground">Visão de caixa por período e por PJ.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => setShowReceivableForm(true)} className="gap-2">
@@ -192,7 +193,7 @@ export default function Recebimentos() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
               <Building2 className="h-4 w-4 text-primary" />
-              <span>Plantões por PJ</span>
+              <span>Recebido por PJ em {format(anchorMonth, 'MMM', { locale: ptBR })}</span>
             </div>
             <Button variant="outline" size="sm" className="gap-2 text-xs text-primary border-primary/30">
               <Download className="h-3.5 w-3.5" /> Exportar CSV
@@ -358,6 +359,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
         />
       )}
 
+      {/* Linha + Total esperado */}
       <div className="border-t-2 border-border pt-3 flex justify-between items-baseline px-1">
         <span className="text-sm text-muted-foreground">= Total esperado em {mesLabel}</span>
         <span className="text-base font-semibold text-[#0D3B66]">{formatCurrency(totalReal, 2)}</span>
@@ -379,6 +381,11 @@ function StatusCard({ title, icon, rows, transactions, variant }) {
   };
   const total = rows.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
 
+  // Ordenar alfabeticamente por sigla do hospital
+  const sortedRows = [...rows].sort((a, b) =>
+    (a.hospital || '').localeCompare(b.hospital || '', 'pt-BR')
+  );
+
   return (
     <div className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-border">
@@ -393,7 +400,7 @@ function StatusCard({ title, icon, rows, transactions, variant }) {
         <span className="text-xs font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
       </div>
       <div className="divide-y divide-[#F0F4F8]">
-        {rows.map(row => (
+        {sortedRows.map(row => (
           <StatusRow key={row.id} row={row} transactions={transactions} variant={variant} />
         ))}
       </div>
@@ -412,30 +419,35 @@ function StatusRow({ row, transactions, variant }) {
     ? transactions.find(t => t.id === row.transaction_id)
     : null;
 
-  const dueDateLabel = row.due_date
-    ? format(new Date(`${row.due_date.slice(0, 10)}T12:00:00`), "dd/MMM", { locale: ptBR })
-    : null;
-
-  const paidDateLabel = tx?.date
-    ? format(new Date(`${tx.date.slice(0, 10)}T12:00:00`), "dd/MMM", { locale: ptBR })
-    : null;
-
+  // Linha 1: competência em MMM/yy
   const competenciaLabel = row.competencia
     ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), "MMM/yy", { locale: ptBR })
     : null;
 
-  const detalhes = [
-    row.pjName,
-    competenciaLabel ? `comp. ${competenciaLabel}` : null,
-    dueDateLabel     ? `venc. ${dueDateLabel}`     : null,
-    paidDateLabel    ? `pago ${paidDateLabel}`      : null,
+  // Linha 2: vencimento em MMM/yy
+  const vencLabel = row.due_date
+    ? format(new Date(`${row.due_date.slice(0, 10)}T12:00:00`), "MMM/yy", { locale: ptBR })
+    : null;
+
+  // Linha 2: pagamento em dd/MMM
+  const pagtoLabel = tx?.date
+    ? format(new Date(`${tx.date.slice(0, 10)}T12:00:00`), "dd/MMM", { locale: ptBR })
+    : null;
+
+  const titulo = [row.hospital, competenciaLabel].filter(Boolean).join(' - ');
+
+  const subtitulo = [
+    vencLabel  ? `Venc: ${vencLabel}`   : null,
+    pagtoLabel ? `Pagto: ${pagtoLabel}` : null,
   ].filter(Boolean).join(' · ');
 
   return (
     <div className="flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors">
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-sm font-semibold text-[#0D3B66] truncate">{row.hospital}</span>
-        <span className="text-[10px] text-[#7B92A8]">{detalhes}</span>
+        <span className="text-sm font-semibold text-[#0D3B66] truncate">{titulo}</span>
+        {subtitulo && (
+          <span className="text-[10px] text-[#7B92A8]">{subtitulo}</span>
+        )}
       </div>
       <div className="flex flex-col items-end gap-0.5 ml-4 flex-shrink-0">
         <span className={`text-sm font-bold ${valueColor[variant]}`}>

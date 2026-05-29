@@ -89,6 +89,13 @@ export default function Recebimentos() {
       };
     });
 
+    const totalEsperado = receivables
+      .filter((item) => {
+        const dueDateKey = (item.due_date || item.competencia || '').slice(0, 7);
+        return monthKeys.includes(dueDateKey);
+      })
+      .reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
+
     const totalWorked = filteredReceivables.reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
     const totalReceived = filteredReceivables.filter((item) => item.status === 'received').reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
     const overdueAmount = filteredReceivables.filter((item) => item.status !== 'received' && item.due_date && item.due_date.slice(0, 10) < todayKey).reduce((sum, item) => sum + Number(item.net_amount || item.amount || 0), 0);
@@ -132,6 +139,7 @@ export default function Recebimentos() {
     }).filter(Boolean);
 
     return {
+      totalEsperado,
       totalWorked,
       totalReceived,
       missingAmount,
@@ -184,9 +192,9 @@ export default function Recebimentos() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Trabalhado" value={formatCurrency(data.totalWorked, 2)} sub="líquido no período" />
-          <KpiCard label="Recebido" value={formatCurrency(data.totalReceived, 2)} sub={`${data.totalWorked ? ((data.totalReceived / data.totalWorked) * 100).toFixed(1) : '0.0'}% do trabalhado`} />
-          <KpiCard label="Falta receber" value={formatCurrency(data.missingAmount, 2)} sub={data.overdueAmount > 0 ? `${formatCurrency(data.overdueAmount, 2)} vencidos` : 'Tudo dentro do prazo'} valueClassName={data.overdueAmount > 0 ? 'text-[#C0392B]' : 'text-primary'} />
+          <KpiCard label="Total esperado" value={formatCurrency(data.totalEsperado, 2)} sub="a receber no período" />
+          <KpiCard label="Recebido" value={formatCurrency(data.totalReceived, 2)} sub={`${data.totalEsperado ? ((data.totalReceived / data.totalEsperado) * 100).toFixed(1) : '0.0'}% do esperado`} />
+          <KpiCard label="Pendente" value={formatCurrency(data.missingAmount, 2)} sub={data.overdueAmount > 0 ? `${formatCurrency(data.overdueAmount, 2)} vencidos` : 'Tudo dentro do prazo'} valueClassName={data.overdueAmount > 0 ? 'text-[#C0392B]' : 'text-primary'} />
           <KpiCard label="Melhor pagador" value={data.bestPayer?.name || '—'} sub={data.bestPayer?.rate === 1 ? 'Sempre em dia' : `${((data.bestPayer?.rate || 0) * 100).toFixed(1)}% recebido`} />
         </div>
 

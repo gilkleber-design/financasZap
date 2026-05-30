@@ -15,6 +15,11 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const invite = urlParams.get('family_invite');
+    if (invite) {
+      localStorage.setItem('pending_family_invite', invite);
+    }
     checkAppState();
   }, []);
 
@@ -91,9 +96,29 @@ export const AuthProvider = ({ children }) => {
 
   const checkUserAuth = async () => {
     try {
-      // Now check if the user is authenticated
       setIsLoadingAuth(true);
       const currentUser = await base44.auth.me();
+      
+      let needsUpdate = false;
+      const updates = {};
+      const pendingInvite = localStorage.getItem('pending_family_invite');
+      
+      if (pendingInvite && pendingInvite !== currentUser.family_id) {
+         updates.family_id = pendingInvite;
+         needsUpdate = true;
+         localStorage.removeItem('pending_family_invite');
+      } else if (!currentUser.family_id) {
+         updates.family_id = currentUser.id;
+         needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+         await base44.auth.updateMe(updates);
+         currentUser.family_id = updates.family_id;
+      }
+      
+      window.__BASE44_FAMILY_ID = currentUser.family_id;
+
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);

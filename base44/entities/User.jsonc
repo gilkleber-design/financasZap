@@ -4,11 +4,11 @@
   "properties": {
     "role": {
       "type": "string",
-      "description": "The role of the user in the app",
       "enum": [
         "admin",
         "user"
-      ]
+      ],
+      "description": "The role of the user in the app"
     },
     "whatsapp_alert_enabled": {
       "type": "boolean",
@@ -22,10 +22,14 @@
     },
     "whatsapp_alert_times": {
       "type": "array",
-      "description": "Hor\u00e1rios dos alertas no formato HH:MM",
       "items": {
         "type": "string"
-      }
+      },
+      "description": "Hor\u00e1rios dos alertas no formato HH:MM"
+    },
+    "family_id": {
+      "type": "string",
+      "description": "ID da fam\u00edlia que os dados est\u00e3o isolados"
     }
   },
   "required": [

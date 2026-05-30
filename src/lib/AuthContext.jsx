@@ -103,11 +103,15 @@ export const AuthProvider = ({ children }) => {
       const updates = {};
       const pendingInvite = localStorage.getItem('pending_family_invite');
       
-      if (pendingInvite && pendingInvite !== currentUser.family_id) {
-         updates.family_id = pendingInvite;
-         needsUpdate = true;
+      if (pendingInvite) {
+         if (pendingInvite !== currentUser.family_id && pendingInvite !== currentUser.id) {
+            updates.family_id = pendingInvite;
+            needsUpdate = true;
+         }
          localStorage.removeItem('pending_family_invite');
-      } else if (!currentUser.family_id) {
+      } 
+      
+      if (!updates.family_id && !currentUser.family_id) {
          updates.family_id = currentUser.id;
          needsUpdate = true;
       }
@@ -142,6 +146,7 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
+    localStorage.removeItem('pending_family_invite');
     
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect

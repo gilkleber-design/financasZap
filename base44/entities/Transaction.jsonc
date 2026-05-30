@@ -101,6 +101,9 @@
     "notes": {
       "type": "string",
       "description": "Observa\u00e7\u00f5es"
+    },
+    "family_id": {
+      "type": "string"
     }
   },
   "required": [
@@ -111,8 +114,35 @@
   ],
   "rls": {
     "create": true,
-    "read": true,
-    "update": true,
-    "delete": true
+    "read": {
+      "$or": [
+        {
+          "family_id": "{{user.family_id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "family_id": "{{user.family_id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "family_id": "{{user.family_id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    }
   }
 }

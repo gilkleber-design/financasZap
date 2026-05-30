@@ -17,6 +17,9 @@
     "amount": {
       "type": "number",
       "description": "Valor limite planejado"
+    },
+    "family_id": {
+      "type": "string"
     }
   },
   "required": [
@@ -27,8 +30,35 @@
   ],
   "rls": {
     "create": true,
-    "read": true,
-    "update": true,
-    "delete": true
+    "read": {
+      "$or": [
+        {
+          "family_id": "{{user.family_id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "family_id": "{{user.family_id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "family_id": "{{user.family_id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    }
   }
 }

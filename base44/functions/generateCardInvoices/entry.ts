@@ -4,14 +4,24 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Obter family_id da automação via request body
+    const user = await base44.auth.me();
+    if (!user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { family_id, forceCardId, forceMonth } = await req.json().catch(() => ({}));
 
-    if (!family_id) {
-      return Response.json(
-        { error: 'family_id is required in request body' },
-        { status: 400 }
-      );
+    let targetFamilyId = family_id;
+
+    // Se nenhum family_id foi fornecido (ex: rodando via automação), processar a família do usuário
+    // Se quiser processar todas as famílias, o admin deve rodar com lógica específica,
+    // mas por segurança e isolamento, vamos rodar no contexto da família do chamador
+    if (!targetFamilyId) {
+      targetFamilyId = user.family_id || user.id;
+    }
+
+    if (targetFamilyId !== (user.family_id || user.id) && user.role !== 'admin') {
+      return Response.json({ error: 'Forbidden: Admin access required for other families' }, { status: 403 });
     }
 
     const today = new Date();
@@ -23,7 +33,7 @@ Deno.serve(async (req) => {
     const creditCards = cards.filter(
       (c) =>
         (c.type === 'credit' || c.type === 'both') &&
-        c.family_id === family_id
+        c.family_id === targetFamilyId
     );
 
     const results = [];
@@ -43,7 +53,7 @@ Deno.serve(async (req) => {
       const alreadyExists = existingInvoices.some(
         (inv) =>
           inv.card_id === card.id &&
-          inv.family_id === family_id &&
+          inv.family_id === targetFamilyId &&
           inv.month &&
           inv.month.startsWith(refMonthStr)
       );
@@ -60,7 +70,7 @@ Deno.serve(async (req) => {
       // Buscar Payables da família
       const allPayables = await base44.asServiceRole.entities.Payable.list('-due_date', 500);
       const familyPayables = allPayables.filter(
-        (p) => p.origin_id === card.id && p.origin_type === 'card' && p.family_id === family_id
+        (p) => p.origin_id === card.id && p.origin_type === 'card' && p.family_id === targetFamilyId
       );
 
       const [refYear, refMon] = refMonthStr.split('-').map(Number);
@@ -130,7 +140,7 @@ Deno.serve(async (req) => {
         origin_type: 'card',
         is_card_invoice_payable: true,
         notes: `Fatura ${card.name} — ${refMonthStr}`,
-        family_id: family_id,
+        family_id: targetFamilyId,
       });
 
       // Criar CardInvoice
@@ -142,7 +152,7 @@ Deno.serve(async (req) => {
         closing_date: closingDateStr,
         due_date: dueDateStr || closingDateStr,
         payable_id: invoicePayable.id,
-        family_id: family_id,
+        family_id: targetFamilyId,
       });
 
       // Vincular items à fatura

@@ -8,8 +8,13 @@ Deno.serve(async (req) => {
 
         const targetFamilyId = user.family_id || user.id;
 
-        const allUsers = await base44.asServiceRole.entities.User.list();
-        const familyMembers = allUsers.filter(u => (u.family_id || u.id) === targetFamilyId);
+        // Busca apenas usuários que pertencem à família do requisitante, evitando carregar todos os usuários do sistema
+        const familyMembers = await base44.asServiceRole.entities.User.filter({
+            $or: [
+                { family_id: targetFamilyId },
+                { id: targetFamilyId }
+            ]
+        });
 
         const safeMembers = familyMembers.map(u => ({
             id: u.id,

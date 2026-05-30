@@ -152,10 +152,10 @@ export default function Recebimentos() {
         </div>
       </div>
 
-      <div className="space-y-3 md:space-y-6 p-4 md:p-6 max-w-4xl mx-auto w-full">
+      <div className="space-y-3 p-4 md:p-4">
         <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-card p-4 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-foreground">Recebimentos</h1>
+            <h1 className="text-2xl font-bold text-foreground">Recebimentos</h1>
             <p className="text-sm text-muted-foreground">Visão de caixa por período e por PJ.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -175,7 +175,7 @@ export default function Recebimentos() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:gap-6 grid-cols-2 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard label="Total esperado" value={formatCurrency(data.totalEsperado, 2)} sub={`a vencer em ${format(anchorMonth, 'MMM', { locale: ptBR })}`} />
           <KpiCard label="Recebido" value={formatCurrency(data.totalRecebido, 2)} sub={`pago em ${format(anchorMonth, 'MMM', { locale: ptBR })} · ${data.pctRecebido}%`} />
           <KpiCard label="Pendente" value={formatCurrency(data.totalPendente, 2)} sub={data.overdueAmount > 0 ? `${formatCurrency(data.overdueAmount, 2)} vencidos` : 'Tudo dentro do prazo'} valueClassName={data.overdueAmount > 0 ? 'text-[#C0392B]' : 'text-primary'} />
@@ -190,12 +190,12 @@ export default function Recebimentos() {
         />
 
         <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-2 md:mb-4">
-            <div className="flex items-center gap-2 text-[10px] md:text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
               <Building2 className="h-4 w-4 text-primary" />
               <span>Recebido por PJ em {format(anchorMonth, 'MMM', { locale: ptBR })}</span>
             </div>
-            <Button variant="outline" size="sm" className="gap-2 text-xs text-primary border-primary/30 w-full md:w-auto">
+            <Button variant="outline" size="sm" className="gap-2 text-xs text-primary border-primary/30">
               <Download className="h-3.5 w-3.5" /> Exportar CSV
             </Button>
           </div>
@@ -212,7 +212,7 @@ export default function Recebimentos() {
                     </div>
                   </div>
                 </div>
-                <div className="hidden md:block overflow-x-auto">
+                <div className="overflow-x-auto">
                   <table className="min-w-full text-left">
                     <thead className="bg-[#F8FAFC]">
                       <tr className="text-[9px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
@@ -237,36 +237,6 @@ export default function Recebimentos() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-                <div className="md:hidden flex flex-col divide-y divide-border">
-                  {group.rows.map((row) => (
-                    <div key={row.id} className="flex flex-col p-4 bg-white gap-2">
-                      <div className="flex justify-between items-baseline py-1 border-b border-border">
-                        <span className="text-sm font-medium text-muted-foreground">Hospital</span>
-                        <span className="text-sm font-semibold text-right">{row.hospital}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline py-1 border-b border-border">
-                        <span className="text-sm font-medium text-muted-foreground">Compet.</span>
-                        <span className="text-sm font-semibold text-right">{row.competencia ? format(new Date(`${row.competencia.slice(0, 10)}T12:00:00`), 'MMM/yy', { locale: ptBR }).toUpperCase() : '—'}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline py-1 border-b border-border">
-                        <span className="text-sm font-medium text-muted-foreground">Bruto</span>
-                        <span className="text-sm font-semibold text-muted-foreground text-right">{formatCurrency(row.gross, 2)}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline py-1 border-b border-border">
-                        <span className="text-sm font-medium text-muted-foreground">Imposto</span>
-                        <span className="text-sm font-semibold text-[#C0622A] text-right">{formatCurrency(row.tax, 2)}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline py-1 border-b border-border">
-                        <span className="text-sm font-medium text-muted-foreground">Líquido</span>
-                        <span className="text-sm font-semibold text-[#0D3B66] text-right">{formatCurrency(row.net, 2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center pt-2">
-                        <span className="text-sm font-medium text-muted-foreground">Status</span>
-                        <StatusBadge status={row.status} amount={row.net} partialAmount={row.net} />
-                      </div>
-                    </div>
-                  ))}
                 </div>
                 <div className="border-t border-border bg-[#F0F4F8] px-4 py-2 text-[10px] font-bold uppercase text-foreground">
                   Total Bruto: {formatCurrency(group.gross, 2)} · Imposto: {formatCurrency(group.tax, 2)} · Líquido: {formatCurrency(group.net, 2)}
@@ -299,10 +269,10 @@ function addOneMonth(date) {
 
 function KpiCard({ label, value, sub, valueClassName = 'text-foreground' }) {
   return (
-    <div className="rounded-xl border border-[#E8EDF2] bg-white p-3 md:p-4 flex flex-col justify-between">
-      <div className="mb-1 text-[9px] md:text-[10px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{label}</div>
-      <div className={`text-base md:text-xl font-bold ${valueClassName}`}>{value}</div>
-      <div className="mt-1 text-[9px] md:text-xs text-muted-foreground leading-tight">{sub}</div>
+    <div className="rounded-xl border border-[#E8EDF2] bg-white px-4 py-3">
+      <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{label}</div>
+      <div className={`text-lg font-bold ${valueClassName}`}>{value}</div>
+      <div className="mt-1 text-[9px] text-muted-foreground">{sub}</div>
     </div>
   );
 }
@@ -424,16 +394,16 @@ function StatusCard({ title, icon, rows, transactions, variant }) {
 
   return (
     <div className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
-      <div className={`flex items-center justify-between px-4 md:px-5 py-3 border-b border-border ${bgHeader[variant]}`}>
+      <div className={`flex items-center justify-between px-5 py-3 border-b border-border ${bgHeader[variant]}`}>
         <div className="flex items-center gap-2">
-          <span className={`text-sm md:text-base font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
+          <span className={`text-sm font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
             {icon} {title}
           </span>
           <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${badgeCls[variant]}`}>
             {rows.length}
           </span>
         </div>
-        <span className="text-sm md:text-base font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
+        <span className="text-sm font-bold text-[#0D3B66]">{formatCurrency(total, 2)}</span>
       </div>
       <div className="divide-y divide-[#F0F4F8]">
         {sortedRows.map(row => (
@@ -478,7 +448,7 @@ function StatusRow({ row, transactions, variant }) {
   ].filter(Boolean).join(' · ');
 
   return (
-    <div className="flex items-center justify-between px-4 md:px-5 py-3 hover:bg-[#F8FAFC] transition-colors">
+    <div className="flex items-center justify-between px-5 py-3 hover:bg-[#F8FAFC] transition-colors">
       <div className="flex flex-col gap-0.5 min-w-0">
         <span className="text-sm font-semibold text-[#0D3B66] truncate">{titulo}</span>
         {subtitulo && (

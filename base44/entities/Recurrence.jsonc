@@ -61,13 +61,13 @@
   "rls": {
     "create": true,
     "read": {
-      "family_id": "{{user.family_id}}"
+      "data.family_id": "{{user.data.family_id}}"
     },
     "update": {
-      "family_id": "{{user.family_id}}"
+      "data.family_id": "{{user.data.family_id}}"
     },
     "delete": {
-      "family_id": "{{user.family_id}}"
+      "data.family_id": "{{user.data.family_id}}"
     }
   }
 }

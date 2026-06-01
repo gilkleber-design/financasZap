@@ -97,6 +97,15 @@
       "default": false,
       "description": "Se deve enviar alerta de vencimento no WhatsApp"
     },
+    "is_card_invoice_payable": {
+      "type": "boolean",
+      "default": false,
+      "description": "Se este payable representa a fatura consolidada de um cart\u00e3o"
+    },
+    "card_invoice_id": {
+      "type": "string",
+      "description": "ID do CardInvoice ao qual este item pertence"
+    },
     "notes": {
       "type": "string"
     },
@@ -112,13 +121,13 @@
   "rls": {
     "create": true,
     "read": {
-      "family_id": "{{user.family_id}}"
+      "data.family_id": "{{user.data.family_id}}"
     },
     "update": {
-      "family_id": "{{user.family_id}}"
+      "data.family_id": "{{user.data.family_id}}"
     },
     "delete": {
-      "family_id": "{{user.family_id}}"
+      "data.family_id": "{{user.data.family_id}}"
     }
   }
 }

@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
+import { queryClientInstance } from '@/lib/query-client';
 
 const AuthContext = createContext();
 
@@ -127,6 +128,12 @@ export const AuthProvider = ({ children }) => {
          currentUser.family_id = updates.family_id;
       }
       
+      // Se o family_id mudou em relação à sessão anterior nesta aba (ex: troca de
+      // conta sem reload), descarta todo o cache para não vazar dados entre famílias.
+      const previousFamilyId = window.__BASE44_FAMILY_ID;
+      if (previousFamilyId && previousFamilyId !== currentUser.family_id) {
+         queryClientInstance.clear();
+      }
       window.__BASE44_FAMILY_ID = currentUser.family_id;
 
       setUser(currentUser);
@@ -152,6 +159,8 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
+    window.__BASE44_FAMILY_ID = undefined;
+    queryClientInstance.clear();
     localStorage.removeItem('pending_family_invite');
     
     if (shouldRedirect) {

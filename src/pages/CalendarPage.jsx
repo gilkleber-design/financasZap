@@ -282,7 +282,7 @@ export default function CalendarPage() {
     // Gera Receivables usando exatamente o receivablePreview (já filtrado sem cancelados)
     for (const { hospital, source, label, total, totalBruto, taxRate, dueDate, shifts: hshifts, isPdt, isExtra, sourceId, categorySlug } of receivablePreview) {
       // Se for receita extra (isExtra), usamos a categoria escolhida no modal
-      const targetCategorySlug = isExtra ? (categorySlug || 'salario') : 'plantoes_pj';
+      const targetCategorySlug = isExtra ? (categorySlug || 'salario') : 'plantoes';
       const categories = await base44.entities.Category.filter({ slug: targetCategorySlug });
       // Se não encontrar, faz fallback pra primeira disponivel
       let finalCategory = categories?.[0];

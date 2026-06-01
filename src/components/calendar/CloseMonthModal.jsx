@@ -289,7 +289,7 @@ export default function CloseMonthModal({ shifts, hospitals, sources, currentMon
                   <div key={idx} className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-violet-800">{ei.description}</p>
-                      <p className="text-xs text-violet-600 capitalize">{ei.categorySlug === 'plantoes_pj' ? 'Plantões' : ei.categorySlug}</p>
+                      <p className="text-xs text-violet-600 capitalize">{ei.categorySlug === 'plantoes' ? 'Plantões' : ei.categorySlug}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-violet-700">{fmt(ei.netAmount)}</p>

@@ -28,12 +28,12 @@ export default function DashboardPage() {
   const greeting = (hour >= 5 && hour < 12) ? 'bom dia' : (hour >= 12 && hour < 18) ? 'boa tarde' : 'boa noite';
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
-  const { data: transactions = [] } = useQuery({ queryKey: ['transactions', me?.id], enabled: !!me, queryFn: () => base44.entities.Transaction.list('-date', 2000) });
-  const { data: payables = [] } = useQuery({ queryKey: ['payables', me?.id], enabled: !!me, queryFn: () => base44.entities.Payable.list('-due_date', 1000) });
-  const { data: receivables = [] } = useQuery({ queryKey: ['receivables', me?.id], enabled: !!me, queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
-  const { data: budgets = [] } = useQuery({ queryKey: ['budgets', me?.id], enabled: !!me, queryFn: () => base44.entities.Budget.list('-year', 500) });
-  const { data: categories = [] } = useQuery({ queryKey: ['categories', me?.id], enabled: !!me, queryFn: () => base44.entities.Category.list('name', 500) });
-  const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals', me?.id], enabled: !!me, queryFn: () => base44.entities.Hospital.list('name', 500) });
+  const { data: transactions = [] } = useQuery({ queryKey: ['transactions'], queryFn: () => base44.entities.Transaction.list('-date', 2000) });
+  const { data: payables = [] } = useQuery({ queryKey: ['payables'], queryFn: () => base44.entities.Payable.list('-due_date', 1000) });
+  const { data: receivables = [] } = useQuery({ queryKey: ['receivables'], queryFn: () => base44.entities.Receivable.list('-due_date', 1000) });
+  const { data: budgets = [] } = useQuery({ queryKey: ['budgets'], queryFn: () => base44.entities.Budget.list('-year', 500) });
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => base44.entities.Category.list('name', 500) });
+  const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: () => base44.entities.Hospital.list('name', 500) });
 
   const dashboardData = useMemo(() => {
     const validTransactions = transactions.filter((item) => item.status !== 'ignored' && item.status !== 'diverged');

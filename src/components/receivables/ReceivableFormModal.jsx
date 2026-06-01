@@ -31,19 +31,25 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
     const taxRate = parseFloat(form.tax_rate) || 0;
     const netAmount = taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
     const category = categories.find((item) => item.id === form.category_id);
-    await base44.entities.Receivable.create({
-      ...form,
-      amount,
-      tax_rate: taxRate || undefined,
-      net_amount: netAmount,
-      status: 'pending',
-      competencia: form.competencia || form.due_date,
-      category: category?.slug || undefined,
-      notes: form.notes || undefined,
-    });
-    setSaving(false);
-    toast.success('Conta a receber criada!');
-    onSaved();
+    try {
+      await base44.entities.Receivable.create({
+        ...form,
+        amount,
+        tax_rate: taxRate || undefined,
+        net_amount: netAmount,
+        status: 'pending',
+        competencia: form.competencia || form.due_date,
+        category: category?.slug || undefined,
+        notes: form.notes || undefined,
+      });
+      toast.success('Conta a receber criada!');
+      onSaved();
+    } catch (error) {
+      console.error('Erro ao salvar receivable:', error);
+      toast.error(`Erro ao salvar: ${error?.message || 'tente novamente'}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const amount = parseFloat(form.amount) || 0;

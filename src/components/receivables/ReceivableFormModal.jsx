@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
+import { CategorySelect } from '@/components/ui/category-select';
 
 export default function ReceivableFormModal({ incomeSources, categories = [], onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -79,14 +80,15 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
             </div>
             <div>
               <Label>Categoria *</Label>
-              <Select value={form.category_id} onValueChange={(value) => set('category_id', value)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar categoria" /></SelectTrigger>
-                <SelectContent>
-                  {categories.filter((category) => category.type === 'income').map((category) => (
-                    <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CategorySelect
+                value={form.category_id}
+                onChange={(value) => set('category_id', value)}
+                valueKey="id"
+                allowedTypes={['income']}
+                allowNone={false}
+                className="mt-1"
+                placeholder="Selecionar categoria"
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

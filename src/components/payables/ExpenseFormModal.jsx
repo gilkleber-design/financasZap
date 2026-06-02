@@ -69,8 +69,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
       const validationErrors = [];
       if (!form.description?.trim()) validationErrors.push('descrição');
       if (!form.amount || parseFloat(form.amount) <= 0) validationErrors.push('valor válido');
-      if (expenseType !== 'fixa' && !form.due_date) validationErrors.push('data de vencimento');
-      if (expenseType === 'fixa' && !form.due_day) validationErrors.push('dia de vencimento');
+      if (!form.due_date) validationErrors.push('data de vencimento');
       if (form.payment_date && !form.origin_id) validationErrors.push('origem do pagamento');
 
       if (validationErrors.length > 0) {

@@ -62,7 +62,13 @@ Deno.serve(async (req) => {
     }
 
     if (expenseType === 'fixa') {
-      const dueDay = Number(body.due_day);
+      const dueDateStr = toDateOnly(body.due_date);
+      if (!dueDateStr) {
+        return Response.json({ error: 'Data de vencimento obrigatória' }, { status: 400 });
+      }
+      
+      const dueDay = Number(dueDateStr.substring(8, 10));
+
       if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) {
         return Response.json({ error: 'Dia de vencimento inválido' }, { status: 400 });
       }
@@ -73,7 +79,23 @@ Deno.serve(async (req) => {
         active: true,
       });
 
-      return Response.json({ status: 'success', type: 'fixa', recurrence });
+      const isPaid = !!body.payment_date;
+      const isCardOrigin = basePayload.origin_type === 'card';
+      
+      const firstPayable = await base44.entities.Payable.create({
+        ...basePayload,
+        due_date: `${dueDateStr}T12:00:00`,
+        competencia: toDateOnly(body.competencia || dueDateStr),
+        status: isCardOrigin ? 'provisioned' : (isPaid ? 'paid' : 'pending'),
+        recurrent: true,
+        recurrence_id: recurrence.id,
+      });
+
+      if (isPaid && !isCardOrigin) {
+        await createPaidTransaction(base44, firstPayable, toDateOnly(body.payment_date), body.origin_id);
+      }
+
+      return Response.json({ status: 'success', type: 'fixa', recurrence, payable: firstPayable });
     }
 
     if (expenseType === 'parcelada') {

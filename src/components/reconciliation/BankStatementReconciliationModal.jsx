@@ -905,11 +905,11 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   
                   {/* Removido Buscar em Outras Contas (Sem automatização) */}
                   
-                  <div className="relative flex-1 max-w-md">
+                  <div className="relative flex-1 min-w-[300px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary/60" />
                     <Input 
                       placeholder="Buscar descrição, contas ou valor..."
-                      className="pl-10 bg-white border-primary/30 font-bold focus:border-primary focus:ring-primary/20"
+                      className="pl-10 h-10 bg-white border-primary/30 font-bold focus:border-primary focus:ring-primary/20"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />

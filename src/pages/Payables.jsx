@@ -536,37 +536,6 @@ export default function Payables() {
     ].filter((section) => section.items.length > 0);
   }, [validPayables, currentMonth, todayStart]);
 
-  const updatePayableMutation = useMutation({
-    mutationFn: async ({ payable, updatedData }) => {
-      const isVencido =
-        isPast(new Date(payable.due_date)) &&
-        !isToday(new Date(payable.due_date));
-
-      if (payable.recurrence_id) {
-        await base44.entities.Recurrence.update(payable.recurrence_id, {
-          amount: updatedData.amount,
-          description: updatedData.description,
-        });
-
-        if (!isVencido) {
-          await base44.entities.Payable.update(payable.id, updatedData);
-        } else {
-          toast.info(
-            'Vencido. Alteração aplicada apenas para os próximos meses.'
-          );
-        }
-      } else {
-        await base44.entities.Payable.update(payable.id, updatedData);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payables-list'] });
-      queryClient.invalidateQueries({ queryKey: ['recurrences'] });
-      setEditingPayable(null);
-      toast.success('Alteração salva.');
-    },
-  });
-
   const deletePayableMutation = useMutation({
     mutationFn: async ({ payable, deleteAllFutures, deleteAllGroup }) => {
       if (deleteAllFutures && payable.recurrence_id) {
@@ -818,12 +787,11 @@ export default function Payables() {
         <EditPayableModal
           payable={editingPayable}
           onClose={() => setEditingPayable(null)}
-          onSaved={(data) =>
-            updatePayableMutation.mutate({
-              payable: editingPayable,
-              updatedData: data,
-            })
-          }
+          onSaved={() => {
+            setEditingPayable(null);
+            queryClient.invalidateQueries();
+            toast.success('Alteração salva.');
+          }}
         />
       )}
 

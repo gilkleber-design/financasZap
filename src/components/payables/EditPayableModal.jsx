@@ -60,6 +60,13 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           due_alert_whatsapp: form.due_alert_whatsapp,
         });
       }
+      if (payable.recurrence_id) {
+        await base44.entities.Recurrence.update(payable.recurrence_id, {
+          description: form.description,
+          amount: parseFloat(form.amount),
+          category: form.category,
+        });
+      }
     } else if (updateScope === 'forward') {
       const allPayables = await base44.entities.Payable.list('-due_date', 500);
       const toUpdate = allPayables.filter(
@@ -73,6 +80,13 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
           category: form.category,
           notes: form.notes || undefined,
           due_alert_whatsapp: form.due_alert_whatsapp,
+        });
+      }
+      if (payable.recurrence_id) {
+        await base44.entities.Recurrence.update(payable.recurrence_id, {
+          description: form.description,
+          amount: parseFloat(form.amount),
+          category: form.category,
         });
       }
     }

@@ -289,6 +289,18 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     enabled: open,
   });
 
+  const { data: receivables = [] } = useQuery({
+    queryKey: ['receivables'],
+    queryFn: () => base44.entities.Receivable.list('', 1000),
+    enabled: open,
+  });
+
+  const { data: hospitals = [] } = useQuery({
+    queryKey: ['hospitals'],
+    queryFn: () => base44.entities.Hospital.list('', 500),
+    enabled: open,
+  });
+
 
 
   const visibleAccounts = useMemo(() => {
@@ -404,10 +416,29 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         // Mais de um com mesmo valor, tentamos match de nome primeiro
         const nameMatches = validCandidates.filter(c => {
           if (hasNameMatch(c.description, row.description)) return true;
-          if (c.income_source_id && incomeSources.length > 0) {
-            const source = incomeSources.find(s => s.id === c.income_source_id);
+          
+          let incomeSourceId = c.income_source_id;
+          let hospitalId = null;
+
+          // Se a transação veio de um recebível (plantão, etc), busca a fonte de renda e hospital do recebível
+          if (c.receivable_id && receivables.length > 0) {
+            const rec = receivables.find(r => r.id === c.receivable_id);
+            if (rec) {
+              if (!incomeSourceId) incomeSourceId = rec.income_source_id;
+              hospitalId = rec.hospital_id;
+            }
+          }
+
+          if (incomeSourceId && incomeSources.length > 0) {
+            const source = incomeSources.find(s => s.id === incomeSourceId);
             if (source && hasNameMatch(source.name, row.description)) return true;
           }
+
+          if (hospitalId && hospitals.length > 0) {
+            const hosp = hospitals.find(h => h.id === hospitalId);
+            if (hosp && (hasNameMatch(hosp.name, row.description) || hasNameMatch(hosp.sigla, row.description))) return true;
+          }
+
           return false;
         });
         const candidatesToConsider = nameMatches.length > 0 ? nameMatches : validCandidates;
@@ -437,7 +468,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       return { ...row, status: 'orphan' };
     });
-  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches, selectedAccountId, incomeSources]);
+  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches, selectedAccountId, incomeSources, receivables, hospitals]);
 
   const itemsToProcess = rowsWithState.filter(r => 
     ['manual_match_ready', 'draft_ready', 'to_ignore'].includes(r.status)

@@ -241,6 +241,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [ignoredRows, setIgnoredRows] = useState({});
   const [manualMatches, setManualMatches] = useState({}); // Agora guarda arrays: { [rowId]: [candidate1, candidate2] }
   const [hideProcessed, setHideProcessed] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [parsingPdf, setParsingPdf] = useState(false);
   const [editingOrphan, setEditingOrphan] = useState(null);
   const [editingDifference, setEditingDifference] = useState(null);
@@ -611,6 +612,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       setIgnoredRows({});
       setEditingOrphan(null);
       setParsingPdf(false);
+      setSearchTerm('');
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
     onOpenChange?.(nextOpen);
@@ -711,7 +713,33 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     ? diffCandidates.filter(c => normalizeToLetters(c.description).includes(normalizeToLetters(diffDesc)))
     : [];
 
-  const displayRows = hideProcessed ? rowsWithState.filter(r => r.status !== 'processed') : rowsWithState;
+  const displayRows = useMemo(() => {
+    let rows = hideProcessed ? rowsWithState.filter(r => r.status !== 'processed') : rowsWithState;
+    if (searchTerm) {
+      const termRaw = searchTerm.toLowerCase();
+      const termNormalized = String(searchTerm || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+      rows = rows.filter(r => {
+        const descNormalized = String(r.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const amountStr = r.amount.toString();
+        const formattedAmountStr = formatCurrency(r.amount).toLowerCase();
+        
+        if (descNormalized.includes(termNormalized)) return true;
+        if (amountStr.includes(termRaw) || formattedAmountStr.includes(termRaw)) return true;
+        
+        if (r.selected && r.selected.length > 0) {
+           if (r.selected.some(s => String(s.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(termNormalized))) return true;
+        } else if (r.match) {
+           if (String(r.match.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(termNormalized)) return true;
+        }
+        return false;
+      });
+    }
+    return rows;
+  }, [rowsWithState, hideProcessed, searchTerm]);
   
   const incomeRows = displayRows.filter(r => r.type === 'income').sort((a, b) => a.date.localeCompare(b.date));
   const expenseRows = displayRows.filter(r => r.type === 'expense').sort((a, b) => a.date.localeCompare(b.date));
@@ -876,6 +904,16 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   {parsingPdf && <span className="text-xs font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap shrink-0">Processando PDF...</span>}
                   
                   {/* Removido Buscar em Outras Contas (Sem automatização) */}
+                  
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input 
+                      placeholder="Buscar por descrição, payable ou valor..."
+                      className="pl-8 bg-slate-50 border-slate-200"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
                   
                   <Button variant="outline" onClick={() => setHideProcessed(!hideProcessed)}>
                       {hideProcessed ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}

@@ -156,7 +156,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           {/* Descrição */}
           <div>
             <Label>Descrição *</Label>
-            <Input tabIndex={1} value={form.description} onChange={e => set('description', e.target.value)} className="mt-1" placeholder="Ex: Aluguel, Netflix, iPhone..." />
+            <Input value={form.description} onChange={e => set('description', e.target.value)} className="mt-1" placeholder="Ex: Aluguel, Netflix, iPhone..." />
           </div>
 
           {/* Categoria */}
@@ -174,7 +174,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           <div>
             <Label>Origem do Pagamento</Label>
             <Select value={form.origin_id || '_none'} onValueChange={handleOriginChange}>
-              <SelectTrigger tabIndex={3} className="mt-1">
+              <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Selecionar conta ou cartão..." />
               </SelectTrigger>
               <SelectContent>
@@ -208,7 +208,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
             <div>
               <Label>Modalidade</Label>
               <Select value={form.payment_modality} onValueChange={v => set('payment_modality', v)}>
-                <SelectTrigger tabIndex={4} className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manual">Manual</SelectItem>
                   <SelectItem value="automatic_debit">Débito Automático</SelectItem>
@@ -223,18 +223,18 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           <div className={`grid gap-3 ${expenseType === 'avulsa' || expenseType === 'parcelada' ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div>
               <Label>{expenseType === 'parcelada' ? 'Valor da Parcela (R$) *' : 'Valor (R$) *'}</Label>
-              <CurrencyInput tabIndex={6} value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
+              <CurrencyInput value={form.amount} onChange={(value) => set('amount', value)} className="mt-1" />
             </div>
             {(expenseType === 'avulsa') && (
               <div>
                 <Label>Vencimento *</Label>
-                <Input tabIndex={6} type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} className="mt-1" />
+                <Input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} className="mt-1" />
               </div>
             )}
             {expenseType === 'fixa' && (
               <div>
                 <Label>Dia do Vencimento *</Label>
-                <Input tabIndex={6} type="number" min={1} max={31} value={form.due_day} onChange={e => set('due_day', e.target.value)} className="mt-1" placeholder="Ex: 10" />
+                <Input type="number" min={1} max={31} value={form.due_day} onChange={e => set('due_day', e.target.value)} className="mt-1" placeholder="Ex: 10" />
               </div>
             )}
           </div>
@@ -246,19 +246,19 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Valor Total da Compra</Label>
-                  <CurrencyInput tabIndex={7} value={form.installment_total_amount} onChange={(value) => set('installment_total_amount', value)} className="mt-1 text-sm" />
+                  <CurrencyInput value={form.installment_total_amount} onChange={(value) => set('installment_total_amount', value)} className="mt-1 text-sm" />
                 </div>
                 <div>
                   <Label className="text-xs">Data da 1ª Parcela *</Label>
-                  <Input tabIndex={8} type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} className="mt-1 text-sm" />
+                  <Input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} className="mt-1 text-sm" />
                 </div>
                 <div>
                   <Label className="text-xs">Total de Parcelas</Label>
-                  <Input tabIndex={9} type="number" min={1} value={form.installment_count} onChange={e => set('installment_count', e.target.value)} className="mt-1 text-sm" placeholder="12" />
+                  <Input type="number" min={1} value={form.installment_count} onChange={e => set('installment_count', e.target.value)} className="mt-1 text-sm" placeholder="12" />
                 </div>
                 <div>
                   <Label className="text-xs">Parcela Atual</Label>
-                  <Input tabIndex={10} type="number" min={1} value={form.installment_number} onChange={e => set('installment_number', e.target.value)} className="mt-1 text-sm" placeholder="1" />
+                  <Input type="number" min={1} value={form.installment_number} onChange={e => set('installment_number', e.target.value)} className="mt-1 text-sm" placeholder="1" />
                 </div>
               </div>
               {installmentsToGenerate > 0 && installmentAmt > 0 && (
@@ -288,7 +288,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
           {/* Observação */}
           <div>
             <Label>Observação</Label>
-            <Input tabIndex={5} value={form.notes} onChange={e => set('notes', e.target.value)} className="mt-1" placeholder="Opcional..." />
+            <Input value={form.notes} onChange={e => set('notes', e.target.value)} className="mt-1" placeholder="Opcional..." />
           </div>
 
         </div>

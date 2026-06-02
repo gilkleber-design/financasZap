@@ -233,8 +233,8 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
             )}
             {expenseType === 'fixa' && (
               <div>
-                <Label>Dia do Vencimento *</Label>
-                <Input type="number" min={1} max={31} value={form.due_day} onChange={e => set('due_day', e.target.value)} className="mt-1" placeholder="Ex: 10" />
+                <Label>Data de Vencimento da Primeira Ocorrência *</Label>
+                <Input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} className="mt-1" />
               </div>
             )}
           </div>

@@ -45,6 +45,13 @@ const normalizeToLetters = (value) => {
     .replace(/[^a-z]/g, ''); 
 };
 
+const hasNameMatch = (desc1, desc2) => {
+  if (!desc1 || !desc2) return false;
+  const words1 = String(desc1).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+  const words2 = String(desc2).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+  return words1.some(w => words2.includes(w));
+};
+
 const toCents = (value) => Math.round(Math.abs(Number(value) || 0) * 100);
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
 
@@ -381,10 +388,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         // Apenas um candidato com valor exato (valor é um sinal forte)
         autoMatchIdx = poolCandidates.findIndex(c => c.id === validCandidates[0].id);
       } else if (validCandidates.length > 1) {
-        // Mais de um com mesmo valor, escolhe o de data mais próxima (limite 45 dias)
+        // Mais de um com mesmo valor, tentamos match de nome primeiro
+        const nameMatches = validCandidates.filter(c => hasNameMatch(c.description, row.description));
+        const candidatesToConsider = nameMatches.length > 0 ? nameMatches : validCandidates;
+
+        // Escolhe o de data mais próxima (limite 45 dias)
         let closest = null;
         let minDiff = Infinity;
-        validCandidates.forEach(c => {
+        candidatesToConsider.forEach(c => {
            const cDate = candidateDate(c);
            if (!cDate || !row.date) return;
            const diff = Math.abs(differenceInCalendarDays(parseISO(String(cDate).substring(0, 10)), parseISO(String(row.date).substring(0, 10))));

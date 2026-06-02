@@ -142,8 +142,8 @@ export default function CalendarPage() {
       const plantaoCategory = categories?.[0] || null;
       const rec = await base44.entities.Receivable.create({
         description: `${hospital.sigla} — À Vista ${format(new Date(date + 'T12:00:00'), 'dd/MM/yyyy')}`,
-        amount: bruto,
-        net_amount: liquido,
+        amount: bruto || 0,
+        net_amount: liquido || bruto || 0,
         due_date: date,
         competencia: format(startOfMonth(new Date(date + 'T12:00:00')), 'yyyy-MM-dd'),
         income_source_id: hospital.income_source_id || '',
@@ -293,8 +293,8 @@ export default function CalendarPage() {
       
       const rec = await createReceivableMutation.mutateAsync({
         description: label,
-        amount: totalBruto,
-        net_amount: total,
+        amount: totalBruto || 0,
+        net_amount: total || totalBruto || 0,
         due_date: format(dueDate, 'yyyy-MM-dd'),
         competencia: format(startOfMonth(hshifts?.length > 0 ? new Date(hshifts[0].date + 'T12:00:00') : currentMonth), 'yyyy-MM-dd'),
         income_source_id: hospital?.income_source_id || source?.id || sourceId || '',

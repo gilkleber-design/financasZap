@@ -28,7 +28,7 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
   const handleSave = async () => {
     if (!form.description || !form.amount || !form.due_date || !form.category_id) return toast.error('Preencha os campos obrigatórios');
     setSaving(true);
-    const amount = parseFloat(form.amount);
+    const amount = parseFloat(form.amount) || 0;
     const taxRate = parseFloat(form.tax_rate) || 0;
     const netAmount = taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
     const category = categories.find((item) => item.id === form.category_id);
@@ -37,7 +37,7 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
         ...form,
         amount,
         tax_rate: taxRate || undefined,
-        net_amount: netAmount,
+        net_amount: netAmount || amount || 0,
         status: 'pending',
         competencia: form.competencia || form.due_date,
         category: category?.slug || undefined,

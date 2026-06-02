@@ -1,36 +1,38 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
-  Home, 
-  HandCoins, 
-  CalendarDays, 
-  Receipt, 
-  BarChart3, 
+  LayoutGrid, 
+  Stethoscope, 
+  Wallet, 
+  ReceiptText, 
+  PieChart, 
+  Target,
+  ClipboardCheck,
   Settings, 
   Menu, 
   X, 
   LogOut, 
   UserCircle, 
-  Plus,
-  Eye
+  Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
 import DashboardLogo from '@/components/dashboard/DashboardLogo';
 
 const navItems = [
-  { path: '/', label: 'Início', icon: Home },
-  { path: '/recebimentos', label: 'Receb.', icon: HandCoins },
-  { path: '/calendario', label: 'Plantões', icon: CalendarDays },
-  { path: '/contas-pagar', label: 'Contas', icon: Receipt },
-  { path: '/relatorios', label: 'Relatórios', icon: BarChart3 },
-  { path: '/revisao-dados', label: 'Revisão', icon: Eye },
+  { path: '/', label: 'Início', icon: LayoutGrid },
+  { path: '/calendario', label: 'Plantões', icon: Stethoscope },
+  { path: '/recebimentos', label: 'Receb.', icon: Wallet },
+  { path: '/contas-pagar', label: 'Contas', icon: ReceiptText },
+  { path: '/relatorios', label: 'Relatórios', icon: PieChart },
+  { path: '/planejamento', label: 'Planej.', icon: Target },
+  { path: '/revisao-dados', label: 'Revisão', icon: ClipboardCheck },
 ];
 
 const mobileNavItems = [
-  { path: '/', label: 'Início', icon: Home },
-  { path: '/recebimentos', label: 'Recebimentos', icon: HandCoins },
-  { path: '/contas-pagar', label: 'Contas', icon: Receipt },
+  { path: '/', label: 'Início', icon: LayoutGrid },
+  { path: '/recebimentos', label: 'Recebimentos', icon: Wallet },
+  { path: '/contas-pagar', label: 'Contas', icon: ReceiptText },
   { path: '/configuracoes', label: 'Config', icon: Settings },
 ];
 
@@ -59,7 +61,7 @@ export default function Layout() {
                     ? 'bg-[rgba(15,163,163,0.25)] text-[#0FA3A3]' 
                     : 'text-[rgba(255,255,255,0.45)] hover:bg-white/10 hover:text-white'
                 )}>
-                  <Icon className="h-7 w-7" />
+                  <Icon className="h-6 w-6" strokeWidth={1.75} />
                 </span>
                 <span className="text-[8px] font-bold tracking-[0.02em] text-inherit">
                   {label}
@@ -77,14 +79,14 @@ export default function Layout() {
                 ? 'bg-[rgba(15,163,163,0.25)] text-[#0FA3A3]' 
                 : 'hover:bg-white/10'
             )}>
-              <Settings className="h-7 w-7" />
+              <Settings className="h-6 w-6" strokeWidth={1.75} />
             </span>
           </Link>
           <button 
             onClick={() => logout()} 
             className="flex h-14 w-14 items-center justify-center rounded-[10px] text-[rgba(255,255,255,0.45)] transition-colors hover:bg-white/10 hover:text-white"
           >
-            <LogOut className="h-7 w-7" />
+            <LogOut className="h-6 w-6" strokeWidth={1.75} />
           </button>
         </div>
       </aside>
@@ -129,7 +131,7 @@ export default function Layout() {
             </div>
             
             <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-              {[...navItems, { path: '/revisao-dados', label: 'Revisão de Dados', icon: Eye }, { path: '/configuracoes', label: 'Configurações', icon: Settings }].map(({ path, label, icon: Icon }) => (
+              {[...navItems, { path: '/configuracoes', label: 'Configurações', icon: Settings }].map(({ path, label, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}

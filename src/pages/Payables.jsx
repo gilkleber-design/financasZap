@@ -72,9 +72,10 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
     !searchTerm || p.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const fixas = filteredPayables.filter(p => p.recurrence_id);
-  const parceladas = filteredPayables.filter(p => !p.recurrence_id && (p.installment_count > 1 || p.installment_group_id));
-  const avulsas = filteredPayables.filter(p => !p.recurrence_id && !(p.installment_count > 1 || p.installment_group_id));
+  const fixas = filteredPayables.filter(p => p.recurrence_id && p.origin_type !== 'card');
+  const parceladas = filteredPayables.filter(p => !p.recurrence_id && (p.installment_count > 1 || p.installment_group_id) && p.origin_type !== 'card');
+  const avulsas = filteredPayables.filter(p => !p.recurrence_id && !(p.installment_count > 1 || p.installment_group_id) && p.origin_type !== 'card');
+  const noCartao = filteredPayables.filter(p => p.origin_type === 'card');
 
   const deleteMutation = useMutation({
     mutationFn: async (recurrence) => {
@@ -121,29 +122,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
         <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
           <ChevronRight className="w-5 h-5" />
-        </Button>
-      </div>
-
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-2 flex-1">
-          <p className="text-sm text-slate-500 font-bold uppercase ml-2 whitespace-nowrap">
-            {filteredPayables.length} Contas
-          </p>
-          <input
-            type="text"
-            placeholder="Buscar contas..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="flex-1 h-9 rounded-md border border-slate-200 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-        </div>
-
-        <Button
-          size="sm"
-          onClick={() => setShowForm(true)}
-          className="font-bold bg-primary whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4 mr-1" /> NOVA CONTA
         </Button>
       </div>
 
@@ -259,6 +237,29 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
       </div>
       )}
 
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm mb-6 mt-4">
+        <div className="flex items-center gap-2 flex-1">
+          <p className="text-sm text-slate-500 font-bold uppercase ml-2 whitespace-nowrap">
+            {filteredPayables.length} Contas
+          </p>
+          <input
+            type="text"
+            placeholder="Buscar contas..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="flex-1 h-9 rounded-md border border-slate-200 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
+
+        <Button
+          size="sm"
+          onClick={() => setShowForm(true)}
+          className="font-bold bg-primary whitespace-nowrap"
+        >
+          <Plus className="w-4 h-4 mr-1" /> NOVA CONTA
+        </Button>
+      </div>
+
       <div className="mt-8">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Contas Lançadas do Mês</h2>
         <Card className="border-0 shadow-sm font-sora bg-white">
@@ -281,20 +282,17 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                   {[
                     { title: 'Fixas', items: fixas },
                     { title: 'Parceladas', items: parceladas },
-                    { title: 'Avulsas', items: avulsas }
+                    { title: 'Avulsas', items: avulsas },
+                    { title: 'No Cartão', items: noCartao }
                   ].map(group => {
                     if (group.items.length === 0) return null;
-                    // Separar contas de cartão (card) das demais
-                    const nonCard = group.items.filter(p => p.origin_type !== 'card');
-                    const cardItems = group.items.filter(p => p.origin_type === 'card');
-                    const sortedItems = [...nonCard, ...cardItems];
                     return (
                       <div key={group.title} className="mb-2">
                         <div className="px-5 py-2 bg-slate-50/80 border-y border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
                           {group.title} ({group.items.length})
                         </div>
                         <div className="divide-y divide-slate-100">
-                          {sortedItems.map(p => {
+                          {group.items.map(p => {
                             const isPaid = p.status === 'paid' || p.status === 'provisioned';
                             return (
                               <div

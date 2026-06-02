@@ -770,14 +770,19 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                     }} className="text-blue-600 hover:text-blue-700" title="Criar lançamento avulso para cobrir diferença">
                         {row.status === 'draft_ready' ? <Pencil className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
                     </Button>
-                    <Popover>
+                    <Popover modal={true}>
                         <PopoverTrigger asChild>
                             <Button size="sm" variant="outline"><Search className="h-4 w-4" /></Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[400px] p-0" align="end">
+                        <PopoverContent 
+                            className="w-[400px] p-0" 
+                            align="end"
+                            onWheel={(e) => e.stopPropagation()}
+                            onTouchMove={(e) => e.stopPropagation()}
+                        >
                             <Command>
                                 <CommandInput placeholder="Buscar lançamentos para compor..." />
-                                <CommandList className="max-h-[250px] h-[250px] overflow-y-auto overscroll-contain">
+                                <CommandList className="max-h-[300px] overflow-y-auto pointer-events-auto">
                                     <CommandEmpty>Nenhum lançamento encontrado.</CommandEmpty>
                                     <CommandGroup>
                                         {[...candidates, ...reconciledTransactions].filter(c => {

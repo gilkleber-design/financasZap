@@ -283,6 +283,12 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     enabled: open,
   });
 
+  const { data: incomeSources = [] } = useQuery({
+    queryKey: ['incomeSources'],
+    queryFn: () => base44.entities.IncomeSource.list('', 500),
+    enabled: open,
+  });
+
 
 
   const visibleAccounts = useMemo(() => {
@@ -396,7 +402,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
         autoMatchIdx = poolCandidates.findIndex(c => c.id === validCandidates[0].id);
       } else if (validCandidates.length > 1) {
         // Mais de um com mesmo valor, tentamos match de nome primeiro
-        const nameMatches = validCandidates.filter(c => hasNameMatch(c.description, row.description));
+        const nameMatches = validCandidates.filter(c => {
+          if (hasNameMatch(c.description, row.description)) return true;
+          if (c.income_source_id && incomeSources.length > 0) {
+            const source = incomeSources.find(s => s.id === c.income_source_id);
+            if (source && hasNameMatch(source.name, row.description)) return true;
+          }
+          return false;
+        });
         const candidatesToConsider = nameMatches.length > 0 ? nameMatches : validCandidates;
 
         // Escolhe o de data mais próxima (limite 45 dias)
@@ -424,7 +437,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
 
       return { ...row, status: 'orphan' };
     });
-  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches, selectedAccountId]);
+  }, [statementRows, candidates, reconciledTransactions, ignoredRows, manualMatches, selectedAccountId, incomeSources]);
 
   const itemsToProcess = rowsWithState.filter(r => 
     ['manual_match_ready', 'draft_ready', 'to_ignore'].includes(r.status)

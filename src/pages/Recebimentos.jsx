@@ -35,7 +35,9 @@ export default function Recebimentos() {
       const hosp = hospitals.find(h => h.id === r.hospital_id);
       const src = incomeSources.find(s => s.id === r.income_source_id);
       const net = Number(r.net_amount || r.amount || 0);
-      const gross = Number(r.amount || 0);
+      // O valor recebido é SEMPRE líquido. Calcula o bruto reverso pela alíquota da PJ.
+      const taxRate = Number(r.tax_rate ?? src?.default_tax_rate ?? 0);
+      const gross = taxRate > 0 ? net / (1 - taxRate / 100) : net;
       return {
         ...r,
         hospital: r.description?.split('—')[0]?.trim() || hosp?.sigla || hosp?.name || src?.name || 'Outras',

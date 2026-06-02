@@ -116,8 +116,8 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
   const installmentAmt = expenseType === 'parcelada' && form.installment_count
     ? (form.installment_total_amount ? parseFloat(form.installment_total_amount) / parseInt(form.installment_count) : parseFloat(form.amount || 0))
     : null;
-  const firstGeneratedDate = expenseType === 'parcelada' && form.due_date && form.installment_number
-    ? format(addMonths(new Date(form.due_date + 'T12:00:00'), parseInt(form.installment_number) - 1), 'dd/MM/yyyy')
+  const firstGeneratedDate = expenseType === 'parcelada' && form.due_date
+    ? format(new Date(form.due_date + 'T12:00:00'), 'dd/MM/yyyy')
     : null;
 
   return (
@@ -249,7 +249,7 @@ export default function ExpenseFormModal({ onClose, onSaved }) {
                   <CurrencyInput value={form.installment_total_amount} onChange={(value) => set('installment_total_amount', value)} className="mt-1 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">Data da 1ª Parcela *</Label>
+                  <Label className="text-xs">Venc. Parcela Atual *</Label>
                   <Input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} className="mt-1 text-sm" />
                 </div>
                 <div>

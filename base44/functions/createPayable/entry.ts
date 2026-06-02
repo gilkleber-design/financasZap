@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
 
       for (let i = 0; i <= installmentCount - installmentNumber; i++) {
         const currentNumber = installmentNumber + i;
-        const installmentDueDate = addMonths(dueDate, currentNumber - 1);
+        const installmentDueDate = addMonths(dueDate, i);
         const isCardOrigin = basePayload.origin_type === 'card';
         const payable = {
           ...basePayload,

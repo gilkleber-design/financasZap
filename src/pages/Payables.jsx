@@ -14,7 +14,7 @@ import {
   ToggleRight,
   Bell,
 } from 'lucide-react';
-import { format, isPast, isToday, addMonths, subMonths, isSameDay, addDays, endOfWeek } from 'date-fns';
+import { format, isPast, isToday, addMonths, subMonths, isSameDay, addDays, endOfWeek, isSameMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
@@ -39,7 +39,7 @@ const fmt = (v) =>
     currency: 'BRL',
   }).format(v || 0);
 
-function ManageAccountsTab({ onEditRecurrence, onEditPayable, onDeletePayable }) {
+function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, onEditPayable, onDeletePayable }) {
   const [showForm, setShowForm] = useState(false);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,9 +57,22 @@ function ManageAccountsTab({ onEditRecurrence, onEditPayable, onDeletePayable })
 
   const isLoading = loadingRecurrences || loadingPayables;
 
-  const filteredPayables = allPayables.filter(p => 
+  const monthPayables = allPayables.filter(p => {
+    const due = p.due_date || p.competencia;
+    if (!due) return false;
+    const normalized = String(due).includes('T') ? String(due) : `${due}T12:00:00`;
+    const parsed = new Date(normalized);
+    if (isNaN(parsed.getTime())) return false;
+    return isSameMonth(parsed, currentMonth);
+  });
+
+  const filteredPayables = monthPayables.filter(p => 
     !searchTerm || p.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const fixas = filteredPayables.filter(p => p.recurrence_id);
+  const parceladas = filteredPayables.filter(p => !p.recurrence_id && (p.installment_count > 1 || p.installment_group_id));
+  const avulsas = filteredPayables.filter(p => !p.recurrence_id && !(p.installment_count > 1 || p.installment_group_id));
 
   const deleteMutation = useMutation({
     mutationFn: async (recurrence) => {
@@ -225,11 +238,22 @@ function ManageAccountsTab({ onEditRecurrence, onEditPayable, onDeletePayable })
       </div>
       )}
 
-      <div>
-        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Todas as Contas (Lançamentos / Parcelas)</h2>
+      <div className="mt-8">
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Contas Lançadas do Mês</h2>
+        
+        <div className="flex items-center justify-between rounded-[14px] border border-border bg-card p-3 shadow-sm mb-4">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+            <ChevronRight className="w-5 h-5" />
+          </Button>
+        </div>
+
         <Card className="border-0 shadow-sm font-sora bg-white">
           <CardContent className="p-0">
-            <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+            <div className="max-h-[500px] overflow-y-auto pb-4">
               {isLoading && (
                 <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                   Carregando contas...
@@ -242,74 +266,94 @@ function ManageAccountsTab({ onEditRecurrence, onEditPayable, onDeletePayable })
                 </p>
               )}
 
-              {!isLoading &&
-                filteredPayables.map((p) => {
-                  const isPaid = p.status === 'paid' || p.status === 'provisioned';
-                  return (
-                  <div
-                    key={p.id}
-                    className={`flex items-center gap-4 px-5 py-4 transition-colors ${
-                      isPaid
-                        ? 'opacity-40 bg-slate-50/50'
-                        : 'hover:bg-slate-50/50'
-                    }`}
-                  >
-                    <div
-                      className={`w-1.5 h-11 rounded-full flex-shrink-0 ${
-                        isPaid ? 'bg-slate-300' : 'bg-amber-400'
-                      }`}
-                    />
+              {!isLoading && filteredPayables.length > 0 && (
+                <>
+                  {[
+                    { title: 'Fixas', items: fixas },
+                    { title: 'Parceladas', items: parceladas },
+                    { title: 'Avulsas', items: avulsas }
+                  ].map(group => {
+                    if (group.items.length === 0) return null;
+                    return (
+                      <div key={group.title} className="mb-2">
+                        <div className="px-5 py-2 bg-slate-50/80 border-y border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          {group.title} ({group.items.length})
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                          {group.items.map(p => {
+                            const isPaid = p.status === 'paid' || p.status === 'provisioned';
+                            return (
+                              <div
+                                key={p.id}
+                                className={`flex items-center gap-4 px-5 py-4 transition-colors ${
+                                  isPaid
+                                    ? 'opacity-40 bg-slate-50/50'
+                                    : 'hover:bg-slate-50/50'
+                                }`}
+                              >
+                                <div
+                                  className={`w-1.5 h-11 rounded-full flex-shrink-0 ${
+                                    isPaid ? 'bg-slate-300' : 'bg-amber-400'
+                                  }`}
+                                />
 
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                        {p.description}
-                        {p.installment_count > 1 && (
-                          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold">
-                            {p.installment_number}/{p.installment_count}
-                          </span>
-                        )}
-                      </p>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-                        VENCIMENTO: {format(new Date(p.due_date), 'dd/MM/yyyy')}
-                      </span>
-                    </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                                    {p.description}
+                                    {p.installment_count > 1 && (
+                                      <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold">
+                                        {p.installment_number}/{p.installment_count}
+                                      </span>
+                                    )}
+                                  </p>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+                                    VENCIMENTO: {format(new Date(String(p.due_date).includes('T') ? p.due_date : `${p.due_date}T12:00:00`), 'dd/MM/yyyy')}
+                                  </span>
+                                </div>
 
-                    <div className="text-right flex-shrink-0 mr-4">
-                      <p className="text-sm font-black text-slate-900">
-                        {fmt(p.amount)}
-                      </p>
-                      <span
-                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                          isPaid
-                            ? 'bg-slate-100 text-slate-500'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}
-                      >
-                        {p.status === 'paid' ? 'PAGO' : p.status === 'provisioned' ? 'NO CARTÃO' : 'PENDENTE'}
-                      </span>
-                    </div>
+                                <div className="text-right flex-shrink-0 mr-4">
+                                  <p className="text-sm font-black text-slate-900">
+                                    {fmt(p.amount)}
+                                  </p>
+                                  <span
+                                    className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                      isPaid
+                                        ? 'bg-slate-100 text-slate-500'
+                                        : 'bg-amber-100 text-amber-700'
+                                    }`}
+                                  >
+                                    {p.status === 'paid' ? 'PAGO' : p.status === 'provisioned' ? 'NO CARTÃO' : 'PENDENTE'}
+                                  </span>
+                                </div>
 
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 text-slate-400 hover:text-primary"
-                        onClick={() => onEditPayable(p)}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 text-slate-400 hover:text-primary"
+                                    onClick={() => onEditPayable(p)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 text-slate-300 hover:text-red-500"
-                        onClick={() => onDeletePayable(p)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )})}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 text-slate-300 hover:text-red-500"
+                                    onClick={() => onDeletePayable(p)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -628,6 +672,8 @@ export default function Payables() {
 
       {viewMode === 'gerenciar_fixas' ? (
         <ManageAccountsTab
+          currentMonth={currentMonth}
+          setCurrentMonth={setCurrentMonth}
           onEditRecurrence={(r) => setEditingRecurrence(r)}
           onEditPayable={(p) => setEditingPayable(p)}
           onDeletePayable={(p) => setDeletingPayable(p)}

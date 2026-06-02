@@ -410,6 +410,19 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     ['manual_match_ready', 'draft_ready', 'to_ignore'].includes(r.status)
   ).length;
 
+  const usedCandidateIds = useMemo(() => {
+    const set = new Set();
+    rowsWithState.forEach(r => {
+      if (r.selected) {
+        r.selected.forEach(s => {
+          if (!s._isDifference) set.add(s.id);
+        });
+      }
+      if (r.match) set.add(r.match.id);
+    });
+    return set;
+  }, [rowsWithState]);
+
   const handleReclassify = async (match) => {
     if (window.confirm("Este lançamento pertence a outra conta. Mover para a conta atual selecionada?")) {
       try {
@@ -737,6 +750,9 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                     <CommandEmpty>Nenhum lançamento encontrado.</CommandEmpty>
                                     <CommandGroup>
                                         {[...candidates, ...reconciledTransactions].filter(c => {
+                                            const isSelectedInThisRow = (row.selected || []).some(s => s.id === c.id);
+                                            if (usedCandidateIds.has(c.id) && !isSelectedInThisRow) return false;
+
                                             const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
                                             if (row.type === 'income') {
                                                 return ['receivable', 'income', 'transfer'].includes(cType);

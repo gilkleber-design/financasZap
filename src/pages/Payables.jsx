@@ -8,6 +8,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Edit2,
   Settings,
   ToggleLeft,
@@ -43,6 +44,7 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
   const [showForm, setShowForm] = useState(false);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isMatrizesOpen, setIsMatrizesOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: recurrences = [], isLoading: loadingRecurrences } = useQuery({
@@ -147,10 +149,18 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
 
       {recurrences.length > 0 && !searchTerm && (
         <div className="mb-6">
-          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Matrizes (Contas Fixas Base)</h2>
-          <Card className="border-0 shadow-sm font-sora bg-white">
-            <CardContent className="p-0">
-              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+          <button 
+            onClick={() => setIsMatrizesOpen(!isMatrizesOpen)}
+            className="flex items-center gap-2 w-full text-left focus:outline-none mb-3 pl-2 group"
+          >
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-700 transition-colors">Matrizes (Contas Fixas Base)</h2>
+            {isMatrizesOpen ? <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-600" /> : <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
+          </button>
+          
+          {isMatrizesOpen && (
+            <Card className="border-0 shadow-sm font-sora bg-white animate-in slide-in-from-top-2 duration-200">
+              <CardContent className="p-0">
+                <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
             {isLoading && (
               <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                 Carregando fixas...
@@ -245,6 +255,7 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
           </div>
         </CardContent>
       </Card>
+      )}
       </div>
       )}
 

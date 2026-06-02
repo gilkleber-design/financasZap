@@ -842,7 +842,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                                     <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
                                                       {isSelected && <Check className="w-3 h-3 text-white" />}
                                                     </div>
-                                                    <span className="truncate flex-1">{c.description}</span>
+                                                    <span className="truncate flex-1">
+                                                      {c.description}
+                                                      {candidateDate(c) && (
+                                                        <span className="text-slate-400 ml-1.5 font-normal text-[11px]">
+                                                          (Venc: {format(parseISO(String(candidateDate(c)).substring(0, 10)), 'dd/MM/yyyy')})
+                                                        </span>
+                                                      )}
+                                                    </span>
                                                     <span className="font-bold">{getDisplayMatchedAmount(c, row.amount)}</span>
                                                   </div>
                                               </CommandItem>
@@ -1055,7 +1062,14 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                           setDiffSelectedCandidate(c);
                         }}
                       >
-                        <span className="font-bold text-slate-700 truncate mr-2">{c.description}</span>
+                        <span className="font-bold text-slate-700 truncate mr-2">
+                          {c.description}
+                          {candidateDate(c) && (
+                            <span className="text-slate-400 ml-1.5 font-normal text-[11px]">
+                              (Venc: {format(parseISO(String(candidateDate(c)).substring(0, 10)), 'dd/MM/yyyy')})
+                            </span>
+                          )}
+                        </span>
                         <span className="font-black text-slate-900 shrink-0">{getDisplayMatchedAmount(c, editingDifference.amount)}</span>
                       </div>
                     ))}

@@ -9,11 +9,12 @@ Deno.serve(async (req) => {
     const payload = await req.json().catch(() => ({}));
     const { type } = payload;
 
-    const allCategories = await base44.entities.Category.filter({});
+    const allCategories = await base44.entities.Category.list('', 500);
+    const activeCategories = allCategories.filter((c) => c.active !== false);
 
     const filtered = type
-      ? allCategories.filter((c) => c.type === type)
-      : allCategories;
+      ? activeCategories.filter((c) => c.type === type)
+      : activeCategories;
 
     const sorted = filtered.sort((a, b) =>
       String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')

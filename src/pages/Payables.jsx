@@ -273,13 +273,17 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
                     { title: 'Avulsas', items: avulsas }
                   ].map(group => {
                     if (group.items.length === 0) return null;
+                    // Separar contas de cartão (card) das demais
+                    const nonCard = group.items.filter(p => p.origin_type !== 'card');
+                    const cardItems = group.items.filter(p => p.origin_type === 'card');
+                    const sortedItems = [...nonCard, ...cardItems];
                     return (
                       <div key={group.title} className="mb-2">
                         <div className="px-5 py-2 bg-slate-50/80 border-y border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
                           {group.title} ({group.items.length})
                         </div>
                         <div className="divide-y divide-slate-100">
-                          {group.items.map(p => {
+                          {sortedItems.map(p => {
                             const isPaid = p.status === 'paid' || p.status === 'provisioned';
                             return (
                               <div

@@ -112,6 +112,16 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
 
   return (
     <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+      <div className="flex items-center justify-between rounded-[14px] border border-border bg-card p-3 shadow-sm">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+          <ChevronLeft className="w-5 h-5" />
+        </Button>
+        <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+          <ChevronRight className="w-5 h-5" />
+        </Button>
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2 flex-1">
           <p className="text-sm text-slate-500 font-bold uppercase ml-2 whitespace-nowrap">
@@ -240,17 +250,6 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
 
       <div className="mt-8">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 pl-2">Contas Lançadas do Mês</h2>
-        
-        <div className="flex items-center justify-between rounded-[14px] border border-border bg-card p-3 shadow-sm mb-4">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-            <ChevronRight className="w-5 h-5" />
-          </Button>
-        </div>
-
         <Card className="border-0 shadow-sm font-sora bg-white">
           <CardContent className="p-0">
             <div className="max-h-[500px] overflow-y-auto pb-4">

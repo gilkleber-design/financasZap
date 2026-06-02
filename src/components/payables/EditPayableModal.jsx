@@ -23,100 +23,127 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
     due_alert_whatsapp: payable?.due_alert_whatsapp === true,
   });
   const [saving, setSaving] = useState(false);
-  const [updateScope, setUpdateScope] = useState(null);
+  const [promptScope, setPromptScope] = useState(false);
   const queryClient = useQueryClient();
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const handleSave = async () => {
+  const executeSave = async (scope) => {
+    setSaving(true);
+    setPromptScope(false);
+
+    const competencia = form.competencia || form.due_date;
+
+    try {
+      if (scope === 'this') {
+        await base44.entities.Payable.update(payable.id, {
+          description: form.description,
+          amount: parseFloat(form.amount),
+          due_date: form.due_date,
+          competencia,
+          category: form.category,
+          notes: form.notes || undefined,
+          due_alert_whatsapp: form.due_alert_whatsapp,
+        });
+      } else if (scope === 'all') {
+        const allPayables = await base44.entities.Payable.list('-due_date', 500);
+        // If it belongs to an installment group, match by group. If recurrence, match by recurrence_id. Else match by description.
+        const toUpdate = allPayables.filter(p => {
+          if (payable.installment_group_id && p.installment_group_id === payable.installment_group_id) return true;
+          if (payable.recurrence_id && p.recurrence_id === payable.recurrence_id) return true;
+          if (!payable.installment_group_id && !payable.recurrence_id && p.description === payable.description) return true;
+          return false;
+        });
+        
+        for (const p of toUpdate) {
+          await base44.entities.Payable.update(p.id, {
+            description: form.description,
+            amount: parseFloat(form.amount),
+            competencia: form.competencia || p.due_date,
+            category: form.category,
+            notes: form.notes || undefined,
+            due_alert_whatsapp: form.due_alert_whatsapp,
+          });
+        }
+        if (payable.recurrence_id) {
+          await base44.entities.Recurrence.update(payable.recurrence_id, {
+            description: form.description,
+            amount: parseFloat(form.amount),
+            category: form.category,
+          });
+        }
+      } else if (scope === 'forward') {
+        const allPayables = await base44.entities.Payable.list('-due_date', 500);
+        const toUpdate = allPayables.filter(p => {
+          let matchesGroup = false;
+          if (payable.installment_group_id && p.installment_group_id === payable.installment_group_id) matchesGroup = true;
+          else if (payable.recurrence_id && p.recurrence_id === payable.recurrence_id) matchesGroup = true;
+          else if (!payable.installment_group_id && !payable.recurrence_id && p.description === payable.description) matchesGroup = true;
+          
+          return matchesGroup && new Date(p.due_date) >= new Date(payable.due_date);
+        });
+
+        for (const p of toUpdate) {
+          await base44.entities.Payable.update(p.id, {
+            description: form.description,
+            amount: parseFloat(form.amount),
+            competencia: form.competencia || p.due_date,
+            category: form.category,
+            notes: form.notes || undefined,
+            due_alert_whatsapp: form.due_alert_whatsapp,
+          });
+        }
+        if (payable.recurrence_id) {
+          await base44.entities.Recurrence.update(payable.recurrence_id, {
+            description: form.description,
+            amount: parseFloat(form.amount),
+            category: form.category,
+          });
+        }
+      }
+
+      await queryClient.invalidateQueries();
+      onSaved();
+    } catch (error) {
+      toast.error('Erro ao salvar alteração.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveRequest = () => {
     if (!form.description || !form.amount || !form.due_date) {
       return toast.error('Preencha todos os campos obrigatórios');
     }
 
-    setSaving(true);
-
-    const competencia = form.competencia || form.due_date;
-
-    if (updateScope === 'this') {
-      await base44.entities.Payable.update(payable.id, {
-        description: form.description,
-        amount: parseFloat(form.amount),
-        due_date: form.due_date,
-        competencia,
-        category: form.category,
-        notes: form.notes || undefined,
-        due_alert_whatsapp: form.due_alert_whatsapp,
-      });
-    } else if (updateScope === 'all') {
-      const allPayables = await base44.entities.Payable.list('-due_date', 500);
-      const toUpdate = allPayables.filter(p => p.description === payable.description);
-      for (const p of toUpdate) {
-        await base44.entities.Payable.update(p.id, {
-          description: form.description,
-          amount: parseFloat(form.amount),
-          competencia: form.competencia || p.due_date,
-          category: form.category,
-          notes: form.notes || undefined,
-          due_alert_whatsapp: form.due_alert_whatsapp,
-        });
-      }
-      if (payable.recurrence_id) {
-        await base44.entities.Recurrence.update(payable.recurrence_id, {
-          description: form.description,
-          amount: parseFloat(form.amount),
-          category: form.category,
-        });
-      }
-    } else if (updateScope === 'forward') {
-      const allPayables = await base44.entities.Payable.list('-due_date', 500);
-      const toUpdate = allPayables.filter(
-        p => p.description === payable.description && new Date(p.due_date) >= new Date(payable.due_date)
-      );
-      for (const p of toUpdate) {
-        await base44.entities.Payable.update(p.id, {
-          description: form.description,
-          amount: parseFloat(form.amount),
-          competencia: form.competencia || p.due_date,
-          category: form.category,
-          notes: form.notes || undefined,
-          due_alert_whatsapp: form.due_alert_whatsapp,
-        });
-      }
-      if (payable.recurrence_id) {
-        await base44.entities.Recurrence.update(payable.recurrence_id, {
-          description: form.description,
-          amount: parseFloat(form.amount),
-          category: form.category,
-        });
-      }
+    if (payable.recurrence_id || payable.installment_group_id) {
+      setPromptScope(true);
+    } else {
+      executeSave('this');
     }
-
-    setSaving(false);
-    await queryClient.invalidateQueries();
-    onSaved();
   };
 
-  if (updateScope) {
+  if (promptScope) {
     return (
-      <AlertDialog open onOpenChange={() => setUpdateScope(null)}>
-        <AlertDialogContent>
+      <AlertDialog open onOpenChange={() => setPromptScope(false)}>
+        <AlertDialogContent className="font-sora">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar atualização</AlertDialogTitle>
+            <AlertDialogTitle>Como deseja salvar esta alteração?</AlertDialogTitle>
             <AlertDialogDescription>
-              {updateScope === 'this' && 'Vai atualizar apenas esta transação de "' + payable.description + '"'}
-              {updateScope === 'all' && 'Vai atualizar TODAS as parcelas de "' + payable.description + '"'}
-              {updateScope === 'forward' && 'Vai atualizar esta e todas as transações futuras de "' + payable.description + '"'}
+              Selecione o escopo da atualização para "{payable.description}":
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex gap-2">
-            <AlertDialogCancel className="flex-1">Cancelar</AlertDialogCancel>
-            <Button
-              className="flex-1"
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? 'Atualizando...' : 'Confirmar'}
+          <div className="flex flex-col gap-2 mt-4">
+            <Button variant="outline" className="font-bold justify-start" onClick={() => executeSave('this')} disabled={saving}>
+              ✅ APENAS NESTE MÊS/PARCELA
             </Button>
+            <Button variant="outline" className="font-bold justify-start" onClick={() => executeSave('forward')} disabled={saving}>
+              ➡️ NESTE MÊS E NOS FUTUROS
+            </Button>
+            <Button variant="outline" className="font-bold justify-start" onClick={() => executeSave('all')} disabled={saving}>
+              🔄 EM TODAS AS PARCELAS (INCLUI PASSADO)
+            </Button>
+            <AlertDialogCancel className="mt-2 font-bold" disabled={saving}>CANCELAR</AlertDialogCancel>
           </div>
         </AlertDialogContent>
       </AlertDialog>
@@ -211,33 +238,11 @@ export default function EditPayableModal({ payable, onClose, onSaved }) {
 
         <div className="flex flex-col gap-3 px-6 py-4 border-t shrink-0 bg-slate-50 mt-auto">
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="flex-1">
+            <Button variant="outline" onClick={onClose} className="flex-1 font-bold">
               Cancelar
             </Button>
-            <Button onClick={() => setUpdateScope('this')} disabled={saving} className="flex-1">
-              Salvar
-            </Button>
-          </div>
-
-          <div className="text-xs text-muted-foreground space-y-1 border-t border-slate-200 pt-3 mt-1">
-            <p className="font-medium mb-2">Outras opções:</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-left text-xs h-auto py-1.5 text-slate-600 hover:text-slate-900"
-              onClick={() => setUpdateScope('forward')}
-              disabled={saving}
-            >
-              Atualizar este e futuros
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-left text-xs h-auto py-1.5 text-slate-600 hover:text-slate-900"
-              onClick={() => setUpdateScope('all')}
-              disabled={saving}
-            >
-              Atualizar todas as parcelas
+            <Button onClick={handleSaveRequest} disabled={saving} className="flex-1 font-bold">
+              {saving ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
         </div>

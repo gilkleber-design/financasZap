@@ -54,6 +54,20 @@ function matchesBankAmount(record, bankAmount) {
     .some((value) => toCents(value) === bankCents);
 }
 
+function getMatchedAmount(record, bankAmount) {
+  const bankCents = toCents(bankAmount);
+  if (toCents(record.net_amount) === bankCents) return record.net_amount;
+  return record.amount || 0;
+}
+
+function getDisplayMatchedAmount(record, bankAmount) {
+  const bankCents = toCents(bankAmount);
+  if (toCents(record.net_amount) === bankCents && toCents(record.amount) !== bankCents) {
+    return `${formatCurrency(record.net_amount)} (líq)`;
+  }
+  return formatCurrency(record.amount);
+}
+
 function splitCsvLine(line, delimiter) {
   const result = [];
   let current = '';
@@ -338,7 +352,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       if (manualMatches[row.id] !== undefined) {
         const selected = manualMatches[row.id];
         if (selected.length > 0) {
-          const sum = selected.reduce((acc, c) => acc + (c.amount || 0), 0);
+          const sum = selected.reduce((acc, c) => acc + getMatchedAmount(c, row.amount), 0);
           const isReady = toCents(sum) === toCents(row.amount);
           return { ...row, status: isReady ? 'manual_match_ready' : 'manual_match_pending', selected, sum };
         }
@@ -380,7 +394,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       if (autoMatchIdx !== -1) {
          const match = poolCandidates[autoMatchIdx];
          poolCandidates.splice(autoMatchIdx, 1); // Consome para não duplicar
-         return { ...row, status: 'manual_match_ready', selected: [match], sum: match.amount, isAutoMatch: true };
+         return { ...row, status: 'manual_match_ready', selected: [match], sum: getMatchedAmount(match, row.amount), isAutoMatch: true };
       }
 
       return { ...row, status: 'orphan' };
@@ -625,7 +639,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
           {row.selected && row.selected.length > 0 ? (
               <div className="flex flex-col gap-1">
                 {row.selected.map(s => (
-                  <p key={s.id} className="truncate text-xs font-bold text-slate-700">✓ {s.description} ({formatCurrency(s.amount)})</p>
+                  <p key={s.id} className="truncate text-xs font-bold text-slate-700">✓ {s.description} ({getDisplayMatchedAmount(s, row.amount)})</p>
                 ))}
                 {row.status === 'manual_match_pending' && (
                   <p className="text-xs text-amber-600 font-bold mt-1">Faltam: {formatCurrency(Math.abs(row.amount - row.sum))}</p>
@@ -684,7 +698,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                                       {isSelected && <Check className="w-3 h-3 text-white" />}
                                                     </div>
                                                     <span className="truncate flex-1">{c.description}</span>
-                                                    <span className="font-bold">{formatCurrency(c.amount)}</span>
+                                                    <span className="font-bold">{getDisplayMatchedAmount(c, row.amount)}</span>
                                                   </div>
                                               </CommandItem>
                                             );

@@ -294,7 +294,10 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const { candidates, reconciledTransactions } = useMemo(() => {
     if (!selectedAccountId) return { reconciledTransactions: [], candidates: [] };
 
-    const isOwner = (item) => getRecordAccountId(item) === selectedAccountId;
+    const isOwner = (item) => {
+      const accId = getRecordAccountId(item);
+      return accId === selectedAccountId || !accId;
+    };
 
     const reconciled = transactions
       .filter(t => t.status === 'conciliated' && (isOwner(t) || showOtherAccounts))
@@ -684,7 +687,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                 <CommandList className="max-h-[300px] overflow-y-auto">
                                     <CommandEmpty>Nenhum lançamento encontrado.</CommandEmpty>
                                     <CommandGroup>
-                                        {candidates.filter(c => {
+                                        {[...candidates, ...reconciledTransactions].filter(c => {
                                             const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
                                             if (row.type === 'income') {
                                                 return ['receivable', 'income', 'transfer'].includes(cType);

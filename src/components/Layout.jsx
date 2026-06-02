@@ -14,7 +14,8 @@ import {
   X, 
   LogOut, 
   UserCircle, 
-  Plus
+  Plus,
+  Link2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
@@ -29,6 +30,7 @@ const navItems = [
   { path: '/relatorios', label: 'Relatórios', icon: PieChart },
   { path: '/planejamento', label: 'Planej.', icon: Target },
   { path: '/revisao-dados', label: 'Revisão', icon: ClipboardCheck },
+  { path: '/hub-amarracao', label: 'Amarração', icon: Link2 },
 ];
 
 const mobileNavItems = [

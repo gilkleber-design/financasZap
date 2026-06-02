@@ -8,6 +8,7 @@ import {
   PieChart, 
   Target,
   ClipboardCheck,
+  ArrowLeftRight,
   Settings, 
   Menu, 
   X, 
@@ -22,6 +23,7 @@ import DashboardLogo from '@/components/dashboard/DashboardLogo';
 const navItems = [
   { path: '/', label: 'Início', icon: LayoutGrid },
   { path: '/calendario', label: 'Plantões', icon: Stethoscope },
+  { path: '/transacoes', label: 'Transações', icon: ArrowLeftRight },
   { path: '/recebimentos', label: 'Receb.', icon: Wallet },
   { path: '/contas-pagar', label: 'Contas', icon: ReceiptText },
   { path: '/relatorios', label: 'Relatórios', icon: PieChart },

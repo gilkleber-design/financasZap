@@ -237,6 +237,8 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
   const [parsingPdf, setParsingPdf] = useState(false);
   const [editingOrphan, setEditingOrphan] = useState(null);
   const [editingDifference, setEditingDifference] = useState(null);
+  const [diffDesc, setDiffDesc] = useState('');
+  const [diffSelectedCandidate, setDiffSelectedCandidate] = useState(null);
   
   // Novos Estados (Motor e Segurança)
   const [recurrenceType, setRecurrenceType] = useState('single');
@@ -642,33 +644,62 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
     e.preventDefault();
     if (!editingDifference) return;
 
-    const formData = new FormData(e.currentTarget);
-    const category = String(formData.get('category') || '');
-    const description = String(formData.get('description') || '');
-    const differenceAmount = Math.abs(editingDifference.amount - editingDifference.sum);
+    if (diffSelectedCandidate) {
+      setManualMatches(prev => {
+        const current = prev[editingDifference.id] !== undefined ? prev[editingDifference.id] : (editingDifference.selected || []);
+        if (current.find(c => c.id === diffSelectedCandidate.id)) return prev;
+        return { ...prev, [editingDifference.id]: [...current, diffSelectedCandidate] };
+      });
+    } else {
+      const formData = new FormData(e.currentTarget);
+      const category = String(formData.get('category') || '');
+      const description = diffDesc || String(formData.get('description') || '');
+      const differenceAmount = Math.abs(editingDifference.amount - editingDifference.sum);
 
-    const fakeMatch = {
-      id: `diff-${Date.now()}`,
-      kind: 'transaction',
-      type: editingDifference.type,
-      description,
-      amount: differenceAmount,
-      net_amount: differenceAmount,
-      category,
-      date: editingDifference.date,
-      _isDifference: true,
-    };
+      const fakeMatch = {
+        id: `diff-${Date.now()}`,
+        kind: 'transaction',
+        type: editingDifference.type,
+        description,
+        amount: differenceAmount,
+        net_amount: differenceAmount,
+        category,
+        date: editingDifference.date,
+        _isDifference: true,
+      };
 
-    setManualMatches(prev => {
-      const current = prev[editingDifference.id] !== undefined ? prev[editingDifference.id] : (editingDifference.selected || []);
-      return { ...prev, [editingDifference.id]: [...current, fakeMatch] };
-    });
+      setManualMatches(prev => {
+        const current = prev[editingDifference.id] !== undefined ? prev[editingDifference.id] : (editingDifference.selected || []);
+        return { ...prev, [editingDifference.id]: [...current, fakeMatch] };
+      });
+    }
     
     setEditingDifference(null);
+    setDiffDesc('');
+    setDiffSelectedCandidate(null);
   };
 
   const isLoading = loadingTransactions || loadingPayables || loadingReceivables || loadingAccounts || parsingPdf;
   
+  const diffCandidates = useMemo(() => {
+    if (!editingDifference) return [];
+    return [...candidates, ...reconciledTransactions].filter(c => {
+      const isSelectedInThisRow = (editingDifference.selected || []).some(s => s.id === c.id);
+      if (usedCandidateIds.has(c.id) && !isSelectedInThisRow) return false;
+
+      const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
+      if (editingDifference.type === 'income') {
+          return ['receivable', 'income', 'transfer'].includes(cType);
+      } else {
+          return ['payable', 'expense', 'transfer'].includes(cType);
+      }
+    });
+  }, [editingDifference, candidates, reconciledTransactions, usedCandidateIds]);
+
+  const filteredDiffCandidates = diffDesc 
+    ? diffCandidates.filter(c => normalizeToLetters(c.description).includes(normalizeToLetters(diffDesc)))
+    : [];
+
   const displayRows = hideProcessed ? rowsWithState.filter(r => r.status !== 'processed') : rowsWithState;
   
   const incomeRows = displayRows.filter(r => r.type === 'income').sort((a, b) => a.date.localeCompare(b.date));
@@ -917,12 +948,18 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
       </Dialog>
 
       {/* Modal para Adicionar Diferença */}
-      <Dialog open={!!editingDifference} onOpenChange={(isOpen) => !isOpen && setEditingDifference(null)}>
+      <Dialog open={!!editingDifference} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          setEditingDifference(null);
+          setDiffDesc('');
+          setDiffSelectedCandidate(null);
+        }
+      }}>
         <DialogContent className="sm:max-w-[425px] font-sora">
           <DialogHeader>
-            <DialogTitle>Lançar Diferença</DialogTitle>
+            <DialogTitle>Compor Valor</DialogTitle>
             <DialogDescription>
-              Crie um lançamento apenas para o valor divergente, para fechar a conta do extrato.
+              Selecione um lançamento existente ou digite para criar um novo lançamento para a diferença.
             </DialogDescription>
           </DialogHeader>
           {editingDifference && (
@@ -933,39 +970,74 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                   <Input disabled value={format(parseISO(editingDifference.date), 'dd/MM/yyyy')} className="bg-slate-50 font-medium" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Valor da Diferença</label>
-                  <Input disabled value={formatCurrency(Math.abs(editingDifference.amount - editingDifference.sum))} className="bg-slate-50 font-black text-right text-amber-600" />
+                  <label className="text-xs font-bold text-slate-500 uppercase">Valor</label>
+                  <Input disabled value={diffSelectedCandidate ? getDisplayMatchedAmount(diffSelectedCandidate, editingDifference.amount) : formatCurrency(Math.abs(editingDifference.amount - (editingDifference.sum || 0)))} className="bg-slate-50 font-black text-right text-amber-600" />
                 </div>
               </div>
               
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Descrição da Diferença</label>
-                <Input name="description" defaultValue={`Diferença: ${editingDifference.description}`} autoFocus className="font-medium" required />
+              <div className="space-y-1 relative">
+                <label className="text-xs font-bold text-slate-500 uppercase">Descrição (Novo ou Existente)</label>
+                <Input 
+                  name="description" 
+                  value={diffDesc}
+                  onChange={e => {
+                    setDiffDesc(e.target.value);
+                    setDiffSelectedCandidate(null);
+                  }}
+                  autoFocus 
+                  autoComplete="off"
+                  placeholder="Digite para buscar ou criar..."
+                  className="font-medium" 
+                  required 
+                />
+                {diffDesc && !diffSelectedCandidate && filteredDiffCandidates.length > 0 && (
+                  <div className="absolute top-[60px] left-0 w-full z-50 bg-white border border-slate-200 rounded-md shadow-xl max-h-[160px] overflow-y-auto">
+                    {filteredDiffCandidates.map(c => (
+                      <div 
+                        key={c.id}
+                        className="px-3 py-2 text-sm hover:bg-slate-100 cursor-pointer flex items-center justify-between border-b last:border-0"
+                        onClick={() => {
+                          setDiffDesc(c.description);
+                          setDiffSelectedCandidate(c);
+                        }}
+                      >
+                        <span className="font-bold text-slate-700 truncate mr-2">{c.description}</span>
+                        <span className="font-black text-slate-900 shrink-0">{getDisplayMatchedAmount(c, editingDifference.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
-                <select 
-                  name="category" 
-                  defaultValue="" 
-                  className="flex h-10 w-full rounded-md border border-input bg-slate-50 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-medium" 
-                  required
-                >
-                  <option value="" disabled>Selecione uma categoria...</option>
-                  {dbCategories
-                    .filter(c => c.active !== false && c.type === editingDifference.type)
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(cat => (
-                      <option key={cat.slug} value={cat.slug}>
-                        {cat.name}
-                      </option>
-                  ))}
-                </select>
-              </div>
+              {!diffSelectedCandidate && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Categoria</label>
+                  <select 
+                    name="category" 
+                    defaultValue="" 
+                    className="flex h-10 w-full rounded-md border border-input bg-slate-50 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-medium" 
+                    required
+                  >
+                    <option value="" disabled>Selecione uma categoria...</option>
+                    {dbCategories
+                      .filter(c => c.active !== false && c.type === editingDifference.type)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(cat => (
+                        <option key={cat.slug} value={cat.slug}>
+                          {cat.name}
+                        </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <DialogFooter className="pt-4">
-                <Button type="button" variant="outline" onClick={() => setEditingDifference(null)}>Cancelar</Button>
-                <Button type="submit" className="bg-primary font-bold">Salvar Diferença</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setEditingDifference(null);
+                  setDiffDesc('');
+                  setDiffSelectedCandidate(null);
+                }}>Cancelar</Button>
+                <Button type="submit" className="bg-primary font-bold">Adicionar</Button>
               </DialogFooter>
             </form>
           )}

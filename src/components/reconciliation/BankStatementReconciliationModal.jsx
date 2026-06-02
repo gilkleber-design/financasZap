@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/popover';
 import {
   Command,
+  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -681,6 +682,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                             <Command>
                                 <CommandInput placeholder="Buscar lançamentos para compor..." />
                                 <CommandList className="max-h-[300px] overflow-y-auto">
+                                    <CommandEmpty>Nenhum lançamento encontrado.</CommandEmpty>
                                     <CommandGroup>
                                         {candidates.filter(c => {
                                             const cType = c.kind === 'transaction' ? c.type : (c.kind === 'receivable' ? 'receivable' : 'payable');
@@ -692,7 +694,7 @@ export default function BankStatementReconciliationModal({ open, onOpenChange })
                                         }).map(c => {
                                             const isSelected = (row.selected || []).find(s => s.id === c.id);
                                             return (
-                                              <CommandItem key={c.id} onSelect={() => toggleCandidate(row, c)}>
+                                              <CommandItem key={c.id} value={`${c.description} ${c.amount} ${c.id}`} onSelect={() => toggleCandidate(row, c)}>
                                                   <div className="flex items-center gap-2">
                                                     <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-slate-300'}`}>
                                                       {isSelected && <Check className="w-3 h-3 text-white" />}

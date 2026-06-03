@@ -485,7 +485,7 @@ function StatusRow({ row, transactions, variant, onOpenReceive }) {
           )}
         </div>
         {variant !== 'recebido' && (
-          <Button size="sm" onClick={() => onOpenReceive(row)} className="font-bold bg-[#0A9E6A] hover:bg-[#088258] text-white">Receber</Button>
+          <Button size="sm" onClick={() => onOpenReceive(row)}>Receber</Button>
         )}
       </div>
     </div>

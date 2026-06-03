@@ -253,7 +253,7 @@ export default function Receivables() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {status !== 'received' && !r._isPfTransaction && (
-                      <Button size="sm" onClick={() => setConfirmingReceivable(r)} className="font-bold bg-[#0A9E6A] hover:bg-[#088258] text-white">
+                      <Button size="sm" onClick={() => setConfirmingReceivable(r)}>
                         Receber
                       </Button>
                     )}

@@ -455,7 +455,11 @@ export default function Payables() {
 
   // REGRA DE OURO: Pagamento de fatura (Transferência de Liquidação) é oculto da contabilidade de despesa.
   const validPayables = useMemo(() => {
-    return payablesItems.filter(p => p.category !== 'transferencia_liquidacao');
+    return payablesItems.filter(p => p.category !== 'transferencia_liquidacao' && p.category !== 'reembolso');
+  }, [payablesItems]);
+
+  const reembolsoPayables = useMemo(() => {
+    return payablesItems.filter(p => p.category === 'reembolso');
   }, [payablesItems]);
 
   // KPIs blindados para controle de fluxo de caixa real
@@ -539,6 +543,28 @@ export default function Payables() {
         };
       });
 
+    const reembolsoItemsList = reembolsoPayables.map((item) => {
+      const dueDate = parseItemDate(item.due_date || item.competencia);
+      const isProvisioned = item.status === 'provisioned';
+      const isPaid = item.status === 'paid' || item.status === 'provisioned';
+      
+      return {
+        id: item.id,
+        description: item.description,
+        category: item.category,
+        dueDate,
+        dueDateLabel: format(dueDate || new Date(), 'dd/MM', { locale: ptBR }),
+        amount: Number(item.amount || 0),
+        installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
+        pill: isPaid ? (isProvisioned ? 'provisioned' : 'paid') : 'pending',
+        pillLabel: isPaid ? (isProvisioned ? 'Cartão' : 'Pago') : 'Pendente',
+        style: 'reembolso',
+        autoDebit: false,
+        canPay: !isPaid,
+        original: item,
+      };
+    });
+
     return [
       { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.dueDate < todayStart && !item.autoDebit) },
       { key: 'soon', title: 'Hoje / Amanhã', icon: PAYABLE_SECTION_ICONS.soon, items: mapped.filter((item) => !item.autoDebit && (isSameDay(item.dueDate, today) || isSameDay(item.dueDate, tomorrow))) },
@@ -546,8 +572,9 @@ export default function Payables() {
       { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
       { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.autoDebit) },
       { key: 'paid', title: 'Resolvidas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: doneItems, collapsible: true },
+      { key: 'reembolso', title: 'Reembolsos', icon: PAYABLE_SECTION_ICONS.reembolso, items: reembolsoItemsList, collapsible: true },
     ].filter((section) => section.items.length > 0);
-  }, [validPayables, currentMonth, todayStart]);
+  }, [validPayables, reembolsoPayables, currentMonth, todayStart]);
 
   const deletePayableMutation = useMutation({
     mutationFn: async ({ payable, deleteAllFutures, deleteAllGroup }) => {

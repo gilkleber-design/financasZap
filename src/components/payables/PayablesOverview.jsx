@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, CreditCard } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, CreditCard, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency, normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
@@ -28,6 +28,7 @@ export default function PayablesOverview({
     month: 'text-[#0A7070]',
     auto: 'text-[#7B92A8]',
     paid: 'text-[#0A6E50]',
+    reembolso: 'text-slate-500',
   };
   const badgeCls = {
     overdue: 'bg-[#FFD4D4] text-[#C0392B]',
@@ -36,6 +37,7 @@ export default function PayablesOverview({
     month: 'bg-[#B8E8E8] text-[#0A7070]',
     auto: 'bg-[#E2E8F0] text-[#7B92A8]',
     paid: 'bg-[#CCF3E3] text-[#0A6E50]',
+    reembolso: 'bg-slate-200 text-slate-500',
   };
   const bgHeader = {
     overdue: 'bg-[#FFF5F5]',
@@ -44,6 +46,7 @@ export default function PayablesOverview({
     month: 'bg-[#F0FAFA]',
     auto: 'bg-[#F8FAFC]',
     paid: 'bg-[#F0FBF7]',
+    reembolso: 'bg-slate-100',
   };
   const valueColor = {
     overdue: 'text-[#C0392B]',
@@ -52,6 +55,7 @@ export default function PayablesOverview({
     month: 'text-[#0D3B66]',
     auto: 'text-[#0D3B66]',
     paid: 'text-[#0A6E50]',
+    reembolso: 'text-slate-500',
   };
 
   return (
@@ -66,7 +70,7 @@ export default function PayablesOverview({
       {sections.map((section) => {
         const total = section.items.reduce((s, r) => s + Number(r.amount || 0), 0);
         return (
-          <div key={section.key} className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
+          <div key={section.key} className={`rounded-[14px] border border-border bg-card shadow-sm overflow-hidden ${section.key === 'reembolso' ? 'opacity-60 grayscale-[0.2]' : ''}`}>
             <div 
               onClick={section.collapsible ? onTogglePaid : undefined}
               className={`flex items-center justify-between px-5 py-3 border-b border-border ${bgHeader[section.key]} ${section.collapsible ? 'cursor-pointer select-none' : ''}`}
@@ -134,4 +138,5 @@ export const PAYABLE_SECTION_ICONS = {
   month: CalendarClock,
   auto: CreditCard,
   paid: CheckCircle2,
+  reembolso: RefreshCcw,
 };

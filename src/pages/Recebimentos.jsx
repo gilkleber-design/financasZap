@@ -50,7 +50,9 @@ export default function Recebimentos() {
       };
     });
 
-    const expectedReceivables = enrichedReceivables.filter(item => {
+    const normalReceivables = enrichedReceivables.filter(r => r.category !== 'reembolso');
+
+    const expectedReceivables = normalReceivables.filter(item => {
       const due = (item.due_date || '').slice(0, 7);
       const isOverdue = item.status !== 'received' && (item.due_date || '') < hoje && due <= currentMonthKey;
       return due === currentMonthKey || isOverdue;
@@ -58,7 +60,7 @@ export default function Recebimentos() {
 
     const totalEsperado = expectedReceivables.reduce((sum, item) => sum + item.net_amount, 0);
 
-    const totalRecebido = enrichedReceivables.filter(item => {
+    const totalRecebido = normalReceivables.filter(item => {
       if (!item.transaction_id) return false;
       const tx = transactions.find(t => t.id === item.transaction_id);
       return tx && (tx.date || '').slice(0, 7) === currentMonthKey;
@@ -86,7 +88,7 @@ export default function Recebimentos() {
     })).sort((a, b) => b.rate - a.rate);
 
     // Receivables cujo pagamento (Transaction.date) caiu no mês selecionado
-    const recebidosNoMes = enrichedReceivables.filter(item => {
+    const recebidosNoMes = normalReceivables.filter(item => {
       if (!item.transaction_id) return false;
       const tx = transactions.find(t => t.id === item.transaction_id);
       return tx && (tx.date || '').slice(0, 7) === currentMonthKey;
@@ -314,21 +316,30 @@ function StatusBadge(props) {
 function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, mesLabel, onOpenReceive }) {
   const hoje = new Date().toISOString().slice(0, 10);
   
-  const vencidos = receivables.filter(item => {
+  const normalReceivables = receivables.filter(r => r.category !== 'reembolso');
+  const reembolsos = receivables.filter(r => r.category === 'reembolso').filter(item => {
+    const due = (item.due_date || '').slice(0, 7);
+    const tx = item.transaction_id ? transactions.find(t => t.id === item.transaction_id) : null;
+    const isReceivedThisMonth = tx && (tx.date || '').slice(0, 7) === currentMonthKey;
+    const isDueThisMonthOrOverdue = due === currentMonthKey || (item.status !== 'received' && due <= currentMonthKey);
+    return isReceivedThisMonth || isDueThisMonthOrOverdue;
+  });
+
+  const vencidos = normalReceivables.filter(item => {
     const due = (item.due_date || '').slice(0, 7);
     return item.status !== 'received'
       && (item.due_date || '') < hoje
       && due <= currentMonthKey;
   });
 
-  const aReceber = receivables.filter(item => {
+  const aReceber = normalReceivables.filter(item => {
     const due = (item.due_date || '').slice(0, 7);
     return due === currentMonthKey
       && item.status !== 'received'
       && (item.due_date || '') >= hoje;
   });
 
-  const recebidos = receivables.filter(item => {
+  const recebidos = normalReceivables.filter(item => {
     if (!item.transaction_id) return false;
     const tx = transactions.find(t => t.id === item.transaction_id);
     return tx && (tx.date || '').slice(0, 7) === currentMonthKey;
@@ -339,7 +350,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
   const somaRecebidos = recebidos.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
   const totalReal     = somaVencidos + somaAReceber + somaRecebidos;
 
-  if (vencidos.length === 0 && aReceber.length === 0 && recebidos.length === 0) {
+  if (vencidos.length === 0 && aReceber.length === 0 && recebidos.length === 0 && reembolsos.length === 0) {
     return (
       <div className="rounded-[14px] border border-border bg-card p-10 text-center shadow-sm">
         <p className="text-sm text-muted-foreground">Nenhum recebimento encontrado no período.</p>
@@ -382,6 +393,16 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
         <span className="text-sm font-semibold text-foreground">TOTAL =</span>
         <span className="text-base font-semibold text-[#0D3B66]">{formatCurrency(totalReal, 2)}</span>
       </div>
+
+      {reembolsos.length > 0 && (
+        <StatusCard
+          title="Reembolsos" icon="🔄"
+          rows={reembolsos}
+          transactions={transactions}
+          variant="reembolso"
+          onOpenReceive={onOpenReceive}
+        />
+      )}
     </div>
   );
 }
@@ -391,11 +412,13 @@ function StatusCard({ title, icon, rows, transactions, variant, onOpenReceive })
     vencido:   'text-[#C0392B]',
     recebido:  'text-[#0A6E50]',
     a_receber: 'text-[#0A7070]',
+    reembolso: 'text-slate-500',
   };
   const badgeCls = {
     vencido:   'bg-[#FFD4D4] text-[#C0392B]',
     recebido:  'bg-[#CCF3E3] text-[#0A6E50]',
     a_receber: 'bg-[#B8E8E8] text-[#0A7070]',
+    reembolso: 'bg-slate-200 text-slate-500',
   };
   const total = rows.reduce((s, r) => s + Number(r.net_amount || r.amount || 0), 0);
 
@@ -408,10 +431,11 @@ function StatusCard({ title, icon, rows, transactions, variant, onOpenReceive })
     vencido:   'bg-[#FFF5F5]',
     recebido:  'bg-[#F0FBF7]',
     a_receber: 'bg-[#F0FAFA]',
+    reembolso: 'bg-slate-100',
   };
 
   return (
-    <div className="rounded-[14px] border border-border bg-card shadow-sm overflow-hidden">
+    <div className={`rounded-[14px] border border-border bg-card shadow-sm overflow-hidden ${variant === 'reembolso' ? 'opacity-60 grayscale-[0.2]' : ''}`}>
       <div className={`flex items-center justify-between px-5 py-3 border-b border-border ${bgHeader[variant]}`}>
         <div className="flex items-center gap-2">
           <span className={`text-sm font-bold uppercase tracking-[0.06em] ${headerColor[variant]}`}>
@@ -437,6 +461,7 @@ function StatusRow({ row, transactions, variant, onOpenReceive }) {
     vencido:   'text-[#C0392B]',
     recebido:  'text-[#0A6E50]',
     a_receber: 'text-[#0A7070]',
+    reembolso: 'text-slate-500',
   };
 
   const tx = row.transaction_id

@@ -556,8 +556,8 @@ export default function Payables() {
         dueDateLabel: format(dueDate || new Date(), 'dd/MM', { locale: ptBR }),
         amount: Number(item.amount || 0),
         installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
-        pill: isPaid ? (isProvisioned ? 'provisioned' : 'paid') : 'pending',
-        pillLabel: isPaid ? (isProvisioned ? 'Cartão' : 'Pago') : 'Pendente',
+        pill: isPaid ? (isProvisioned ? 'provisioned' : 'paid') : (dueDate < todayStart ? 'overdue' : 'pending'),
+        pillLabel: isPaid ? (isProvisioned ? 'Cartão' : 'Pago') : (dueDate < todayStart ? 'Vencido' : 'Pendente'),
         style: 'reembolso',
         autoDebit: false,
         canPay: !isPaid,
@@ -572,7 +572,7 @@ export default function Payables() {
       { key: 'month', title: 'Restante do Mês', icon: PAYABLE_SECTION_ICONS.month, items: mapped.filter((item) => !item.autoDebit && item.dueDate > weekEnd && item.dueDate <= monthEnd) },
       { key: 'auto', title: 'Débito Automático', icon: PAYABLE_SECTION_ICONS.auto, items: mapped.filter((item) => item.autoDebit) },
       { key: 'paid', title: 'Resolvidas este mês', icon: PAYABLE_SECTION_ICONS.paid, items: doneItems, collapsible: true },
-      { key: 'reembolso', title: 'Reembolsos', icon: PAYABLE_SECTION_ICONS.reembolso, items: reembolsoItemsList, collapsible: true },
+      { key: 'reembolso', title: 'Reembolsos', icon: PAYABLE_SECTION_ICONS.reembolso, items: reembolsoItemsList, collapsible: false },
     ].filter((section) => section.items.length > 0);
   }, [validPayables, reembolsoPayables, currentMonth, todayStart]);
 

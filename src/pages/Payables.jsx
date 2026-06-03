@@ -604,65 +604,37 @@ export default function Payables() {
   });
 
   return (
-    <div className="p-6 space-y-6 font-sora text-slate-800">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {viewMode === 'mensal'
-              ? 'Contas a Pagar'
-              : 'Gerenciamento de Fixas'}
-          </h1>
-
-          {viewMode === 'mensal' ? (
-            <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
-              Resumo do Mês · {fmt(kpis.expected)}
-            </p>
-          ) : (
-            <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
-              Edite a raiz dos seus custos de vida
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() =>
-              setViewMode(
-                viewMode === 'mensal' ? 'gerenciar_fixas' : 'mensal'
-              )
-            }
-            className="font-bold h-10 px-4 text-slate-600 border-slate-200"
-          >
-            {viewMode === 'mensal' ? (
-              <Settings className="w-4 h-4 mr-2" />
-            ) : (
-              <ChevronLeft className="w-4 h-4 mr-2" />
-            )}
-            {viewMode === 'mensal'
-              ? 'GERENCIAR CONTAS'
-              : 'VOLTAR PARA MESES'}
-          </Button>
-
-          {viewMode === 'mensal' && (
-            <Button
-              onClick={() => setShowForm(true)}
-              className="bg-primary font-bold h-10 px-6"
-            >
-              <Plus className="w-4 h-4 mr-2" /> NOVA DESPESA
-            </Button>
-          )}
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-background pb-24 md:pb-6 font-sora p-4 md:p-6 text-slate-800">
       {viewMode === 'gerenciar_fixas' ? (
-        <ManageAccountsTab
-          currentMonth={currentMonth}
-          setCurrentMonth={setCurrentMonth}
-          onEditRecurrence={(r) => setEditingRecurrence(r)}
-          onEditPayable={(p) => setEditingPayable(p)}
-          onDeletePayable={(p) => setDeletingPayable(p)}
-        />
+        <>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                Gerenciamento de Fixas
+              </h1>
+              <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest mt-1">
+                Edite a raiz dos seus custos de vida
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setViewMode('mensal')}
+                className="font-bold h-10 px-4 text-slate-600 border-slate-200"
+              >
+                <ChevronLeft className="w-4 h-4 mr-2" />
+                VOLTAR PARA MESES
+              </Button>
+            </div>
+          </div>
+          <ManageAccountsTab
+            currentMonth={currentMonth}
+            setCurrentMonth={setCurrentMonth}
+            onEditRecurrence={(r) => setEditingRecurrence(r)}
+            onEditPayable={(p) => setEditingPayable(p)}
+            onDeletePayable={(p) => setDeletingPayable(p)}
+          />
+        </>
       ) : (
         <>
           <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3 -mx-6 -mt-6 mb-3">
@@ -678,14 +650,30 @@ export default function Payables() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-[14px] border border-border bg-card p-3 shadow-sm">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <span className="text-sm font-bold min-w-[120px] text-center capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-              <ChevronRight className="w-5 h-5" />
-            </Button>
+          <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-card p-4 shadow-sm md:flex-row md:items-center md:justify-between mb-3">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Contas a Pagar</h1>
+              <p className="text-sm text-muted-foreground">Compromissos organizados por urgência.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={() => setViewMode('gerenciar_fixas')} className="gap-2 border-primary/30 text-primary hover:text-primary">
+                <Settings className="h-4 w-4" />
+                Gerenciar Contas
+              </Button>
+              <Button onClick={() => setShowForm(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Nova despesa
+              </Button>
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="min-w-[110px] text-center text-sm font-semibold capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
 
           <PayablesOverview

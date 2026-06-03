@@ -56,11 +56,6 @@ export default function PayablesOverview({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-[14px] border border-border bg-card p-4 shadow-sm">
-        <h1 className="text-2xl font-bold text-foreground">Contas a Pagar</h1>
-        <p className="text-sm text-muted-foreground">Compromissos organizados por urgência.</p>
-      </div>
-
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Total do mês" value={formatCurrency(kpis.expected, 2)} sub="soma completa" />
         <KpiCard label="Pago" value={formatCurrency(kpis.paid, 2)} sub={`${kpis.expected ? ((kpis.paid / kpis.expected) * 100).toFixed(1) : '0.0'}% do mês`} />

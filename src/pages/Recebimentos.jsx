@@ -50,7 +50,8 @@ export default function Recebimentos() {
 
     const expectedReceivables = enrichedReceivables.filter(item => {
       const due = (item.due_date || '').slice(0, 7);
-      return due === currentMonthKey;
+      const isOverdue = item.status !== 'received' && (item.due_date || '') < hoje && due <= currentMonthKey;
+      return due === currentMonthKey || isOverdue;
     });
 
     const totalEsperado = expectedReceivables.reduce((sum, item) => sum + item.net_amount, 0);
@@ -304,9 +305,9 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
   
   const vencidos = receivables.filter(item => {
     const due = (item.due_date || '').slice(0, 7);
-    return due === currentMonthKey
-      && item.status !== 'received'
-      && (item.due_date || '') < hoje;
+    return item.status !== 'received'
+      && (item.due_date || '') < hoje
+      && due <= currentMonthKey;
   });
 
   const aReceber = receivables.filter(item => {

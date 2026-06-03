@@ -122,7 +122,13 @@ Deno.serve(async (req) => {
     } else if (status === 'PAGAS') {
       items = payables.filter(p => p.status === 'paid' && monthMatches(p, month, sortBy) && typeMatches(p, filter) && cardMatches(p, creditCardOnly));
     } else {
-      const monthItems = payables.filter(p => ['pending', 'provisioned', 'paid', 'conciliated'].includes(p.status) && monthMatches(p, month, sortBy) && cardMatches(p, creditCardOnly));
+      const monthItems = payables.filter(p => {
+        const isMonthMatch = monthMatches(p, month, sortBy);
+        const isOverdue = p.status === 'pending' && toDateOnly(p.due_date) < todayKey() && monthKeyFromDate(p.due_date) <= month;
+        return ['pending', 'provisioned', 'paid', 'conciliated'].includes(p.status) && 
+               (isMonthMatch || isOverdue) && 
+               cardMatches(p, creditCardOnly);
+      });
       const projections = future && filter !== 'PARCELADAS' && filter !== 'AVULSAS'
         ? recurrences
             .filter(r => r.active !== false)

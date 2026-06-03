@@ -40,7 +40,7 @@ const fmt = (v) =>
     currency: 'BRL',
   }).format(v || 0);
 
-function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, onEditPayable, onDeletePayable }) {
+function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, onEditPayable, onDeletePayable, payablesItems, loadingPayables }) {
   const [showForm, setShowForm] = useState(false);
   const [deletingRecurrence, setDeletingRecurrence] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,14 +52,9 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
     queryFn: () => base44.entities.Recurrence.list('-created_date', 100),
   });
 
-  const { data: allPayables = [], isLoading: loadingPayables } = useQuery({
-    queryKey: ['all-payables-manage'],
-    queryFn: () => base44.entities.Payable.list('-due_date', 500),
-  });
-
   const isLoading = loadingRecurrences || loadingPayables;
 
-  const monthPayables = allPayables.filter(p => {
+  const monthPayables = (payablesItems || []).filter(p => {
     const due = p.due_date || p.competencia;
     if (!due) return false;
     const normalized = String(due).includes('T') ? String(due) : `${due}T12:00:00`;
@@ -267,7 +262,7 @@ function ManageAccountsTab({ currentMonth, setCurrentMonth, onEditRecurrence, on
         </div>
         <Card className="border-0 shadow-sm font-sora bg-white">
           <CardContent className="p-0">
-            <div className="max-h-[500px] overflow-y-auto pb-4">
+            <div className="pb-4">
               {isLoading && (
                 <p className="p-16 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">
                   Carregando contas...
@@ -433,14 +428,13 @@ export default function Payables() {
   const monthKey = format(currentMonth, 'yyyy-MM');
 
   // Backend busca os dados do mês
-  const { data: payablesResponse } = useQuery({
+  const { data: payablesResponse, isLoading: loadingPayables } = useQuery({
     queryKey: ['payables-list', monthKey],
     queryFn: () =>
       base44.functions.invoke('listPayables', {
         month: monthKey,
         status: 'TODAS', // Traz tudo. O frontend cuida da regra de negócio.
       }),
-    enabled: viewMode === 'mensal',
   });
 
   const payablesItems = payablesResponse?.data?.items || [];
@@ -661,6 +655,8 @@ export default function Payables() {
             onEditRecurrence={(r) => setEditingRecurrence(r)}
             onEditPayable={(p) => setEditingPayable(p)}
             onDeletePayable={(p) => setDeletingPayable(p)}
+            payablesItems={payablesItems}
+            loadingPayables={loadingPayables}
           />
         </>
       ) : (

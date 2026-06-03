@@ -52,7 +52,7 @@ export default function Layout() {
       {/* Sidebar Desktop */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 w-24 flex-col items-center bg-[#0D3B66] py-4 text-white overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <Link to="/" className="mb-6 flex shrink-0 h-[68px] w-[68px] items-center justify-center rounded-xl text-white">
-          <DashboardLogo className="h-11 w-11" />
+          <DashboardLogo className="h-[53px] w-[53px]" />
         </Link>
 
         <nav className="flex flex-1 flex-col items-center gap-4 w-full">

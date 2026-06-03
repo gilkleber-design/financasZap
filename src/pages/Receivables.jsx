@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, ChevronLeft, ChevronRight, Undo2, Pencil } from 'lucide-react';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import ConfirmReceivableModal from '@/components/dashboard/ConfirmReceivableModal';
 import { format, isPast, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
@@ -16,6 +16,7 @@ const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency:
 
 export default function Receivables() {
   const [showForm, setShowForm] = useState(false);
+  const [editingReceivable, setEditingReceivable] = useState(null);
   const [confirmingReceivable, setConfirmingReceivable] = useState(null);
   const [deletingReceivable, setDeletingReceivable] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -154,7 +155,7 @@ export default function Receivables() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-sora font-bold">Contas a Receber</h1>
+          <h1 className="text-2xl font-sora font-bold">Gerenciar Recebíveis</h1>
           <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -253,6 +254,11 @@ export default function Receivables() {
                         <CheckCircle2 className="w-4 h-4" />
                       </Button>
                     )}
+                    {!r._isPfTransaction && (
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-blue-500 hover:text-blue-700" onClick={() => setEditingReceivable(r)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                     {status === 'received' && !r._isPfTransaction && (
                       <Button variant="ghost" size="icon" className="w-8 h-8 text-amber-500 hover:text-amber-700" title="Desfazer recebimento" onClick={() => undoPaymentMutation.mutate(r)}>
                         <Undo2 className="w-4 h-4" />
@@ -278,11 +284,12 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
-      {showForm && (
+      {(showForm || editingReceivable) && (
         <ReceivableFormModal
+          receivable={editingReceivable}
           incomeSources={incomeSources}
-          onClose={() => setShowForm(false)}
-          onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); }}
+          onClose={() => { setShowForm(false); setEditingReceivable(null); }}
+          onSaved={() => { queryClient.invalidateQueries(); setShowForm(false); setEditingReceivable(null); }}
         />
       )}
 

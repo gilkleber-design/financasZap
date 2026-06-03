@@ -10,10 +10,20 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { CategorySelect } from '@/components/ui/category-select';
+import { useCategories } from '@/hooks/useCategories';
 
-export default function ReceivableFormModal({ incomeSources, categories = [], onClose, onSaved }) {
+export default function ReceivableFormModal({ receivable, incomeSources, onClose, onSaved }) {
+  const { categories } = useCategories();
   const [form, setForm] = useState({
-    description: '', amount: '', due_date: '', competencia: '', income_source_id: '', category_id: '', tax_rate: '', recurrent: false, notes: '',
+    description: receivable?.description || '', 
+    amount: receivable?.amount || '', 
+    due_date: receivable?.due_date ? receivable.due_date.split('T')[0] : '', 
+    competencia: receivable?.competencia ? receivable.competencia.split('T')[0] : '', 
+    income_source_id: receivable?.income_source_id || '', 
+    category_id: receivable?.category_id || '', 
+    tax_rate: receivable?.tax_rate || '', 
+    recurrent: receivable?.recurrent || false, 
+    notes: receivable?.notes || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -33,17 +43,30 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
     const netAmount = taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
     const category = categories.find((item) => item.id === form.category_id);
     try {
-      await base44.entities.Receivable.create({
-        ...form,
-        amount,
-        tax_rate: taxRate || undefined,
-        net_amount: netAmount || amount || 0,
-        status: 'pending',
-        competencia: form.competencia || form.due_date,
-        category: category?.slug || undefined,
-        notes: form.notes || undefined,
-      });
-      toast.success('Conta a receber criada!');
+      if (receivable) {
+        await base44.entities.Receivable.update(receivable.id, {
+          ...form,
+          amount,
+          tax_rate: taxRate || undefined,
+          net_amount: netAmount || amount || 0,
+          competencia: form.competencia || form.due_date,
+          category: category?.slug || undefined,
+          notes: form.notes || undefined,
+        });
+        toast.success('Conta a receber atualizada!');
+      } else {
+        await base44.entities.Receivable.create({
+          ...form,
+          amount,
+          tax_rate: taxRate || undefined,
+          net_amount: netAmount || amount || 0,
+          status: 'pending',
+          competencia: form.competencia || form.due_date,
+          category: category?.slug || undefined,
+          notes: form.notes || undefined,
+        });
+        toast.success('Conta a receber criada!');
+      }
       onSaved();
     } catch (error) {
       console.error('Erro ao salvar receivable:', error);
@@ -61,7 +84,7 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <div className="px-6 py-4 border-b shrink-0">
-          <DialogHeader><DialogTitle>Nova Conta a Receber</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{receivable ? 'Editar Conta a Receber' : 'Nova Conta a Receber'}</DialogTitle></DialogHeader>
         </div>
         <div className="space-y-4 p-6 overflow-y-auto flex-1 min-h-0">
           <div>
@@ -86,7 +109,7 @@ export default function ReceivableFormModal({ incomeSources, categories = [], on
                 value={form.category_id}
                 onChange={(value) => set('category_id', value)}
                 valueKey="id"
-                allowedTypes={['income']}
+                allowedTypes={['income', 'transfer']}
                 allowNone={false}
                 className="mt-1"
                 placeholder="Selecionar categoria"

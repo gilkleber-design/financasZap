@@ -89,7 +89,27 @@ export function CategorySelect({
         </SelectTrigger>
         <SelectContent>
           {allowNone && <SelectItem value="_none">Nenhuma</SelectItem>}
-          {visibleRoots.map((cat) => {
+          {visibleRoots.filter(c => c.type !== 'transfer').map((cat) => {
+            const children = getChildren(cat.id).filter(isAllowed);
+            return (
+              <div key={cat.id}>
+                <SelectItem value={String(cat[valueKey])} className="font-semibold">
+                  {cat.name}
+                </SelectItem>
+                {children.map((child) => (
+                  <SelectItem key={child.id} value={String(child[valueKey])} className="ml-4">
+                    → {child.name}
+                  </SelectItem>
+                ))}
+              </div>
+            );
+          })}
+          {visibleRoots.some(c => c.type === 'transfer') && (
+            <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-slate-50 mt-2 mb-1">
+              Transferências / Neutras
+            </div>
+          )}
+          {visibleRoots.filter(c => c.type === 'transfer').map((cat) => {
             const children = getChildren(cat.id).filter(isAllowed);
             return (
               <div key={cat.id}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, ChevronLeft, ChevronRight, Download, Landmark, Plus } from 'lucide-react';
+import { Bell, Building2, CalendarClock, ChevronLeft, ChevronRight, Download, Landmark, Plus, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, subMonths, startOfMonth, endOfMonth, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -156,6 +156,12 @@ export default function Recebimentos() {
             <p className="text-sm text-muted-foreground">Visão de caixa por período e por PJ.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild className="gap-2 border-primary/30 text-primary hover:text-primary">
+              <Link to="/contas-receber">
+                <Settings className="h-4 w-4" />
+                Gerenciar Recebíveis
+              </Link>
+            </Button>
             <Button onClick={() => setShowReceivableForm(true)} className="gap-2">
               <Plus className="h-4 w-4" />
               Novo recebível

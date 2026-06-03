@@ -251,10 +251,10 @@ export default function Receivables() {
                       {r.recurrent && !r._isPfTransaction && <Badge variant="outline" className="text-xs py-0 h-4 px-1.5">Recorrente</Badge>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {status !== 'received' && !r._isPfTransaction && (
-                      <Button variant="ghost" size="icon" className="w-8 h-8 text-emerald-500" onClick={() => setConfirmingReceivable(r)}>
-                        <CheckCircle2 className="w-4 h-4" />
+                      <Button size="sm" onClick={() => setConfirmingReceivable(r)} className="font-bold bg-[#0A9E6A] hover:bg-[#088258] text-white">
+                        Receber
                       </Button>
                     )}
                     {!r._isPfTransaction && (

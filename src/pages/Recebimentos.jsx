@@ -9,10 +9,12 @@ import DashboardLogo from '@/components/dashboard/DashboardLogo';
 import { getInitials, formatCurrency } from '@/components/dashboard/financaszapTheme';
 import { Button } from '@/components/ui/button';
 import ReceivableFormModal from '@/components/receivables/ReceivableFormModal';
+import ConfirmReceivableModal from '@/components/dashboard/ConfirmReceivableModal';
 
 export default function Recebimentos() {
   const [anchorMonth, setAnchorMonth] = useState(new Date());
   const [showReceivableForm, setShowReceivableForm] = useState(false);
+  const [confirmingReceivable, setConfirmingReceivable] = useState(null);
   const now = new Date();
   const range = 1;
 
@@ -191,6 +193,7 @@ export default function Recebimentos() {
           transactions={transactions} 
           currentMonthKey={data.currentMonthKey} 
           mesLabel={format(anchorMonth, 'MMMM', { locale: ptBR })}
+          onOpenReceive={(item) => setConfirmingReceivable(item)}
         />
 
         <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
@@ -262,6 +265,14 @@ export default function Recebimentos() {
             }}
           />
         )}
+        {confirmingReceivable && (
+          <ConfirmReceivableModal
+            receivable={confirmingReceivable}
+            onClose={() => {
+              setConfirmingReceivable(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -300,7 +311,7 @@ function StatusBadge(props) {
   return <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-bold ${styles[status] || styles.a_receber}`}>{label}</span>;
 }
 
-function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, mesLabel }) {
+function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, mesLabel, onOpenReceive }) {
   const hoje = new Date().toISOString().slice(0, 10);
   
   const vencidos = receivables.filter(item => {
@@ -344,6 +355,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
           rows={vencidos}
           transactions={transactions}
           variant="vencido"
+          onOpenReceive={onOpenReceive}
         />
       )}
       {recebidos.length > 0 && (
@@ -352,6 +364,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
           rows={recebidos}
           transactions={transactions}
           variant="recebido"
+          onOpenReceive={onOpenReceive}
         />
       )}
       {aReceber.length > 0 && (
@@ -360,6 +373,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
           rows={aReceber}
           transactions={transactions}
           variant="a_receber"
+          onOpenReceive={onOpenReceive}
         />
       )}
 
@@ -372,7 +386,7 @@ function ReceivimentosPorStatus({ receivables, transactions, currentMonthKey, me
   );
 }
 
-function StatusCard({ title, icon, rows, transactions, variant }) {
+function StatusCard({ title, icon, rows, transactions, variant, onOpenReceive }) {
   const headerColor = {
     vencido:   'text-[#C0392B]',
     recebido:  'text-[#0A6E50]',
@@ -411,14 +425,14 @@ function StatusCard({ title, icon, rows, transactions, variant }) {
       </div>
       <div className="divide-y divide-[#F0F4F8]">
         {sortedRows.map(row => (
-          <StatusRow key={row.id} row={row} transactions={transactions} variant={variant} />
+          <StatusRow key={row.id} row={row} transactions={transactions} variant={variant} onOpenReceive={onOpenReceive} />
         ))}
       </div>
     </div>
   );
 }
 
-function StatusRow({ row, transactions, variant }) {
+function StatusRow({ row, transactions, variant, onOpenReceive }) {
   const valueColor = {
     vencido:   'text-[#C0392B]',
     recebido:  'text-[#0A6E50]',
@@ -459,14 +473,19 @@ function StatusRow({ row, transactions, variant }) {
           <span className="text-xs text-[#4A6278]">{subtitulo}</span>
         )}
       </div>
-      <div className="flex flex-col items-end gap-0.5 ml-4 flex-shrink-0">
-        <span className={`text-sm font-bold ${valueColor[variant]}`}>
-          {formatCurrency(Number(row.net_amount || row.amount || 0), 2)}
-        </span>
-        {Number(row.tax_amount || 0) > 0 && (
-          <span className="text-[9px] text-[#7B92A8]">
-            bruto {formatCurrency(Number(row.gross_amount || row.amount || 0), 2)}
+      <div className="flex items-center gap-4 ml-4 flex-shrink-0">
+        <div className="flex flex-col items-end gap-0.5">
+          <span className={`text-sm font-bold ${valueColor[variant]}`}>
+            {formatCurrency(Number(row.net_amount || row.amount || 0), 2)}
           </span>
+          {Number(row.tax_amount || 0) > 0 && (
+            <span className="text-[9px] text-[#7B92A8]">
+              bruto {formatCurrency(Number(row.gross_amount || row.amount || 0), 2)}
+            </span>
+          )}
+        </div>
+        {variant !== 'recebido' && (
+          <Button size="sm" onClick={() => onOpenReceive(row)} className="font-bold bg-[#0A9E6A] hover:bg-[#088258] text-white">Receber</Button>
         )}
       </div>
     </div>

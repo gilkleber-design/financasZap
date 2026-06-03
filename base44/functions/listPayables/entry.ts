@@ -44,7 +44,7 @@ function cardMatches(item, creditCardOnly) {
   return item.origin_type === 'card';
 }
 
-async function materializeCurrentMonth(base44, month) {
+async function materializeCurrentMonth(base44, month, user) {
   if (month !== currentMonthKey()) return;
 
   const recurrences = await base44.entities.Recurrence.list('-created_date', 500);
@@ -70,6 +70,7 @@ async function materializeCurrentMonth(base44, month) {
       origin_type: recurrence.origin_type || (recurrence.origin_id ? 'account' : undefined),
       payment_modality: recurrence.payment_modality || 'manual',
       notes: recurrence.notes || undefined,
+      family_id: recurrence.family_id || user.family_id || user.data?.family_id || undefined,
     });
   }
 
@@ -110,7 +111,7 @@ Deno.serve(async (req) => {
     const sortBy = body.sort || 'due_date';
     const creditCardOnly = body.creditCardOnly === true;
 
-    await materializeCurrentMonth(base44, month);
+    await materializeCurrentMonth(base44, month, user);
 
     const payables = await base44.entities.Payable.list('-due_date', 1000);
     const recurrences = await base44.entities.Recurrence.list('-created_date', 500);
@@ -125,6 +126,9 @@ Deno.serve(async (req) => {
       const monthItems = payables.filter(p => {
         const isMonthMatch = monthMatches(p, month, sortBy);
         const isOverdue = p.status === 'pending' && toDateOnly(p.due_date) < todayKey() && monthKeyFromDate(p.due_date) <= month;
+        // Reembolsos devem aparecer se a data for do mês, se for overdue, ou se pago no mês.
+        // Como o status de reembolso pode ser pending, paid ou provisioned, ele passa na check de cima,
+        // só precisamos garantir que a checagem de mês/atraso está funcionando.
         return ['pending', 'provisioned', 'paid', 'conciliated'].includes(p.status) && 
                (isMonthMatch || isOverdue) && 
                cardMatches(p, creditCardOnly);

@@ -543,27 +543,28 @@ export default function Payables() {
         };
       });
 
-    const reembolsoItemsList = reembolsoPayables.map((item) => {
-      const dueDate = parseItemDate(item.due_date || item.competencia);
-      const isProvisioned = item.status === 'provisioned';
-      const isPaid = item.status === 'paid' || item.status === 'provisioned';
-      
-      return {
-        id: item.id,
-        description: item.description,
-        category: item.category,
-        dueDate,
-        dueDateLabel: format(dueDate || new Date(), 'dd/MM', { locale: ptBR }),
-        amount: Number(item.amount || 0),
-        installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
-        pill: isPaid ? (isProvisioned ? 'provisioned' : 'paid') : (dueDate < todayStart ? 'overdue' : 'pending'),
-        pillLabel: isPaid ? (isProvisioned ? 'Cartão' : 'Pago') : (dueDate < todayStart ? 'Vencido' : 'Pendente'),
-        style: 'reembolso',
-        autoDebit: false,
-        canPay: !isPaid,
-        original: item,
-      };
-    });
+    const reembolsoItemsList = reembolsoPayables
+      .map((item) => {
+        const dueDate = parseItemDate(item.due_date || item.competencia);
+        const isProvisioned = item.status === 'provisioned';
+        const isPaid = item.status === 'paid' || item.status === 'provisioned';
+        
+        return {
+          id: item.id,
+          description: item.description,
+          category: item.category,
+          dueDate,
+          dueDateLabel: format(dueDate || new Date(), 'dd/MM', { locale: ptBR }),
+          amount: Number(item.amount || 0),
+          installmentLabel: item.installment_count > 1 ? `${item.installment_number || 1}/${item.installment_count}` : '',
+          pill: isPaid ? (isProvisioned ? 'provisioned' : 'paid') : (dueDate < todayStart ? 'overdue' : 'pending'),
+          pillLabel: isPaid ? (isProvisioned ? 'Cartão' : 'Pago') : (dueDate < todayStart ? 'Vencido' : 'Pendente'),
+          style: 'reembolso',
+          autoDebit: false,
+          canPay: !isPaid,
+          original: item,
+        };
+      });
 
     return [
       { key: 'overdue', title: 'Vencidas', icon: PAYABLE_SECTION_ICONS.overdue, items: mapped.filter((item) => item.dueDate < todayStart && !item.autoDebit) },

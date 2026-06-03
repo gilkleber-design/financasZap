@@ -36,34 +36,39 @@ export default function ReceivableFormModal({ receivable, incomeSources, onClose
   };
 
   const handleSave = async () => {
-    if (!form.description || !form.amount || !form.due_date || !form.category_id) return toast.error('Preencha os campos obrigatórios');
+    if (!form.description) return toast.error('Preencha a descrição');
+    if (!form.amount) return toast.error('Preencha o valor bruto');
+    if (!form.due_date) return toast.error('Preencha a data prevista');
+    if (!form.category_id) return toast.error('Selecione uma categoria');
+
     setSaving(true);
     const amount = parseFloat(form.amount) || 0;
     const taxRate = parseFloat(form.tax_rate) || 0;
     const netAmount = taxRate > 0 ? amount * (1 - taxRate / 100) : amount;
     const category = categories.find((item) => item.id === form.category_id);
+    
+    const payload = {
+      description: form.description,
+      amount,
+      due_date: form.due_date,
+      competencia: form.competencia || form.due_date,
+      category_id: form.category_id,
+      category: category?.slug || undefined,
+      income_source_id: form.income_source_id || undefined,
+      tax_rate: taxRate || undefined,
+      net_amount: netAmount || amount || 0,
+      recurrent: form.recurrent,
+      notes: form.notes || undefined,
+    };
+
     try {
       if (receivable) {
-        await base44.entities.Receivable.update(receivable.id, {
-          ...form,
-          amount,
-          tax_rate: taxRate || undefined,
-          net_amount: netAmount || amount || 0,
-          competencia: form.competencia || form.due_date,
-          category: category?.slug || undefined,
-          notes: form.notes || undefined,
-        });
+        await base44.entities.Receivable.update(receivable.id, payload);
         toast.success('Conta a receber atualizada!');
       } else {
         await base44.entities.Receivable.create({
-          ...form,
-          amount,
-          tax_rate: taxRate || undefined,
-          net_amount: netAmount || amount || 0,
+          ...payload,
           status: 'pending',
-          competencia: form.competencia || form.due_date,
-          category: category?.slug || undefined,
-          notes: form.notes || undefined,
         });
         toast.success('Conta a receber criada!');
       }

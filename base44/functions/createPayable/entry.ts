@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
         const isCardOrigin = basePayload.origin_type === 'card';
         const payable = {
           ...basePayload,
-          description: `${basePayload.description} (${currentNumber}/${installmentCount})`,
+          description: basePayload.description,
           due_date: `${installmentDueDate}T12:00:00`,
           competencia: installmentDueDate,
           status: isCardOrigin ? 'provisioned' : (shouldPayNow && i === 0 ? 'paid' : 'pending'),

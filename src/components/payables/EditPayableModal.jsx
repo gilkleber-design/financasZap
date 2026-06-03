@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 export default function EditPayableModal({ payable, onClose, onSaved }) {
   // O split('T')[0] garante que o input date consiga ler a data do banco (YYYY-MM-DD)
   const [form, setForm] = useState({
-    description: payable?.description || '',
+    description: payable?.description ? payable.description.replace(/\s*\(\d+\/\d+\)\s*$/, '') : '',
     amount: payable?.amount || '',
     due_date: payable?.due_date ? payable.due_date.split('T')[0] : '',
     competencia: payable?.competencia ? payable.competencia.split('T')[0] : '',

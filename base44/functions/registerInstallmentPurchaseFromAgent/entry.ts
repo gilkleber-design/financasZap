@@ -101,14 +101,20 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'card_id é obrigatório' }, { status: 400 });
     }
 
+    if (!category) {
+      return Response.json({ error: 'category (slug) é obrigatório. Pergunte a categoria ao usuário antes de confirmar.' }, { status: 400 });
+    }
+
     const card = await base44.entities.Card.get(card_id);
     if (!card) {
       return Response.json({ error: 'Cartão não encontrado' }, { status: 404 });
     }
 
-    const matchedCategory = category
-      ? (await base44.entities.Category.filter({ slug: category }, '-created_date', 1))?.[0] || null
-      : null;
+    const matchedCategory = (await base44.entities.Category.filter({ slug: category }, '-created_date', 1))?.[0] || null;
+
+    if (!matchedCategory) {
+      return Response.json({ error: `Categoria "${category}" não encontrada. Use listCategoriesForAgent para obter o slug correto.` }, { status: 400 });
+    }
 
     const perInstallmentRaw = Math.round((totalAmount / installmentCount) * 100) / 100;
     const roundedTotal = Math.round(totalAmount * 100);
@@ -133,6 +139,8 @@ Deno.serve(async (req) => {
       description: cleanDescription,
       card_name: card.name,
       bank_name: card.bank || null,
+      category_slug: matchedCategory?.slug || category,
+      category_name: matchedCategory?.name || null,
       purchase_date: purchaseDate,
       total_amount: totalAmount,
       total_amount_formatted: formatCurrency(totalAmount),
@@ -156,6 +164,7 @@ Deno.serve(async (req) => {
         '',
         `• Compra: ${cleanDescription}`,
         `• Cartão: ${card.name}`,
+        `• Categoria: ${matchedCategory?.name || category}`,
         `• Valor total: ${formatCurrency(totalAmount)}`,
         `• Parcelamento: ${installmentCount}x${amountSource === 'installment' && Number.isFinite(installmentAmount) ? ` de ${formatCurrency(installmentAmount)}` : ''}`,
         '',

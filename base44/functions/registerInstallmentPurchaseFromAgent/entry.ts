@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
       card_id,
       notes,
       confirmed,
+      category_confirmed_by_user,
     } = payload;
 
     const cleanDescription = String(description || '').trim();
@@ -103,6 +104,13 @@ Deno.serve(async (req) => {
 
     if (!category) {
       return Response.json({ error: 'category (slug) é obrigatório. Pergunte a categoria ao usuário antes de confirmar.' }, { status: 400 });
+    }
+
+    if (!category_confirmed_by_user) {
+      return Response.json({
+        error: 'CATEGORIA_NAO_CONFIRMADA: você NÃO perguntou a categoria ao usuário. PARE. Envie a pergunta de categoria (PASSO P2), aguarde a resposta do usuário e só então chame esta função novamente com category_confirmed_by_user: true. É proibido atribuir categoria sozinho.',
+        requires_category_question: true,
+      }, { status: 400 });
     }
 
     const card = await base44.entities.Card.get(card_id);

@@ -120,7 +120,24 @@ export default function DashboardPage() {
         else if (!amount) status = 'futuro';
         else if (hasOverdue) status = 'vencido';
         else status = 'a_receber';
-        return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount };
+
+        // Detalhes para o balão (apenas parcial/vencido): mostra o que está pendente/vencido
+        let tooltipItems = null;
+        if (status === 'parcial' || status === 'vencido') {
+          tooltipItems = receivableMatches
+            .filter((item) => item.status !== 'received')
+            .map((item) => {
+              const isLate = item.status === 'overdue' || (item.due_date && item.due_date.slice(0, 10) < todayKey);
+              return {
+                id: item.id,
+                description: item.description,
+                amount: Number(item.net_amount || item.amount || 0),
+                isLate,
+              };
+            });
+        }
+
+        return { key: `${hospital.id}-${key}`, status, amount, partialAmount: receivedAmount, tooltipItems };
       });
 
       const monthsWithValue = new Set(hospitalReceivables.map((item) => (item.competencia || item.due_date || '').slice(0, 7)).filter(Boolean));

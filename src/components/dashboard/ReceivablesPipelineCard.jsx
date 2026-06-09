@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Building2, CalendarClock, CheckCircle2, CircleAlert, Clock3, Landmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '@/components/dashboard/financaszapTheme';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const STATUS_STYLES = {
   recebido: 'bg-[#E6F9F0] border-[#0A9E6A] text-[#0A9E6A]',
@@ -56,7 +58,7 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
                   <td className="py-3 pr-4 text-sm font-semibold text-foreground">{row.hospitalName}</td>
                   {row.cells.map((cell) => (
                     <td key={cell.key} className="py-3 pr-4">
-                      <StatusPill status={cell.status} amount={cell.amount} partialAmount={cell.partialAmount} />
+                      <StatusPill status={cell.status} amount={cell.amount} partialAmount={cell.partialAmount} tooltipItems={cell.tooltipItems} />
                     </td>
                   ))}
                 </tr>
@@ -87,7 +89,8 @@ export default function ReceivablesPipelineCard({ months, rows, totals, hasHospi
   );
 }
 
-function StatusPill({ status, amount, partialAmount }) {
+function StatusPill({ status, amount, partialAmount, tooltipItems }) {
+  const [open, setOpen] = useState(false);
   const paidAmount = partialAmount ?? amount;
   const label = status === 'vencido'
     ? formatCurrency(amount, 2)
@@ -99,10 +102,49 @@ function StatusPill({ status, amount, partialAmount }) {
           ? formatCurrency(amount, 2)
           : formatCurrency(amount, 2);
 
-  return (
+  const pill = (
     <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold whitespace-nowrap ${STATUS_STYLES[status] || STATUS_STYLES.futuro}`}>
       {label}
     </span>
+  );
+
+  // Sem detalhes: pílula normal, sem balão
+  if (!tooltipItems || tooltipItems.length === 0) return pill;
+
+  const heading = status === 'parcial' ? 'Pendente neste mês' : 'Vencido neste mês';
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onClick={() => setOpen((prev) => !prev)}
+          className="cursor-help"
+        >
+          {pill}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        className="w-64 p-3"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-muted-foreground mb-2">{heading}</p>
+        <div className="space-y-1.5">
+          {tooltipItems.map((item) => (
+            <div key={item.id} className="flex items-start justify-between gap-2 text-xs">
+              <span className="text-foreground leading-snug">{item.description}</span>
+              <span className={`font-bold whitespace-nowrap ${item.isLate ? 'text-[#C0392B]' : 'text-[#C0622A]'}`}>
+                {formatCurrency(item.amount, 2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

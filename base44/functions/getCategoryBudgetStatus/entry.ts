@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
   try {
@@ -10,10 +10,13 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { category_slug, month, year } = body;
+    const { category_slug } = body;
+    const now = new Date();
+    const month = body.month || (now.getMonth() + 1);
+    const year = body.year || now.getFullYear();
 
-    if (!category_slug || !month || !year) {
-      return Response.json({ error: 'category_slug, month and year are required' }, { status: 400 });
+    if (!category_slug) {
+      return Response.json({ error: 'category_slug is required' }, { status: 400 });
     }
 
     const categories = await base44.entities.Category.list('name', 500);

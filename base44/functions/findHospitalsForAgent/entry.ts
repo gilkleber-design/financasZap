@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
   try {
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
         id: hospital.id,
         name: hospital.name,
         sigla: hospital.sigla,
-        remuneration_model: hospital.remuneration_model,
+        payment_model: hospital.payment_model,
         valores: {
           valor_sd_semana: hospital.valor_sd_semana,
           valor_sn_semana: hospital.valor_sn_semana,

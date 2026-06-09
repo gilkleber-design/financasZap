@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const normalizeDate = (value) => {
   if (!value) return null;
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     }
 
     const payload = await req.json().catch(() => ({}));
-    const { action, shift_id, hospital_id, hospital_query, hospital_confirmed, date, type, shift_kind, valor, notes, status, recurrence } = payload;
+    const { action, shift_id, hospital_id, hospital_query, hospital_confirmed, date, type, shift_kind, valor, valor_producao, is_avista, is_turno, notes, status, recurrence } = payload;
 
     if (!action) {
       return Response.json({ error: 'action is required' }, { status: 400 });
@@ -121,9 +121,19 @@ Deno.serve(async (req) => {
       const normalizedKind = shift_kind || 'regular';
       const dates = buildRecurringDates(normalizedDate, normalizedKind === 'regular' ? recurrence : 'none');
 
+      const isProducaoHospital = hospital.payment_model === 'so_producao';
+
       const shifts = [];
       for (const shiftDate of dates) {
-        const resolvedValue = valor !== undefined ? Number(valor || 0) : resolveShiftValue(hospital, type, normalizedKind, shiftDate);
+        let resolvedValue;
+        if (valor !== undefined) {
+          resolvedValue = Number(valor || 0);
+        } else if (isProducaoHospital) {
+          resolvedValue = Number(valor_producao || 0);
+        } else {
+          resolvedValue = resolveShiftValue(hospital, type, normalizedKind, shiftDate);
+        }
+
         const shift = await base44.entities.Shift.create({
           hospital_id,
           date: shiftDate,
@@ -131,6 +141,9 @@ Deno.serve(async (req) => {
           shift_kind: normalizedKind,
           status: status || 'scheduled',
           valor: resolvedValue,
+          ...(isProducaoHospital && valor_producao !== undefined ? { valor_producao: Number(valor_producao || 0) } : {}),
+          ...(is_avista !== undefined ? { is_avista: !!is_avista } : {}),
+          ...(is_turno !== undefined ? { is_turno: !!is_turno } : {}),
           notes: notes || undefined,
         });
         shifts.push(shift);

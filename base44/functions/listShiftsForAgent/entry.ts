@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
   try {
@@ -20,11 +20,17 @@ Deno.serve(async (req) => {
       ? await base44.entities.Shift.filter(query, 'date', 200)
       : await base44.entities.Shift.list('date', 200);
 
+    const hospitals = await base44.entities.Hospital.list();
+    const hospitalById = {};
+    hospitals.forEach((h) => { hospitalById[h.id] = h; });
+
     return Response.json({
       success: true,
       shifts: shifts.map((shift) => ({
         id: shift.id,
         hospital_id: shift.hospital_id,
+        hospital_name: hospitalById[shift.hospital_id]?.name || null,
+        hospital_sigla: hospitalById[shift.hospital_id]?.sigla || null,
         date: shift.date,
         type: shift.type,
         shift_kind: shift.shift_kind,

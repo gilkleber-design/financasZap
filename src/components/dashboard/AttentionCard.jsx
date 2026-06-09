@@ -35,7 +35,7 @@ export default function AttentionCard({ data }) {
                 return (
                   <AlertRow
                     key={item.id}
-                    title={item.hospital_name || item.description}
+                    title={item.description || item.hospital_name}
                     value={formatCurrency(item.amount, 0)}
                     subtitle={`${item.competencia_label} · ${getLateLabel(days)}`}
                     subtitleClass="text-[#C0392B] font-semibold"

@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.30';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
     try {
@@ -30,11 +30,13 @@ Deno.serve(async (req) => {
                 amount: Number(limit)
             });
         } else {
+            const familyId = user.family_id || user.data?.family_id || user.id;
             updatedBudget = await base44.entities.Budget.create({
                 category_id: category_id,
                 month: targetMonth,
                 year: targetYear,
-                amount: Number(limit)
+                amount: Number(limit),
+                family_id: familyId
             });
         }
 

@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.29';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
     try {
@@ -60,6 +60,8 @@ Deno.serve(async (req) => {
             categoryRecord = results?.[0] || null;
         }
 
+        const familyId = user.family_id || user.data?.family_id || user.id;
+
         // 3. Criar a transação
         const tx = await base44.entities.Transaction.create({
             description: conciliationRecord?.description || description,
@@ -75,6 +77,7 @@ Deno.serve(async (req) => {
             reconciled: !!conciliate_id,
             status: 'registered',
             notes: notes || 'Gerado via Assistente',
+            family_id: familyId,
             ...(conciliate_id && conciliate_type === 'receivable' && { receivable_id: conciliate_id }),
             ...(conciliate_id && conciliate_type !== 'receivable' && { payable_id: conciliate_id }),
         });

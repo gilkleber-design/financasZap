@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
       const dates = buildRecurringDates(normalizedDate, normalizedKind === 'regular' ? recurrence : 'none');
 
       const isProducaoHospital = hospital.payment_model === 'so_producao';
+      const familyId = user.family_id || user.data?.family_id || user.id;
 
       const shifts = [];
       for (const shiftDate of dates) {
@@ -145,6 +146,7 @@ Deno.serve(async (req) => {
           ...(is_avista !== undefined ? { is_avista: !!is_avista } : {}),
           ...(is_turno !== undefined ? { is_turno: !!is_turno } : {}),
           notes: notes || undefined,
+          family_id: familyId,
         });
         shifts.push(shift);
       }

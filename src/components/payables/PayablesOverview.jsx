@@ -1,5 +1,6 @@
 import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, CreditCard, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { format } from 'date-fns';
 import { formatCurrency, normalizeCategoryLabel } from '@/components/dashboard/financaszapTheme';
 
 const STATUS_PILL = {
@@ -19,6 +20,11 @@ export default function PayablesOverview({
   onOpenNew,
   onOpenManageRecurring,
   onOpenPay,
+  atrasadas = [],
+  totalAtrasadas = 0,
+  atrasadasOpen = false,
+  onToggleAtrasadas,
+  parseItemDate,
 }) {
   const headerColor = {
     overdue: 'text-[#C0392B]',
@@ -90,6 +96,60 @@ export default function PayablesOverview({
           sub="aguardando prazo"
         />
       </div>
+
+      {/* Banner de atrasos de meses anteriores — entre KPIs e seções do mês */}
+      {atrasadas.length > 0 && (
+        <div className="rounded-[10px] border border-[#FFCDD2] bg-[#FFF5F5] overflow-hidden">
+          <div
+            className="px-5 py-3 flex justify-between items-center cursor-pointer select-none"
+            onClick={onToggleAtrasadas}
+          >
+            <span className="text-sm text-[#C0392B] font-medium">
+              ⚠ {atrasadas.length} conta(s) em atraso de meses anteriores
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-bold text-[#C0392B]">
+                {formatCurrency(totalAtrasadas, 2)}
+              </span>
+              <span className="text-base font-bold text-[#C0392B] leading-none">
+                {atrasadasOpen ? '−' : '+'}
+              </span>
+            </div>
+          </div>
+
+          {atrasadasOpen && (
+            <div className="border-t border-[#FFCDD2] divide-y divide-[#FFE0E0]">
+              {atrasadas.map(p => {
+                const dueDate = parseItemDate ? parseItemDate(p.due_date || p.competencia) : null;
+                return (
+                  <div key={p.id} className="flex items-center justify-between px-5 py-3 bg-[#FFF8F8]">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="text-sm font-semibold text-[#C0392B] truncate">
+                        {p.description}
+                      </span>
+                      <span className="text-xs text-[#E07070]">
+                        Venc: {dueDate ? format(dueDate, 'dd/MM/yyyy') : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                      <span className="text-sm font-bold text-[#C0392B]">
+                        {formatCurrency(Number(p.amount || 0), 2)}
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={() => onOpenPay(p)}
+                        className="font-bold bg-[#C0392B] hover:bg-[#A93226] text-white"
+                      >
+                        Pagar
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {sections.map((section) => {
         const total = section.items.reduce((s, r) => s + Number(r.amount || 0), 0);

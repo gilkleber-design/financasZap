@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import {
   ToggleRight,
   Bell,
 } from 'lucide-react';
-import { format, isPast, isToday, addMonths, subMonths, isSameDay, addDays, endOfWeek, isSameMonth } from 'date-fns';
+import { format, addMonths, subMonths, isSameDay, addDays, endOfWeek, isSameMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import {
@@ -430,13 +430,12 @@ export default function Payables() {
   const queryClient = useQueryClient();
   const monthKey = format(currentMonth, 'yyyy-MM');
 
-  // Backend busca os dados do mês
   const { data: payablesResponse, isLoading: loadingPayables } = useQuery({
     queryKey: ['payables-list', monthKey],
     queryFn: () =>
       base44.functions.invoke('listPayables', {
         month: monthKey,
-        status: 'TODAS', // Traz tudo. O frontend cuida da regra de negócio.
+        status: 'TODAS',
       }),
   });
 
@@ -450,7 +449,6 @@ export default function Payables() {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
-  // REGRA DE OURO: Pagamento de fatura (Transferência de Liquidação) é oculto da contabilidade de despesa.
   const validPayables = useMemo(() => {
     return payablesItems.filter(p => p.category !== 'transferencia_liquidacao' && p.category !== 'reembolso');
   }, [payablesItems]);
@@ -459,38 +457,76 @@ export default function Payables() {
     return payablesItems.filter(p => p.category === 'reembolso');
   }, [payablesItems]);
 
-  // KPIs blindados para controle de fluxo de caixa real
   const kpis = useMemo(() => {
+    const currentMonthKey = format(currentMonth, 'yyyy-MM');
+    const hojeDate = new Date();
+    const hojeStr = format(hojeDate, 'yyyy-MM-dd');
+
+    const previsto = validPayables
+      .filter(p => String(p.due_date || p.competencia || '').slice(0, 7) === currentMonthKey)
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    const pago = validPayables
+      .filter(p => {
+        const d = String(p.due_date || p.competencia || '');
+        return (p.status === 'paid' || p.status === 'provisioned') &&
+               d.slice(0, 7) === currentMonthKey &&
+               d.slice(0, 10) <= hojeStr;
+      })
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    const vencido = validPayables
+      .filter(p => {
+        const d = String(p.due_date || p.competencia || '');
+        return p.status === 'pending' &&
+               d.slice(0, 7) === currentMonthKey &&
+               d.slice(0, 10) < hojeStr;
+      })
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    const aVencer = validPayables
+      .filter(p => {
+        const d = String(p.due_date || p.competencia || '');
+        return p.status === 'pending' &&
+               d.slice(0, 7) === currentMonthKey &&
+               d.slice(0, 10) > hojeStr;
+      })
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    const pct = previsto > 0 ? ((pago / previsto) * 100).toFixed(1) : '0.0';
+
     return {
-      // Total do Mês: Tudo que foi previsto (Pendentes + Pagos + Provisionados no cartão)
-      expected: validPayables.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      // Pago: O que está liquidado ('paid') ou garantido na fatura do cartão ('provisioned')
-      paid: validPayables.filter(p => p.status === 'paid' || p.status === 'provisioned').reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      // A Vencer: Somente o que ainda vai estourar o prazo (Não inclui provisionado)
-      open: validPayables.filter(p => p.status === 'pending' && (() => {
-        const date = parseItemDate(p.due_date || p.competencia);
-        return date && date >= todayStart;
-      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      // Vencido: O que ficou para trás (Não pago)
-      overdue: validPayables.filter(p => p.status === 'pending' && (() => {
-        const date = parseItemDate(p.due_date || p.competencia);
-        return date && date < todayStart;
-      })()).reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      expected: previsto,
+      expectedLabel: "total do mês",
+      paid: pago,
+      paidLabel: `${pct}% do previsto`,
+      overdue: vencido,
+      overdueLabel: "ação urgente",
+      open: aVencer,
+      openLabel: "aguardando prazo"
     };
-  }, [validPayables, todayStart]);
+  }, [validPayables, currentMonth]);
+
+  const atrasadasMesesAnteriores = useMemo(() => {
+    const currentMonthKey = format(currentMonth, 'yyyy-MM');
+    return validPayables.filter(p => {
+       const d = String(p.due_date || p.competencia || '');
+       return p.status === 'pending' && d.length >= 7 && d.slice(0, 7) < currentMonthKey;
+    });
+  }, [validPayables, currentMonth]);
+
+  const totalAtrasadasAnteriores = atrasadasMesesAnteriores.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
   if (viewMode === 'mensal') {
     localStorage.setItem('contas_mes', format(currentMonth, 'yyyy-MM'));
   }
 
-  // Distribuição puramente por urgência
   const urgencySections = useMemo(() => {
     const today = new Date();
     const tomorrow = addDays(todayStart, 1);
     const weekEnd = endOfWeek(todayStart, { weekStartsOn: 0 });
     const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 12, 0, 0);
 
-    // Gavetas de Ação: Somente contas pendentes
     const pendingItems = validPayables.filter(p => p.status === 'pending');
     
     const mapped = pendingItems.map((item) => {
@@ -517,7 +553,6 @@ export default function Payables() {
       };
     }).filter(Boolean);
 
-    // Gaveta de Arquivo Morto: O que já não é um problema hoje (Pago Conta Corrente ou Provisionado Cartão)
     const doneItems = validPayables
       .filter(p => p.status === 'paid' || p.status === 'provisioned')
       .map((item) => {
@@ -679,8 +714,8 @@ export default function Payables() {
 
           <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-card p-4 shadow-sm md:flex-row md:items-center md:justify-between mb-3">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Contas a Pagar</h1>
-              <p className="text-sm text-muted-foreground">Compromissos organizados por urgência.</p>
+              <h1 className="text-2xl font-bold text-foreground">Controle de Contas</h1>
+              <p className="text-sm text-muted-foreground">Visão de caixa do mês</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={() => setViewMode('gerenciar_fixas')} className="gap-2 border-primary/30 text-primary hover:text-primary">
@@ -702,6 +737,17 @@ export default function Payables() {
               </div>
             </div>
           </div>
+
+          {atrasadasMesesAnteriores.length > 0 && (
+            <div className="rounded-[10px] border border-[#FFCDD2] bg-[#FFF5F5] px-5 py-3 flex justify-between items-center mb-3">
+              <span className="text-sm text-[#C0392B] font-medium">
+                ⚠ {atrasadasMesesAnteriores.length} conta(s) em atraso de meses anteriores
+              </span>
+              <span className="text-sm font-bold text-[#C0392B]">
+                {fmt(totalAtrasadasAnteriores)}
+              </span>
+            </div>
+          )}
 
           <PayablesOverview
             monthLabel={format(currentMonth, 'MMMM yyyy', { locale: ptBR })}

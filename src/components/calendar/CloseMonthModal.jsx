@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertCircle, Lock, Plus, Info, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -45,7 +46,9 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                 date: { $gte: startDate, $lte: endDate },
             });
             // Filter closable
-            return allShifts.filter(s => !s.is_avista && s.status !== 'passed' && !s.receivable_id);
+            return allShifts
+                .filter(s => !s.is_avista && s.status !== 'passed' && !s.receivable_id)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
         }
     });
 
@@ -57,7 +60,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
         if (preview && shifts.length > 0 && Object.keys(shiftStatuses).length === 0) {
             const initialShifts = {};
             shifts.forEach(s => {
-                initialShifts[s.id] = s.status === 'cancelled' ? 'cancelled' : 'done';
+                initialShifts[s.id] = s.status === 'done' ? 'done' : (s.status === 'cancelled' ? 'cancelled' : 'ignored');
             });
             setShiftStatuses(initialShifts);
 
@@ -124,7 +127,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
     const toggleShift = (id) => {
         setShiftStatuses(prev => ({
             ...prev,
-            [id]: prev[id] === 'done' ? 'cancelled' : 'done'
+            [id]: prev[id] === 'done' ? 'ignored' : 'done'
         }));
     };
 
@@ -171,19 +174,21 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                     const hospital = hospitals.find(h => h.id === shift.hospital_id);
                                     const val = (Number(shift.valor) || 0) + (Number(shift.valor_producao) || 0);
                                     const isDone = shiftStatuses[shift.id] === 'done';
+                                    const isCancelled = shiftStatuses[shift.id] === 'cancelled';
+                                    const isIgnored = shiftStatuses[shift.id] === 'ignored';
                                     
                                     return (
-                                        <div key={shift.id} className={`flex items-center justify-between p-2 rounded-lg border ${isDone ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-transparent opacity-60'}`}>
+                                        <div key={shift.id} className={`flex items-center justify-between p-2 rounded-lg border ${isDone ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-50/30 border-dashed border-slate-200 opacity-60'}`}>
                                             <div className="flex items-center gap-3">
-                                                <Checkbox checked={isDone} onCheckedChange={() => toggleShift(shift.id)} />
+                                                <Checkbox checked={isDone} disabled={isCancelled} onCheckedChange={() => toggleShift(shift.id)} />
                                                 <div className="text-sm">
-                                                    <span className={`font-bold ${isDone ? 'text-slate-700' : 'line-through text-slate-400'}`}>
+                                                    <span className={`font-bold ${isDone ? 'text-slate-700' : (isCancelled ? 'line-through text-slate-400' : 'text-slate-500')}`}>
                                                         {hospital?.sigla || 'Hosp'} — {shift.type} {format(new Date(`${shift.date}T12:00:00`), 'dd/MM')}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className="text-sm font-semibold text-slate-600">
-                                                {isDone ? fmt(val) : 'Cancelado'}
+                                            <div className={`text-sm font-semibold ${isDone ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                {isCancelled ? 'Cancelado' : (isIgnored ? `Pendente (${fmt(val)})` : fmt(val))}
                                             </div>
                                         </div>
                                     );
@@ -220,12 +225,11 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                             <div className="flex flex-col items-end gap-0.5">
                                                 <div className="flex items-center gap-2">
                                                     {inc.lock_amount && <Lock className="w-3 h-3 text-amber-600" />}
-                                                    <Input 
-                                                        type="number"
+                                                    <CurrencyInput 
                                                         value={inc.amount}
-                                                        onChange={e => updateIncome(inc.id, 'amount', e.target.value)}
+                                                        onChange={val => updateIncome(inc.id, 'amount', val)}
                                                         disabled={!inc.checked || inc.lock_amount}
-                                                        className="w-28 h-7 text-sm text-right font-semibold"
+                                                        className="w-28 h-7 text-sm text-right font-semibold bg-transparent border-input"
                                                         placeholder="Valor Bruto"
                                                     />
                                                 </div>

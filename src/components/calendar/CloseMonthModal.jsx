@@ -52,8 +52,8 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
         }
     });
 
-    const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: () => base44.entities.Hospital.list() });
-    const { data: sources = [] } = useQuery({ queryKey: ['incomeSources'], queryFn: () => base44.entities.IncomeSource.list() });
+    const { data: hospitals = [], isLoading: isLoadingHospitals } = useQuery({ queryKey: ['hospitals'], queryFn: () => base44.entities.Hospital.list() });
+    const { data: sources = [], isLoading: isLoadingSources } = useQuery({ queryKey: ['income_sources'], queryFn: () => base44.entities.IncomeSource.list() });
 
     // Initialize state when preview loads
     useEffect(() => {
@@ -136,7 +136,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
     };
 
     if (error) return <Dialog open onOpenChange={onClose}><DialogContent><div className="p-8 text-center text-red-500">Erro: {error.message}</div></DialogContent></Dialog>;
-    const isActuallyLoading = isLoading || !isPreviewFetched || !isShiftsFetched;
+    const isActuallyLoading = isLoading || !isPreviewFetched || !isShiftsFetched || isLoadingHospitals || isLoadingSources;
     if (isActuallyLoading) return <Dialog open><DialogContent><div className="p-8 text-center">Carregando prévia...</div></DialogContent></Dialog>;
 
     const selectedShiftsNetTotal = shifts.filter(s => shiftStatuses[s.id] === 'done').reduce((acc, s) => {

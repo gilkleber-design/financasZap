@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
         }
 
         const rollbackQueue = [];
-        const family_id = user.data?.family_id || null;
+        const family_id = user.family_id || user.data?.family_id || user.id;
 
         try {
             const closure = await base44.entities.MonthlyClosure.create({

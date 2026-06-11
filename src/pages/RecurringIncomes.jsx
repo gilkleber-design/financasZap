@@ -63,7 +63,7 @@ export default function RecurringIncomes() {
             <Repeat className="w-6 h-6 text-primary" />
             Receitas Recorrentes
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie sal\u00e1rios e bolsas que se repetem mensalmente</p>
+          <p className="text-sm text-muted-foreground mt-1">Gerencie salários e bolsas que se repetem mensalmente</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => setShowInactive(!showInactive)}>
@@ -86,7 +86,7 @@ export default function RecurringIncomes() {
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-bold text-lg leading-tight">{item.description}</h3>
                 <span className="font-black text-primary bg-primary/10 px-2 py-1 rounded text-sm">
-                  {fmt(item.default_amount)}/m\u00eas
+                  {fmt(item.default_amount)}/mês
                 </span>
               </div>
               
@@ -94,12 +94,12 @@ export default function RecurringIncomes() {
                 <p>Dia {item.due_day || '--'} &middot; Categoria: {getCategoryName(item.category_id, item.category)}</p>
                 <div className="flex flex-wrap items-center gap-2 font-semibold text-[10px] mt-2">
                   {item.lock_amount && <span className="flex items-center text-amber-700 bg-amber-100 px-2 py-0.5 rounded"><Lock className="w-3 h-3 mr-1" /> VALOR TRAVADO</span>}
-                  {item.pre_check && <span className="flex items-center text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded"><CheckCircle2 className="w-3 h-3 mr-1" /> PR\u00c9-MARCADA</span>}
+                  {item.pre_check && <span className="flex items-center text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded"><CheckCircle2 className="w-3 h-3 mr-1" /> PRÉ-MARCADA</span>}
                 </div>
               </div>
 
               <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 mb-4 border border-slate-100">
-                \u00daltimo recebido: <strong className="text-slate-800">{item.last_amount ? fmt(item.last_amount) : '---'}</strong> em {item.last_received_at ? format(new Date(`${item.last_received_at}T12:00:00`), 'dd/MM/yyyy') : '---'}
+                Último recebido: <strong className="text-slate-800">{item.last_amount ? fmt(item.last_amount) : '---'}</strong> em {item.last_received_at ? format(new Date(`${item.last_received_at}T12:00:00`), 'dd/MM/yyyy') : '---'}
               </div>
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">

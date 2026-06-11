@@ -173,7 +173,12 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                 {shifts.length === 0 && <p className="text-sm text-slate-400">Nenhum plantão pendente.</p>}
                                 {shifts.map(shift => {
                                     const hospital = hospitals.find(h => h.id === shift.hospital_id);
-                                    const val = (Number(shift.valor) || 0) + (Number(shift.valor_producao) || 0);
+                                    const source = sources.find(src => src.id === hospital?.income_source_id);
+                                    const taxRate = Number(source?.default_tax_rate || 0);
+                                    
+                                    const gross = (Number(shift.valor) || 0) + (Number(shift.valor_producao) || 0);
+                                    const netVal = taxRate > 0 ? gross * (1 - taxRate / 100) : gross;
+                                    
                                     const isDone = shiftStatuses[shift.id] === 'done';
                                     const isCancelled = shiftStatuses[shift.id] === 'cancelled';
                                     const isIgnored = shiftStatuses[shift.id] === 'ignored';
@@ -188,8 +193,13 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className={`text-sm font-semibold ${isDone ? 'text-slate-600' : 'text-slate-400'}`}>
-                                                {isCancelled ? 'Cancelado' : (isIgnored ? `Pendente (${fmt(val)})` : fmt(val))}
+                                            <div className={`text-sm font-semibold flex flex-col items-end justify-center ${isDone ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                {isCancelled ? 'Cancelado' : (
+                                                    <>
+                                                        <span>{isIgnored ? `Pendente (${fmt(netVal)})` : fmt(netVal)}</span>
+                                                        {taxRate > 0 && <span className="text-[10px] text-muted-foreground font-normal">Bruto: {fmt(gross)}</span>}
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     );

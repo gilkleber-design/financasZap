@@ -98,10 +98,10 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
 
             if (res.data.error) throw new Error(res.data.error);
 
-            toast.success('M\u00eas fechado com sucesso!');
+            toast.success('Mês fechado com sucesso!');
             onClosed();
         } catch (err) {
-            toast.error(err.message || 'Erro ao fechar o m\u00eas');
+            toast.error(err.message || 'Erro ao fechar o mês');
         } finally {
             setIsSaving(false);
         }
@@ -132,7 +132,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
         setIncomes(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
     };
 
-    if (isLoading) return <Dialog open><DialogContent><div className="p-8 text-center">Carregando pr\u00e9via...</div></DialogContent></Dialog>;
+    if (isLoading) return <Dialog open><DialogContent><div className="p-8 text-center">Carregando prévia...</div></DialogContent></Dialog>;
     if (error) return <Dialog open onOpenChange={onClose}><DialogContent><div className="p-8 text-center text-red-500">Erro: {error.message}</div></DialogContent></Dialog>;
 
     const selectedShiftsNetTotal = shifts.filter(s => shiftStatuses[s.id] === 'done').reduce((acc, s) => {
@@ -157,16 +157,16 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
             <DialogContent className="font-sora sm:max-w-[600px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
                 <div className="px-6 py-4 border-b border-border shrink-0">
                     <DialogTitle className="text-xl">FECHAMENTO DE {format(monthStart, 'MMMM/yyyy', {locale: ptBR}).toUpperCase()}</DialogTitle>
-                    <DialogDescription>Confirme os plant\u00f5es e receitas para gerar os receb\u00edveis do m\u00eas.</DialogDescription>
+                    <DialogDescription>Confirme os plantões e receitas para gerar os recebíveis do mês.</DialogDescription>
                 </div>
 
-                <ScrollArea className="flex-1 px-6 py-4">
+                <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
                     <div className="space-y-6">
-                        {/* PLANT\u00d5ES */}
+                        {/* PLANTÕES */}
                         <section>
-                            <h3 className="text-xs font-bold text-slate-500 mb-3 tracking-widest uppercase">PLANT\u00d5ES ({shifts.filter(s=>shiftStatuses[s.id]==='done').length})</h3>
+                            <h3 className="text-xs font-bold text-slate-500 mb-3 tracking-widest uppercase">PLANTÕES ({shifts.filter(s=>shiftStatuses[s.id]==='done').length})</h3>
                             <div className="space-y-2">
-                                {shifts.length === 0 && <p className="text-sm text-slate-400">Nenhum plant\u00e3o pendente.</p>}
+                                {shifts.length === 0 && <p className="text-sm text-slate-400">Nenhum plantão pendente.</p>}
                                 {shifts.map(shift => {
                                     const hospital = hospitals.find(h => h.id === shift.hospital_id);
                                     const val = (Number(shift.valor) || 0) + (Number(shift.valor_producao) || 0);
@@ -239,7 +239,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                         {inc.checked && (
                                             <div className="pl-7">
                                                 <Input 
-                                                    placeholder="Adicionar nota (ex: f\u00e9rias, horas extras)..." 
+                                                    placeholder="Adicionar nota (ex: férias, horas extras)..." 
                                                     value={inc.notes}
                                                     onChange={e => updateIncome(inc.id, 'notes', e.target.value)}
                                                     className="h-6 text-xs text-muted-foreground border-transparent bg-transparent shadow-none px-0"
@@ -257,7 +257,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                             </div>
                         </section>
                     </div>
-                </ScrollArea>
+                </div>
 
                 <div className="px-6 py-4 bg-slate-100 border-t border-border shrink-0 flex items-center justify-between">
                     <div>

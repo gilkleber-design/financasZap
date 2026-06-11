@@ -32,9 +32,11 @@ Deno.serve(async (req) => {
             const shifts = await base44.entities.Shift.list();
             const shiftsToUpdate = shifts.filter(s => Object.keys(shift_statuses || {}).includes(s.id));
             const hospitals = await base44.entities.Hospital.list();
+            const sources = await base44.entities.IncomeSource.list();
 
             let shiftCount = 0;
             let totalGross = 0;
+            let totalNet = 0;
             const shiftsByHospital = {};
 
             for (const shift of shiftsToUpdate) {
@@ -71,6 +73,9 @@ Deno.serve(async (req) => {
             for (const [hospitalId, data] of Object.entries(shiftsByHospital)) {
                 const hospital = hospitals.find(h => h.id === hospitalId);
                 const hospitalName = hospital ? hospital.sigla || hospital.name : 'Desconhecido';
+                const source = hospital ? sources.find(s => s.id === hospital.income_source_id) : null;
+                const taxRate = Number(source?.default_tax_rate || 0);
+                const netTotal = taxRate > 0 ? data.total * (1 - taxRate / 100) : data.total;
                 
                 let payment_date = due_date;
                 if (hospital) {
@@ -82,17 +87,19 @@ Deno.serve(async (req) => {
                 const rec = await base44.entities.Receivable.create({
                     description: `${hospitalName} Plant\u00f5es ${month.toString().padStart(2, '0')}/${year}`,
                     amount: data.total,
-                    net_amount: data.total,
+                    net_amount: netTotal,
                     due_date: payment_date,
                     competencia: `${monthPrefix}-01`,
                     hospital_id: hospitalId,
                     income_source_id: hospital ? hospital.income_source_id : null,
+                    tax_rate: taxRate,
                     status: 'pending',
                     closure_id: closure.id,
                     receivable_type: 'shifts_aggregated',
                     source_shift_ids: data.shifts
                 });
                 rollbackQueue.unshift(async () => await base44.entities.Receivable.delete(rec.id));
+                totalNet += netTotal;
 
                 for (const shiftId of data.shifts) {
                     await base44.entities.Shift.update(shiftId, { receivable_id: rec.id });
@@ -100,20 +107,25 @@ Deno.serve(async (req) => {
                 }
 
                 if (hospital && hospital.payment_model === 'plantao_producao' && Number(hospital.valor_medio_pdt) > 0) {
+                    const pdtGross = Number(hospital.valor_medio_pdt);
+                    const pdtNet = taxRate > 0 ? pdtGross * (1 - taxRate / 100) : pdtGross;
+                    
                     const pdtRec = await base44.entities.Receivable.create({
                         description: `${hospitalName} PDT ${month.toString().padStart(2, '0')}/${year}`,
-                        amount: Number(hospital.valor_medio_pdt),
-                        net_amount: Number(hospital.valor_medio_pdt),
+                        amount: pdtGross,
+                        net_amount: pdtNet,
                         due_date: payment_date,
                         competencia: `${monthPrefix}-01`,
                         hospital_id: hospitalId,
                         income_source_id: hospital.income_source_id,
+                        tax_rate: taxRate,
                         status: 'pending',
                         closure_id: closure.id,
                         receivable_type: 'pdt_estimate'
                     });
                     rollbackQueue.unshift(async () => await base44.entities.Receivable.delete(pdtRec.id));
-                    totalGross += Number(hospital.valor_medio_pdt);
+                    totalGross += pdtGross;
+                    totalNet += pdtNet;
                 }
             }
 
@@ -149,6 +161,10 @@ Deno.serve(async (req) => {
                     }
                 }
 
+                const source = sources.find(s => s.id === incSrcId);
+                const taxRate = Number(source?.default_tax_rate || 0);
+                const incomeNet = taxRate > 0 ? incomeAmount * (1 - taxRate / 100) : incomeAmount;
+
                 const closureInc = await base44.entities.ClosureIncome.create({
                     closure_id: closure.id,
                     recurring_income_id: inc.recurring_income_id || null,
@@ -163,11 +179,12 @@ Deno.serve(async (req) => {
                 const incRec = await base44.entities.Receivable.create({
                     description: inc.description || 'Receita',
                     amount: incomeAmount,
-                    net_amount: incomeAmount,
+                    net_amount: incomeNet,
                     due_date: inc.due_date || `${monthPrefix}-05`,
                     competencia: `${monthPrefix}-01`,
                     category_id: catId,
                     income_source_id: incSrcId,
+                    tax_rate: taxRate,
                     status: 'pending',
                     closure_id: closure.id,
                     receivable_type: 'extra_income'
@@ -176,15 +193,16 @@ Deno.serve(async (req) => {
 
                 await base44.entities.ClosureIncome.update(closureInc.id, { receivable_id: incRec.id });
                 totalGross += incomeAmount;
+                totalNet += incomeNet;
             }
 
             await base44.entities.MonthlyClosure.update(closure.id, {
                 total_gross: totalGross,
-                total_net: totalGross,
+                total_net: totalNet,
                 shift_count: shiftCount
             });
 
-            return Response.json({ success: true, closure_id: closure.id, summary: { total_gross: totalGross, shift_count: shiftCount } });
+            return Response.json({ success: true, closure_id: closure.id, summary: { total_gross: totalGross, total_net: totalNet, shift_count: shiftCount } });
 
         } catch (innerError) {
             console.error("Error inside transaction, rolling back...", innerError);

@@ -50,6 +50,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
     });
 
     const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: () => base44.entities.Hospital.list() });
+    const { data: sources = [] } = useQuery({ queryKey: ['incomeSources'], queryFn: () => base44.entities.IncomeSource.list() });
 
     // Initialize state when preview loads
     useEffect(() => {
@@ -66,6 +67,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                 description: ri.description,
                 amount: ri.suggested_amount,
                 category_id: ri.category_id,
+                income_source_id: ri.income_source_id,
                 notes: '',
                 checked: ri.pre_check,
                 lock_amount: ri.lock_amount
@@ -112,6 +114,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
             description: 'Nova Receita Extra',
             amount: 0,
             category_id: null,
+            income_source_id: null,
             notes: '',
             checked: true,
             lock_amount: false
@@ -132,9 +135,22 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
     if (isLoading) return <Dialog open><DialogContent><div className="p-8 text-center">Carregando pr\u00e9via...</div></DialogContent></Dialog>;
     if (error) return <Dialog open onOpenChange={onClose}><DialogContent><div className="p-8 text-center text-red-500">Erro: {error.message}</div></DialogContent></Dialog>;
 
-    const selectedShiftsTotal = shifts.filter(s => shiftStatuses[s.id] === 'done').reduce((acc, s) => acc + (Number(s.valor) || 0) + (Number(s.valor_producao) || 0), 0);
-    const selectedIncomesTotal = incomes.filter(i => i.checked).reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
-    const totalExpected = selectedShiftsTotal + selectedIncomesTotal;
+    const selectedShiftsNetTotal = shifts.filter(s => shiftStatuses[s.id] === 'done').reduce((acc, s) => {
+        const hospital = hospitals.find(h => h.id === s.hospital_id);
+        const source = sources.find(src => src.id === hospital?.income_source_id);
+        const taxRate = Number(source?.default_tax_rate || 0);
+        const gross = (Number(s.valor) || 0) + (Number(s.valor_producao) || 0);
+        return acc + (taxRate > 0 ? gross * (1 - taxRate / 100) : gross);
+    }, 0);
+
+    const selectedIncomesNetTotal = incomes.filter(i => i.checked).reduce((acc, i) => {
+        const source = sources.find(src => src.id === i.income_source_id);
+        const taxRate = Number(source?.default_tax_rate || 0);
+        const gross = Number(i.amount) || 0;
+        return acc + (taxRate > 0 ? gross * (1 - taxRate / 100) : gross);
+    }, 0);
+
+    const totalExpected = selectedShiftsNetTotal + selectedIncomesNetTotal;
 
     return (
         <Dialog open onOpenChange={onClose}>
@@ -173,7 +189,7 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                     );
                                 })}
                                 <div className="text-right text-sm font-bold text-slate-700 pt-2">
-                                    Subtotal: {fmt(selectedShiftsTotal)}
+                                    Subtotal (Líquido): {fmt(selectedShiftsNetTotal)}
                                 </div>
                             </div>
                         </section>
@@ -184,7 +200,12 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                 <h3 className="text-xs font-bold text-slate-500 tracking-widest uppercase">RECEITAS EXTRAS E BOLSAS</h3>
                             </div>
                             <div className="space-y-3">
-                                {incomes.map((inc, idx) => (
+                                {incomes.map((inc, idx) => {
+                                    const source = sources.find(src => src.id === inc.income_source_id);
+                                    const taxRate = Number(source?.default_tax_rate || 0);
+                                    const hasTax = taxRate > 0;
+                                    
+                                    return (
                                     <div key={inc.id} className={`p-3 rounded-lg border ${inc.checked ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/50 border-transparent opacity-60'}`}>
                                         <div className="flex items-center gap-3 mb-2">
                                             <Checkbox checked={inc.checked} onCheckedChange={(v) => updateIncome(inc.id, 'checked', v)} />
@@ -196,15 +217,23 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                                     disabled={!inc.checked || inc.lock_amount}
                                                 />
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {inc.lock_amount && <Lock className="w-3 h-3 text-amber-600" />}
-                                                <Input 
-                                                    type="number"
-                                                    value={inc.amount}
-                                                    onChange={e => updateIncome(inc.id, 'amount', e.target.value)}
-                                                    disabled={!inc.checked || inc.lock_amount}
-                                                    className="w-28 h-7 text-sm text-right font-semibold"
-                                                />
+                                            <div className="flex flex-col items-end gap-0.5">
+                                                <div className="flex items-center gap-2">
+                                                    {inc.lock_amount && <Lock className="w-3 h-3 text-amber-600" />}
+                                                    <Input 
+                                                        type="number"
+                                                        value={inc.amount}
+                                                        onChange={e => updateIncome(inc.id, 'amount', e.target.value)}
+                                                        disabled={!inc.checked || inc.lock_amount}
+                                                        className="w-28 h-7 text-sm text-right font-semibold"
+                                                        placeholder="Valor Bruto"
+                                                    />
+                                                </div>
+                                                {inc.checked && hasTax && (
+                                                    <div className="text-[10px] text-muted-foreground mr-1">
+                                                        Líquido: {fmt(Number(inc.amount) * (1 - taxRate / 100))} (-{taxRate}%)
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         {inc.checked && (
@@ -218,12 +247,12 @@ export default function CloseMonthModal({ monthStart, onClose, onClosed }) {
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                )})}
                                 <Button variant="outline" size="sm" onClick={addAvulso} className="w-full text-xs border-dashed">
                                     <Plus className="w-3 h-3 mr-2" /> Adicionar Receita Avulsa
                                 </Button>
                                 <div className="text-right text-sm font-bold text-slate-700 pt-2">
-                                    Subtotal: {fmt(selectedIncomesTotal)}
+                                    Subtotal (Líquido): {fmt(selectedIncomesNetTotal)}
                                 </div>
                             </div>
                         </section>

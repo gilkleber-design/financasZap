@@ -1,0 +1,43 @@
+{
+  "name": "ReportSnapshot",
+  "type": "object",
+  "properties": {
+    "family_id": {
+      "type": "string"
+    },
+    "month": {
+      "type": "number"
+    },
+    "year": {
+      "type": "number"
+    },
+    "totals_json": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "filters_used": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "family_id",
+    "month",
+    "year"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "update": {
+      "data.family_id": "{{user.data.family_id}}"
+    },
+    "delete": {
+      "data.family_id": "{{user.data.family_id}}"
+    }
+  }
+}

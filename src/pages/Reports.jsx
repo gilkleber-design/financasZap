@@ -457,7 +457,12 @@ export default function Reports() {
         <div className="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[400px] w-full mb-6">
           <div className="flex justify-between items-center mb-2">
             <span className="text-white font-bold text-sm">Resultados do Debug de Maio</span>
-            <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setDebugData(null)}>Fechar</Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => {
+                navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
+              }}>📋 Copiar</Button>
+              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setDebugData(null)}>Fechar</Button>
+            </div>
           </div>
           <pre>{JSON.stringify(debugData, null, 2)}</pre>
         </div>

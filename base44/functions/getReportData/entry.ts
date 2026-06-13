@@ -52,24 +52,27 @@ export default async function reqHandler(req) {
             return null;
         };
 
-        // Fetch Data using user context
-        const transactions = await base44.entities.Transaction.filter({
-            date: { $gte: startDateStr, $lte: endDateStr }
-        }, '', 5000);
+        const sixMonthsAgoObj = new Date(year, month - 6, 1);
+        const sixMonthsAgoStr = `${sixMonthsAgoObj.getFullYear()}-${pad(sixMonthsAgoObj.getMonth() + 1)}-01`;
 
-        const payables = await base44.entities.Payable.filter({
-            $or: [
-                { competencia: { $gte: startDateStr, $lte: endDateStr } },
-                { due_date: { $gte: startDateStr, $lte: endDateStr } }
-            ]
-        }, '', 5000);
+        // Fetch Data using user context (6 months window)
+        const transactionsAll = await base44.entities.Transaction.filter({
+            date: { $gte: sixMonthsAgoStr, $lte: endDateStr }
+        }, '-date', 5000);
 
-        const receivables = await base44.entities.Receivable.filter({
+        const payablesAll = await base44.entities.Payable.filter({
             $or: [
-                { competencia: { $gte: startDateStr, $lte: endDateStr } },
-                { due_date: { $gte: startDateStr, $lte: endDateStr } }
+                { competencia: { $gte: sixMonthsAgoStr, $lte: endDateStr } },
+                { due_date: { $gte: sixMonthsAgoStr, $lte: endDateStr } }
             ]
-        }, '', 5000);
+        }, '-competencia', 5000);
+
+        const receivablesAll = await base44.entities.Receivable.filter({
+            $or: [
+                { competencia: { $gte: sixMonthsAgoStr, $lte: endDateStr } },
+                { due_date: { $gte: sixMonthsAgoStr, $lte: endDateStr } }
+            ]
+        }, '-competencia', 5000);
 
         // Helper to get data_ref
         const getDataRef = (item, isTx = false) => {
@@ -79,33 +82,6 @@ export default async function reqHandler(req) {
             }
             return item.due_date;
         };
-
-        // Filter arrays in JS
-        const isMonth = (dateStr) => dateStr >= startDateStr && dateStr <= endDateStr;
-
-        const validTransactions = transactions.filter(t => 
-            isMonth(getDataRef(t, true)) && 
-            !exclude_transaction_statuses.includes(t.status)
-        );
-
-        let validPayables = payables.filter(p => isMonth(getDataRef(p, false))).map(p => ({ ...p, data_ref: getDataRef(p, false) }));
-        let validReceivables = receivables.filter(r => isMonth(getDataRef(r, false))).map(r => ({ ...r, data_ref: getDataRef(r, false) }));
-        const validTransactionsWithRef = validTransactions.map(t => ({ ...t, data_ref: getDataRef(t, true) }));
-
-        // Rules handling
-        if (include_card_invoices) {
-            validPayables = validPayables.filter(p => !p.card_invoice_id); 
-        } else {
-            validPayables = validPayables.filter(p => !p.is_card_invoice_payable);
-        }
-
-        // Installments
-        validPayables = validPayables.filter(p => {
-            if (p.installment_total_amount && (!p.installment_number || p.installment_number <= 0)) {
-                return false; // Umbrella
-            }
-            return true;
-        });
 
         const getAmount = (item, isTx = false) => {
             if (isTx && amount_basis === 'net' && item.net_amount !== undefined) return Number(item.net_amount);
@@ -119,18 +95,67 @@ export default async function reqHandler(req) {
             return exclude_categories.includes(slug);
         };
 
-        const incomeExpectedArray = validReceivables.filter(r => !isCategoryExcluded(r));
-        const incomeExpectedTotal = incomeExpectedArray.reduce((s, r) => s + getAmount(r), 0);
-        const incomeReceivedTxs = validTransactionsWithRef.filter(t => t.type === 'income' && !isCategoryExcluded(t));
-        const incomeReceivedTotal = incomeReceivedTxs.reduce((s, t) => s + getAmount(t, true), 0);
-        const incomePendingTotal = Math.max(0, incomeExpectedTotal - incomeReceivedTotal);
+        // Filter arrays for current month
+        const isMonth = (dateStr) => dateStr >= startDateStr && dateStr <= endDateStr;
 
-        const expenseExpectedArray = validPayables.filter(p => !isCategoryExcluded(p));
-        const expenseExpectedTotal = expenseExpectedArray.reduce((s, p) => s + getAmount(p), 0);
-        const expensePaidTxs = validTransactionsWithRef.filter(t => t.type === 'expense' && !isCategoryExcluded(t));
-        const expensePaidTotal = expensePaidTxs.reduce((s, t) => s + getAmount(t, true), 0);
-        const expensePendingTotal = Math.max(0, expenseExpectedTotal - expensePaidTotal);
+        const currentTransactions = transactionsAll.filter(t => isMonth(getDataRef(t, true)) && !exclude_transaction_statuses.includes(t.status));
+        let validPayables = payablesAll.filter(p => isMonth(getDataRef(p, false))).map(p => ({ ...p, data_ref: getDataRef(p, false) }));
+        let validReceivables = receivablesAll.filter(r => isMonth(getDataRef(r, false))).map(r => ({ ...r, data_ref: getDataRef(r, false) }));
+        const validTransactionsWithRef = currentTransactions.map(t => ({ ...t, data_ref: getDataRef(t, true) }));
 
+        // Rules handling
+        if (include_card_invoices) {
+            validPayables = validPayables.filter(p => !p.card_invoice_id); 
+        } else {
+            validPayables = validPayables.filter(p => !p.is_card_invoice_payable);
+        }
+
+        // Installments
+        validPayables = validPayables.filter(p => {
+            if (p.installment_total_amount && (!p.installment_number || p.installment_number <= 0)) return false;
+            return true;
+        });
+
+        // Split Data correctly
+        const payablesExpected = validPayables.filter(p => !isCategoryExcluded(p));
+        const payablesPaid = payablesExpected.filter(p => p.status === 'paid');
+        const payablesPending = payablesExpected.filter(p => p.status !== 'paid');
+
+        const receivablesExpected = validReceivables.filter(r => !isCategoryExcluded(r));
+        const receivablesReceived = receivablesExpected.filter(r => r.status === 'received');
+        const receivablesPending = receivablesExpected.filter(r => r.status !== 'received');
+
+        const expenseTxs = validTransactionsWithRef.filter(t => t.type === 'expense' && !isCategoryExcluded(t));
+        const expectedPayableIds = new Set(payablesExpected.map(p => p.id));
+        // Orphans are transactions that didn't pay an expected payable of THIS month
+        const expenseOrphanTxs = expenseTxs.filter(t => !t.payable_id || !expectedPayableIds.has(t.payable_id));
+        
+        const incomeTxs = validTransactionsWithRef.filter(t => t.type === 'income' && !isCategoryExcluded(t));
+        const expectedReceivableIds = new Set(receivablesExpected.map(r => r.id));
+        // Orphans are transactions that didn't receive an expected receivable of THIS month
+        const incomeOrphanTxs = incomeTxs.filter(t => !t.receivable_id || !expectedReceivableIds.has(t.receivable_id));
+
+        // Totals
+        const payablesExpectedTotal = payablesExpected.reduce((s, p) => s + getAmount(p), 0);
+        const payablesPaidTotal = payablesPaid.reduce((s, p) => s + getAmount(p), 0);
+        const payablesPendingTotal = payablesPending.reduce((s, p) => s + getAmount(p), 0);
+
+        const receivablesExpectedTotal = receivablesExpected.reduce((s, r) => s + getAmount(r), 0);
+        const receivablesReceivedTotal = receivablesReceived.reduce((s, r) => s + getAmount(r), 0);
+        const receivablesPendingTotal = receivablesPending.reduce((s, r) => s + getAmount(r), 0);
+
+        const expenseOrphanTotal = expenseOrphanTxs.reduce((s, t) => s + getAmount(t, true), 0);
+        const incomeOrphanTotal = incomeOrphanTxs.reduce((s, t) => s + getAmount(t, true), 0);
+
+        const expectedExpenseTotal = payablesExpectedTotal;
+        const realizedExpenseTotal = payablesPaidTotal + expenseOrphanTotal;
+        const pendingExpenseTotal = payablesPendingTotal;
+
+        const expectedIncomeTotal = receivablesExpectedTotal;
+        const realizedIncomeTotal = receivablesReceivedTotal + incomeOrphanTotal;
+        const pendingIncomeTotal = receivablesPendingTotal;
+
+        // Categories mapping
         const buildCategoryTree = (txs, itemsExpected) => {
             const map = {};
             const allItems = [...txs, ...itemsExpected];
@@ -217,15 +242,20 @@ export default async function reqHandler(req) {
             return roots.sort((a,b) => b.expected - a.expected || b.paid - a.paid);
         };
 
-        const incomeByCategory = buildCategoryTree(incomeReceivedTxs, incomeExpectedArray);
+        const incomeByCategory = buildCategoryTree(incomeTxs, receivablesExpected);
         const mappedIncomeByCategory = incomeByCategory.map(n => ({
             ...n, received: n.paid, paid: undefined
         }));
 
-        const expenseByCategory = buildCategoryTree(expensePaidTxs, expenseExpectedArray);
+        const expenseByCategory = buildCategoryTree(expenseTxs, payablesExpected);
 
+        // Sources mapping
         const sourceMap = {};
-        validReceivables.forEach(r => {
+        const warnings = [];
+        let txsWithoutSource = 0;
+        let txsWithoutSourceVal = 0;
+
+        receivablesExpected.forEach(r => {
             const sId = r.income_source_id || 'outras';
             if (!sourceMap[sId]) {
                 const s = incomeSources.find(x => String(x.id) === String(sId));
@@ -239,8 +269,12 @@ export default async function reqHandler(req) {
             sourceMap[sId].expected_net += Number(r.net_amount || r.amount || 0);
         });
 
-        incomeReceivedTxs.forEach(t => {
+        incomeTxs.forEach(t => {
             const sId = t.income_source_id || 'outras';
+            if (!t.income_source_id) {
+                txsWithoutSource++;
+                txsWithoutSourceVal += Number(t.amount || 0);
+            }
             if (!sourceMap[sId]) {
                 const s = incomeSources.find(x => String(x.id) === String(sId));
                 sourceMap[sId] = {
@@ -254,7 +288,21 @@ export default async function reqHandler(req) {
             sourceMap[sId].tax_amount += Number(t.tax_amount || 0);
         });
 
-        // Calculate tax correctly
+        if (txsWithoutSource > 0) {
+            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(txsWithoutSourceVal);
+            warnings.push(`${fmt} em receitas sem income_source vinculado (${txsWithoutSource} transações). Considere conciliá-las nas Configurações.`);
+        }
+
+        let payablesWithoutCategory = 0;
+        payablesExpected.forEach(p => {
+            if (!p.category_id && !p.category) payablesWithoutCategory++;
+        });
+        if (payablesWithoutCategory > 0) {
+            warnings.push(`${payablesWithoutCategory} despesas sem categoria definida.`);
+        }
+
+        warnings.push("Saldo inicial não implementado — ver Bloco 5");
+
         Object.values(sourceMap).forEach(s => {
             s.tax_amount = s.expected_gross - s.expected_net;
             if (s.tax_amount > 0 && s.expected_gross > 0 && s.tax_rate === 0) {
@@ -264,17 +312,64 @@ export default async function reqHandler(req) {
 
         const incomeBySource = Object.values(sourceMap);
 
+        // Calculate cashflow 6m
+        const cashflow_6m = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(year, month - 1 - i, 1);
+            const m = d.getMonth() + 1;
+            const y = d.getFullYear();
+            const startM = `${y}-${pad(m)}-01`;
+            const endM = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+
+            const checkM = (ds) => ds >= startM && ds <= endM;
+            
+            const mTx = transactionsAll.filter(t => checkM(getDataRef(t, true)) && !exclude_transaction_statuses.includes(t.status));
+            
+            const mIncTx = mTx.filter(t => t.type === 'income' && !isCategoryExcluded(t));
+            const mIncGross = mIncTx.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+            const mIncNet = mIncTx.reduce((s, t) => s + (Number(t.net_amount) !== undefined ? Number(t.net_amount) : Number(t.amount || 0)), 0);
+
+            const mExpTx = mTx.filter(t => t.type === 'expense' && !isCategoryExcluded(t));
+            const mExp = mExpTx.reduce((s, t) => s + getAmount(t, true), 0);
+
+            cashflow_6m.push({
+                month: m, year: y,
+                label: `${pad(m)}/${y}`,
+                income_gross: mIncGross,
+                income_net: mIncNet,
+                expense: mExp,
+                result: mIncNet - mExp
+            });
+        }
+
+        // Build items arrays
+        const incomeItems = [
+            ...receivablesExpected.map(r => ({ ...r, _model: 'Receivable' })),
+            ...incomeOrphanTxs.map(t => ({ ...t, _model: 'Transaction' }))
+        ];
+        
+        const expenseItems = [
+            ...payablesExpected.map(p => ({ ...p, _model: 'Payable' })),
+            ...expenseOrphanTxs.map(t => ({ ...t, _model: 'Transaction' }))
+        ];
+
+        // Fiscal summary
+        const fiscalTotalGross = incomeBySource.reduce((s, i) => s + i.received_gross, 0);
+        const fiscalTotalNet = incomeBySource.reduce((s, i) => s + i.received_net, 0);
+        const fiscalTaxRetained = incomeBySource.reduce((s, i) => s + i.tax_amount, 0);
+
         const resultObj = {
-            expected: incomeExpectedTotal - expenseExpectedTotal,
-            realized: incomeReceivedTotal - expensePaidTotal,
-            projected: incomeReceivedTotal + incomePendingTotal - (expensePaidTotal + expensePendingTotal),
+            expected: expectedIncomeTotal - expectedExpenseTotal,
+            realized: realizedIncomeTotal - realizedExpenseTotal,
+            projected: expectedIncomeTotal - expectedExpenseTotal, // usually we should use actual algorithm if projected diff is needed
             balance_start_of_month: 0,
-            balance_end_of_month_projected: 0 // Will add resultObj.projected
+            balance_end_of_month_projected: 0 
         };
         
+        const projectedIncome = realizedIncomeTotal + pendingIncomeTotal;
+        const projectedExpense = realizedExpenseTotal + pendingExpenseTotal;
+        resultObj.projected = projectedIncome - projectedExpense;
         resultObj.balance_end_of_month_projected = resultObj.balance_start_of_month + resultObj.projected;
-
-        const orphanTransactions = expensePaidTxs.filter(t => !t.payable_id && !t.receivable_id);
 
         const reportData = {
             meta: {
@@ -284,27 +379,50 @@ export default async function reqHandler(req) {
                 filters_applied: { date_basis, amount_basis, excluded_categories: exclude_categories, excluded_transaction_statuses: exclude_transaction_statuses, include_card_invoices }
             },
             income: {
-                expected: { total: incomeExpectedTotal, count: incomeExpectedArray.length },
-                received: { total: incomeReceivedTotal, count: incomeReceivedTxs.length },
-                pending: { total: incomePendingTotal, count: Math.max(0, incomeExpectedArray.length - incomeReceivedTxs.length) },
-                by_source: incomeBySource, by_category: mappedIncomeByCategory
+                receivables: {
+                    expected: { total: receivablesExpectedTotal, count: receivablesExpected.length },
+                    received: { total: receivablesReceivedTotal, count: receivablesReceived.length },
+                    pending: { total: receivablesPendingTotal, count: receivablesPending.length }
+                },
+                orphan_transactions: { total: incomeOrphanTotal, count: incomeOrphanTxs.length },
+                expected_total: expectedIncomeTotal,
+                realized_total: realizedIncomeTotal,
+                pending_total: pendingIncomeTotal,
+                by_source: incomeBySource, 
+                by_category: mappedIncomeByCategory,
+                items: incomeItems
             },
             expense: {
-                expected: { total: expenseExpectedTotal, count: expenseExpectedArray.length },
-                paid: { total: expensePaidTotal, count: expensePaidTxs.length },
-                pending: { total: expensePendingTotal, count: Math.max(0, expenseExpectedArray.length - expensePaidTxs.length) },
-                by_category: expenseByCategory
+                payables: {
+                    expected: { total: payablesExpectedTotal, count: payablesExpected.length },
+                    paid: { total: payablesPaidTotal, count: payablesPaid.length },
+                    pending: { total: payablesPendingTotal, count: payablesPending.length }
+                },
+                orphan_transactions: { total: expenseOrphanTotal, count: expenseOrphanTxs.length },
+                expected_total: expectedExpenseTotal,
+                realized_total: realizedExpenseTotal,
+                pending_total: pendingExpenseTotal,
+                by_category: expenseByCategory,
+                items: expenseItems
             },
+            fiscal: {
+                gross_income: fiscalTotalGross,
+                net_income: fiscalTotalNet,
+                tax_retained: fiscalTaxRetained
+            },
+            cashflow_6m,
             result: resultObj,
             diagnostics: {
                 unknown_category_slugs: Array.from(unknown_category_slugs),
                 counts: {
-                    transactions_total: validTransactionsWithRef.length,
+                    transactions_total: currentTransactions.length,
+                    transactions_without_income_source: txsWithoutSource,
                     payables_total: validPayables.length,
+                    payables_without_category: payablesWithoutCategory,
                     receivables_total: validReceivables.length,
-                    orphan_transactions: orphanTransactions.length
+                    orphan_transactions: expenseOrphanTxs.length + incomeOrphanTxs.length
                 },
-                warnings: [],
+                warnings: warnings,
                 truncated_results: false
             }
         };

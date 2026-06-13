@@ -27,6 +27,20 @@ export default function Reports() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const verifyMode = searchParams.get('verify') === '1';
+  const debugMode = searchParams.get('debug') === '1';
+  const [debugData, setDebugData] = useState(null);
+  const [isDebugLoading, setIsDebugLoading] = useState(false);
+
+  const runDebug = async () => {
+    setIsDebugLoading(true);
+    try {
+      const res = await base44.functions.invoke('debugMayExpenses');
+      setDebugData(res.data);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setIsDebugLoading(false);
+  };
 
   const { data: newReportRes } = useQuery({
     queryKey: ['reportData', currentMonth.getMonth() + 1, currentMonth.getFullYear()],
@@ -434,7 +448,22 @@ export default function Reports() {
           <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
           <p className="text-muted-foreground text-sm mt-1">Visão financeira completa</p>
         </div>
+        {debugMode && (
+          <Button onClick={runDebug} disabled={isDebugLoading} className="bg-amber-500 hover:bg-amber-600 text-white">
+            {isDebugLoading ? 'Carregando...' : '🐛 Debug Maio'}
+          </Button>
+        )}
       </div>
+
+      {debugData && (
+        <div className="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[400px] w-full mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-white font-bold text-sm">Resultados do Debug de Maio</span>
+            <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setDebugData(null)}>Fechar</Button>
+          </div>
+          <pre>{JSON.stringify(debugData, null, 2)}</pre>
+        </div>
+      )}
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-2 bg-[#E8EDF2] p-1 rounded-xl">

@@ -24,9 +24,9 @@ export default async function reqHandler(req) {
         const lastDay = new Date(year, month, 0).getDate();
         const endDateStr = `${year}-${pad(month)}-${pad(lastDay)}`;
 
-        // Fetch categories and sources using user context (handles RLS automatically)
-        const categories = await base44.entities.Category.list('name', 500);
-        const incomeSources = await base44.entities.IncomeSource.list('name', 500);
+        // Fetch categories and sources bypassing RLS to ensure lookups work even if user.data.family_id is missing
+        const categories = await base44.asServiceRole.entities.Category.filter({ family_id }, '-created_date', 5000);
+        const incomeSources = await base44.asServiceRole.entities.IncomeSource.filter({ family_id }, '-created_date', 5000);
 
         const catMap = {};
         const slugMap = {};
@@ -143,6 +143,9 @@ export default async function reqHandler(req) {
         const receivablesExpectedTotal = receivablesExpected.reduce((s, r) => s + getAmount(r), 0);
         const receivablesReceivedTotal = receivablesReceived.reduce((s, r) => s + getAmount(r), 0);
         const receivablesPendingTotal = receivablesPending.reduce((s, r) => s + getAmount(r), 0);
+        
+        const receivablesPendingCount = receivablesExpected.length - receivablesReceived.length;
+        const payablesPendingCount = payablesExpected.length - payablesPaid.length;
 
         const expenseOrphanTotal = expenseOrphanTxs.reduce((s, t) => s + getAmount(t, true), 0);
         const incomeOrphanTotal = incomeOrphanTxs.reduce((s, t) => s + getAmount(t, true), 0);
@@ -252,17 +255,27 @@ export default async function reqHandler(req) {
         // Sources mapping
         const sourceMap = {};
         const warnings = [];
-        let txsWithoutSource = 0;
-        let txsWithoutSourceVal = 0;
+        let itemsWithoutSource = 0;
+        let itemsWithoutSourceVal = 0;
+
+        const getSource = (sId) => {
+            const s = incomeSources.find(x => String(x.id) === String(sId));
+            if (s) return s;
+            if (sId === 'outras') return { name: 'Outras', type: 'pj', default_tax_rate: 0 };
+            return { name: 'PJ não identificada', type: 'pj', default_tax_rate: 0 };
+        };
 
         receivablesExpected.forEach(r => {
             const sId = r.income_source_id || 'outras';
+            if (!r.income_source_id) {
+                itemsWithoutSource++;
+                itemsWithoutSourceVal += Number(r.amount || 0);
+            }
             if (!sourceMap[sId]) {
-                const s = incomeSources.find(x => String(x.id) === String(sId));
+                const s = getSource(sId);
                 sourceMap[sId] = {
-                    source_id: sId, source_name: s ? s.name : (sId === 'outras' ? 'Outras' : 'PJ não identificada'),
-                    source_type: s ? s.type : 'pj', expected_gross: 0, received_gross: 0,
-                    expected_net: 0, received_net: 0, tax_amount: 0, tax_rate: Number(s?.default_tax_rate || 0)
+                    source_id: sId, source_name: s.name, source_type: s.type, expected_gross: 0, received_gross: 0,
+                    expected_net: 0, received_net: 0, tax_amount: 0, tax_rate: Number(s.default_tax_rate || 0)
                 };
             }
             sourceMap[sId].expected_gross += Number(r.amount || 0);
@@ -271,16 +284,11 @@ export default async function reqHandler(req) {
 
         incomeTxs.forEach(t => {
             const sId = t.income_source_id || 'outras';
-            if (!t.income_source_id) {
-                txsWithoutSource++;
-                txsWithoutSourceVal += Number(t.amount || 0);
-            }
             if (!sourceMap[sId]) {
-                const s = incomeSources.find(x => String(x.id) === String(sId));
+                const s = getSource(sId);
                 sourceMap[sId] = {
-                    source_id: sId, source_name: s ? s.name : (sId === 'outras' ? 'Outras' : 'PJ não identificada'),
-                    source_type: s ? s.type : 'pj', expected_gross: 0, received_gross: 0,
-                    expected_net: 0, received_net: 0, tax_amount: 0, tax_rate: Number(s?.default_tax_rate || 0)
+                    source_id: sId, source_name: s.name, source_type: s.type, expected_gross: 0, received_gross: 0,
+                    expected_net: 0, received_net: 0, tax_amount: 0, tax_rate: Number(s.default_tax_rate || 0)
                 };
             }
             sourceMap[sId].received_gross += Number(t.amount || 0);
@@ -288,9 +296,16 @@ export default async function reqHandler(req) {
             sourceMap[sId].tax_amount += Number(t.tax_amount || 0);
         });
 
-        if (txsWithoutSource > 0) {
-            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(txsWithoutSourceVal);
-            warnings.push(`${fmt} em receitas sem income_source vinculado (${txsWithoutSource} transações). Considere conciliá-las nas Configurações.`);
+        incomeOrphanTxs.forEach(t => {
+            if (!t.income_source_id) {
+                itemsWithoutSource++;
+                itemsWithoutSourceVal += Number(t.amount || 0);
+            }
+        });
+
+        if (itemsWithoutSource > 0) {
+            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(itemsWithoutSourceVal);
+            warnings.push(`${fmt} em receitas sem income_source vinculado (${itemsWithoutSource} itens). Considere conciliá-las nas Configurações.`);
         }
 
         let payablesWithoutCategory = 0;
@@ -304,9 +319,11 @@ export default async function reqHandler(req) {
         warnings.push("Saldo inicial não implementado — ver Bloco 5");
 
         Object.values(sourceMap).forEach(s => {
-            s.tax_amount = s.expected_gross - s.expected_net;
+            s.tax_amount = s.expected_gross > 0 ? (s.expected_gross - s.expected_net) : (s.received_gross - s.received_net);
             if (s.tax_amount > 0 && s.expected_gross > 0 && s.tax_rate === 0) {
                 s.tax_rate = Number((s.tax_amount / s.expected_gross * 100).toFixed(1));
+            } else if (s.tax_amount > 0 && s.received_gross > 0 && s.tax_rate === 0) {
+                s.tax_rate = Number((s.tax_amount / s.received_gross * 100).toFixed(1));
             }
         });
 
@@ -314,12 +331,17 @@ export default async function reqHandler(req) {
 
         // Calculate cashflow 6m
         const cashflow_6m = [];
+        const earliestTx = await base44.asServiceRole.entities.Transaction.filter({ family_id }, '+date', 1);
+        const earliestDateStr = earliestTx.length > 0 && earliestTx[0].date ? earliestTx[0].date.substring(0, 7) + '-01' : new Date().toISOString().substring(0, 7) + '-01';
+
         for (let i = 5; i >= 0; i--) {
             const d = new Date(year, month - 1 - i, 1);
             const m = d.getMonth() + 1;
             const y = d.getFullYear();
             const startM = `${y}-${pad(m)}-01`;
             const endM = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+            
+            const completeness = startM >= earliestDateStr ? 'complete' : 'partial';
 
             const checkM = (ds) => ds >= startM && ds <= endM;
             
@@ -331,14 +353,17 @@ export default async function reqHandler(req) {
 
             const mExpTx = mTx.filter(t => t.type === 'expense' && !isCategoryExcluded(t));
             const mExp = mExpTx.reduce((s, t) => s + getAmount(t, true), 0);
+            
+            const monthLabels = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
             cashflow_6m.push({
                 month: m, year: y,
-                label: `${pad(m)}/${y}`,
+                label: `${monthLabels[m-1]}/${String(y).slice(-2)}`,
                 income_gross: mIncGross,
                 income_net: mIncNet,
-                expense: mExp,
-                result: mIncNet - mExp
+                expense_gross: mExp,
+                balance: mIncNet - mExp,
+                data_completeness: completeness
             });
         }
 
@@ -382,7 +407,7 @@ export default async function reqHandler(req) {
                 receivables: {
                     expected: { total: receivablesExpectedTotal, count: receivablesExpected.length },
                     received: { total: receivablesReceivedTotal, count: receivablesReceived.length },
-                    pending: { total: receivablesPendingTotal, count: receivablesPending.length }
+                    pending: { total: receivablesPendingTotal, count: receivablesPendingCount }
                 },
                 orphan_transactions: { total: incomeOrphanTotal, count: incomeOrphanTxs.length },
                 expected_total: expectedIncomeTotal,
@@ -406,9 +431,11 @@ export default async function reqHandler(req) {
                 items: expenseItems
             },
             fiscal: {
-                gross_income: fiscalTotalGross,
-                net_income: fiscalTotalNet,
-                tax_retained: fiscalTaxRetained
+                total_gross: fiscalTotalGross,
+                total_net: fiscalTotalNet,
+                total_tax: fiscalTaxRetained,
+                effective_rate: fiscalTotalGross > 0 ? (fiscalTaxRetained / fiscalTotalGross) * 100 : 0,
+                by_source: incomeBySource
             },
             cashflow_6m,
             result: resultObj,
@@ -416,7 +443,7 @@ export default async function reqHandler(req) {
                 unknown_category_slugs: Array.from(unknown_category_slugs),
                 counts: {
                     transactions_total: currentTransactions.length,
-                    transactions_without_income_source: txsWithoutSource,
+                    transactions_without_income_source: itemsWithoutSource,
                     payables_total: validPayables.length,
                     payables_without_category: payablesWithoutCategory,
                     receivables_total: validReceivables.length,

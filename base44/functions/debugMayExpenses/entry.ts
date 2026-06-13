@@ -6,12 +6,17 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user || user.role !== 'admin') return Response.json({ error: 'Unauthorized' }, { status: 403 });
 
-        // Tenta todas as estratégias para resolver family_id
-        const candidate1 = user.family_id;
-        const candidate2 = user.data?.family_id;
+        // Busca o usuário completo para ver todos os campos disponíveis
+        const fullUsers = await base44.asServiceRole.entities.User.filter({ id: user.id }, '-created_date', 1);
+        const fullUser = fullUsers[0] || {};
+
+        // Coleta todos os campos que podem ser family_id
+        const allUserKeys = Object.keys(fullUser);
+        const candidate1 = fullUser.family_id;
+        const candidate2 = fullUser.data?.family_id;
         const candidate3 = user.id;
 
-        // Testa cada candidato para ver qual tem dados
+        // Testa cada candidato distinto para ver qual tem dados
         const testFamilyId = async (fid) => {
             if (!fid) return 0;
             const r = await base44.asServiceRole.entities.Transaction.filter({ family_id: fid }, '-created_date', 5);
@@ -28,18 +33,26 @@ Deno.serve(async (req) => {
             || (c3count > 0 ? candidate3 : null)
             || candidate1 || candidate2 || candidate3;
 
-        const allTxsCount = await base44.asServiceRole.entities.Transaction.filter({ family_id: resolved_family_id }, '-created_date', 5);
-        const allPayablesCount = await base44.asServiceRole.entities.Payable.filter({ family_id: resolved_family_id }, '-created_date', 5);
+        const allTxsSample = await base44.asServiceRole.entities.Transaction.filter({ family_id: resolved_family_id }, '-created_date', 5);
+        const allPayablesSample = await base44.asServiceRole.entities.Payable.filter({ family_id: resolved_family_id }, '-created_date', 5);
+
+        // Busca qualquer transação sem filtro de família para ver o que existe no banco
+        const anyTx = await base44.asServiceRole.entities.Transaction.list('-created_date', 3);
 
         const _debug = {
             user_id: user.id,
-            user_family_id: user.family_id,
-            user_data_family_id: user.data?.family_id,
-            candidates: { c1: { id: candidate1, count: c1count }, c2: { id: candidate2, count: c2count }, c3: { id: candidate3, count: c3count } },
+            full_user_keys: allUserKeys,
+            full_user_family_id: fullUser.family_id,
+            full_user_data: fullUser.data,
+            candidates: {
+                c1: { id: candidate1, count: c1count },
+                c2: { id: candidate2, count: c2count },
+                c3: { id: candidate3, count: c3count }
+            },
             resolved_family_id,
-            all_transactions_sample_count: allTxsCount.length,
-            all_payables_sample_count: allPayablesCount.length,
-            tx_sample: allTxsCount.slice(0, 2).map(t => ({ id: t.id, date: t.date, family_id: t.family_id })),
+            all_transactions_sample_count: allTxsSample.length,
+            all_payables_sample_count: allPayablesSample.length,
+            any_tx_in_db: anyTx.map(t => ({ id: t.id, family_id: t.family_id, date: t.date })),
         };
 
         // Usa $lt do próximo mês em vez de $lte do dia 31 (fix para timestamps ISO)
@@ -51,6 +64,7 @@ Deno.serve(async (req) => {
             type: 'expense',
             date: { $gte: startMay, $lt: startJun }
         }, '-amount', 5000);
+        _debug.txs_may_count = txsMay.length;
 
         const payablesAll = await base44.asServiceRole.entities.Payable.filter({ family_id: resolved_family_id }, '-amount', 5000);
         const payablesMap = {};

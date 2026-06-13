@@ -6,81 +6,43 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user || user.role !== 'admin') return Response.json({ error: 'Unauthorized' }, { status: 403 });
 
-        // Busca o usuário completo para ver todos os campos disponíveis
-        const fullUsers = await base44.asServiceRole.entities.User.filter({ id: user.id }, '-created_date', 1);
-        const fullUser = fullUsers[0] || {};
-
-        // Coleta todos os campos que podem ser family_id
-        const allUserKeys = Object.keys(fullUser);
-        const candidate1 = fullUser.family_id;
-        const candidate2 = fullUser.data?.family_id;
-        const candidate3 = user.id;
-
-        // Testa cada candidato distinto para ver qual tem dados
-        const testFamilyId = async (fid) => {
-            if (!fid) return 0;
-            const r = await base44.asServiceRole.entities.Transaction.filter({ family_id: fid }, '-created_date', 5);
-            return r.length;
-        };
-
-        const c1count = await testFamilyId(candidate1);
-        const c2count = candidate2 && candidate2 !== candidate1 ? await testFamilyId(candidate2) : -1;
-        const c3count = candidate3 !== candidate1 && candidate3 !== candidate2 ? await testFamilyId(candidate3) : -1;
-
-        // Usa o candidato que tem dados
-        const resolved_family_id = (c1count > 0 ? candidate1 : null)
-            || (c2count > 0 ? candidate2 : null)
-            || (c3count > 0 ? candidate3 : null)
-            || candidate1 || candidate2 || candidate3;
-
-        const allTxsSample = await base44.asServiceRole.entities.Transaction.filter({ family_id: resolved_family_id }, '-created_date', 5);
-        const allPayablesSample = await base44.asServiceRole.entities.Payable.filter({ family_id: resolved_family_id }, '-created_date', 5);
-
-        // Busca qualquer transação sem filtro de família para ver o que existe no banco
-        const anyTx = await base44.asServiceRole.entities.Transaction.list('-created_date', 3);
-
-        const _debug = {
-            user_id: user.id,
-            full_user_keys: allUserKeys,
-            full_user_family_id: fullUser.family_id,
-            full_user_data: fullUser.data,
-            candidates: {
-                c1: { id: candidate1, count: c1count },
-                c2: { id: candidate2, count: c2count },
-                c3: { id: candidate3, count: c3count }
-            },
-            resolved_family_id,
-            all_transactions_sample_count: allTxsSample.length,
-            all_payables_sample_count: allPayablesSample.length,
-            any_tx_in_db: anyTx.map(t => ({ id: t.id, family_id: t.family_id, date: t.date })),
-        };
-
-        // Usa $lt do próximo mês em vez de $lte do dia 31 (fix para timestamps ISO)
         const startMay = '2026-05-01';
         const startJun = '2026-06-01';
 
-        const txsMay = await base44.asServiceRole.entities.Transaction.filter({
-            family_id: resolved_family_id,
+        // Usa o client do usuário (com RLS) — Transaction tem $or: [created_by_id, family_id]
+        // Busca todas as transações do usuário sem filtro extra, depois filtra em memória
+        const allTxs = await base44.entities.Transaction.filter({
             type: 'expense',
             date: { $gte: startMay, $lt: startJun }
         }, '-amount', 5000);
-        _debug.txs_may_count = txsMay.length;
 
-        const payablesAll = await base44.asServiceRole.entities.Payable.filter({ family_id: resolved_family_id }, '-amount', 5000);
+        const allPayables = await base44.entities.Payable.list('-amount', 5000);
+
+        const _debug = {
+            user_id: user.id,
+            family_id: user.family_id,
+            txs_fetched: allTxs.length,
+            payables_fetched: allPayables.length,
+            tx_sample: allTxs.slice(0, 3).map(t => ({ id: t.id, amount: t.amount, date: t.date, payable_id: t.payable_id })),
+        };
+
         const payablesMap = {};
-        payablesAll.forEach(p => payablesMap[p.id] = p);
+        allPayables.forEach(p => { payablesMap[p.id] = p; });
 
-        // Fix: usa $lt para comparação de strings de data também
-        const payablesMay = payablesAll.filter(p => {
+        const payablesMay = allPayables.filter(p => {
             const ref = p.competencia || p.due_date;
             return ref >= startMay && ref < startJun;
         });
 
-        const top5Txs = txsMay.slice(0, 5).map(t => ({ id: t.id, desc: t.description, amount: t.amount, date: t.date, p_id: t.payable_id }));
+        // 1. Transactions de despesa em maio
+        const txsMay = allTxs;
+        const top5Txs = txsMay.slice(0, 5).map(t => ({ id: t.id, desc: t.description, amount: t.amount, date: t.date, payable_id: t.payable_id }));
 
+        // 2. Payables de maio pagos
         const payablesMayPaid = payablesMay.filter(p => p.status === 'paid');
         const top5PayablesPaid = payablesMayPaid.slice(0, 5).map(p => ({ id: p.id, desc: p.description, amount: p.amount, ref: p.competencia || p.due_date }));
 
+        // 3. Txs de maio cujo payable é de OUTRO mês
         const crossingTxs = txsMay.filter(t => {
             if (!t.payable_id) return false;
             const p = payablesMap[t.payable_id];
@@ -89,9 +51,10 @@ Deno.serve(async (req) => {
             return pRef < startMay || pRef >= startJun;
         }).map(t => {
             const p = payablesMap[t.payable_id];
-            return { amount: t.amount, tx_desc: t.description, tx_date: t.date, payable_desc: p.description, payable_ref: p.competencia || p.due_date };
+            return { amount: t.amount, tx_desc: t.description, tx_date: t.date, payable_ref: p.competencia || p.due_date, payable_desc: p.description };
         });
 
+        // 4. Duplicidades: múltiplas txs de maio -> mesmo payable
         const txByPayable = {};
         txsMay.forEach(t => {
             if (t.payable_id) {
@@ -99,23 +62,29 @@ Deno.serve(async (req) => {
                 txByPayable[t.payable_id].push(t);
             }
         });
-        const duplicates = Object.entries(txByPayable).filter(([k, arr]) => arr.length > 1).map(([k, arr]) => ({
-            payable_id: k,
-            payable_desc: payablesMap[k]?.description,
-            count: arr.length,
-            total_amount: arr.reduce((s, t) => s + t.amount, 0),
-            tx_dates: arr.map(t => t.date)
-        }));
+        const duplicates = Object.entries(txByPayable)
+            .filter(([, arr]) => arr.length > 1)
+            .map(([k, arr]) => ({
+                payable_id: k,
+                payable_desc: payablesMap[k]?.description,
+                count: arr.length,
+                total_amount: arr.reduce((s, t) => s + t.amount, 0),
+                tx_dates: arr.map(t => t.date)
+            }));
 
+        // 5. Cartões
         const invoicesMay = payablesMay.filter(p => p.is_card_invoice_payable);
-        const invoiceItemsSum = payablesMay.filter(p => p.card_invoice_id).reduce((s, p) => s + (p.amount || 0), 0);
+        const invoiceItemsSum = payablesMay.filter(p => p.card_invoice_id && !p.is_card_invoice_payable).reduce((s, p) => s + (p.amount || 0), 0);
 
+        // 6. Órfãs: txs sem payable ou cujo payable não existe
         const orphansMay = txsMay.filter(t => !t.payable_id || !payablesMap[t.payable_id]);
         const top10Orphans = orphansMay.slice(0, 10).map(t => ({ id: t.id, desc: t.description, amount: t.amount, date: t.date }));
 
+        // 7. Payables pendentes em maio
         const payablesMayPending = payablesMay.filter(p => p.status !== 'paid');
         const top5PayablesPending = payablesMayPending.slice(0, 5).map(p => ({ id: p.id, desc: p.description, amount: p.amount, ref: p.competencia || p.due_date }));
 
+        // 8. Soma detalhada
         const a_txsPaidInMonth = txsMay.filter(t => {
             if (!t.payable_id) return false;
             const p = payablesMap[t.payable_id];
@@ -133,8 +102,8 @@ Deno.serve(async (req) => {
             1: { title: "1. Transactions Expense (date=Mai/2026)", count: txsMay.length, sum: txsMay.reduce((s, t) => s + (t.amount || 0), 0), top5: top5Txs },
             2: { title: "2. Payables (ref=Mai/2026, status=paid)", count: payablesMayPaid.length, sum: d_payablesPaidSum, top5: top5PayablesPaid },
             3: { title: "3. Cruzamento (Tx Mai -> Payable Outro Mês)", count: crossingTxs.length, sum: b_txsPaidOtherMonth, items: crossingTxs },
-            4: { title: "4. Duplicidades (Múltiplas Txs -> Mesmo Payable)", count: duplicates.length, sum_of_txs: duplicates.reduce((s,d)=>s+d.total_amount,0), items: duplicates },
-            5: { title: "5. Cartões", invoices_count: invoicesMay.length, invoices_sum: invoicesMay.reduce((s,p)=>s+p.amount,0), items_sum: invoiceItemsSum },
+            4: { title: "4. Duplicidades (Múltiplas Txs -> Mesmo Payable)", count: duplicates.length, sum_of_txs: duplicates.reduce((s, d) => s + d.total_amount, 0), items: duplicates },
+            5: { title: "5. Cartões", invoices_count: invoicesMay.length, invoices_sum: invoicesMay.reduce((s, p) => s + (p.amount || 0), 0), items_sum: invoiceItemsSum },
             6: { title: "6. Transactions Órfãs (sem payable_id)", count: orphansMay.length, sum: c_orphansSum, top10: top10Orphans },
             7: { title: "7. Payables Pendentes em Maio", count: payablesMayPending.length, sum: payablesMayPending.reduce((s, p) => s + (p.amount || 0), 0), top5: top5PayablesPending },
             8: {

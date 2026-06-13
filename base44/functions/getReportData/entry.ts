@@ -294,9 +294,23 @@ export default async function reqHandler(req) {
                     expected_net: 0, received_net: 0, tax_amount: 0, tax_rate: Number(s.default_tax_rate || 0)
                 };
             }
-            sourceMap[sId].received_gross += Number(t.amount || 0);
-            sourceMap[sId].received_net += Number(t.net_amount || t.amount || 0);
-            sourceMap[sId].tax_amount += Number(t.tax_amount || 0);
+            
+            // Corrige o cálculo de imposto quando a transaction traz a informação diretamente
+            const tGross = Number(t.amount || 0);
+            let tNet = Number(t.net_amount !== undefined ? t.net_amount : t.amount || 0);
+            let tTaxAmount = Number(t.tax_amount || 0);
+            
+            // Se a transaction tem tax_rate mas não tax_amount, calcula agora
+            if (t.tax_rate > 0 && tTaxAmount === 0 && tGross > 0) {
+                tTaxAmount = tGross * (Number(t.tax_rate) / 100);
+                if (t.net_amount === undefined) {
+                    tNet = tGross - tTaxAmount;
+                }
+            }
+
+            sourceMap[sId].received_gross += tGross;
+            sourceMap[sId].received_net += tNet;
+            sourceMap[sId].tax_amount += tTaxAmount;
         });
 
         incomeOrphanTxs.forEach(t => {

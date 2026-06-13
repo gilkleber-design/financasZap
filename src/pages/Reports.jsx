@@ -388,13 +388,8 @@ export default function Reports() {
         console.warn(`[VERIFY] Divergência em Income Realized. Legacy: ${legacyIncome}, Novo: ${newIncome}`);
       }
 
-      // 3. Expense Expected (Limits)
-      const legacyExpectedExpense = plannedVsActual.reduce((sum, item) => sum + item.limit, 0);
-      const newExpectedExpense = newReport.expense.expected_total;
-      // O legacyExpectedExpense soma os limites do budget. No novo modelo, expected é a soma dos Payables. Pode divergir e é esperado!
-      if (Math.abs(legacyExpectedExpense - newExpectedExpense) > 0.01) {
-        console.warn(`[VERIFY] Divergência em Expense Expected. Legacy (Limites do Budget): ${legacyExpectedExpense}, Novo (Payables Expected): ${newExpectedExpense}`);
-      }
+      // 3. Expense Expected - REMOVIDO
+      // (Legacy usa limites do budget, Novo usa soma de Payables. Não são comparáveis).
 
       // 4. Fiscal
       if (Math.abs(totalGross - newReport.fiscal.total_gross) > 0.01) {

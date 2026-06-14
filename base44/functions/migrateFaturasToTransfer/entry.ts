@@ -10,23 +10,26 @@ Deno.serve(async (req) => {
         const execute = body.execute === true;
 
         // 1. Busca categorias alvo e a categoria destino "fatura"
-        const allCats = await base44.entities.Category.list('name', 500);
+        const family_id = user.data?.family_id || user.family_id;
+        const catQuery = family_id ? { family_id } : {};
+        const allCats = await base44.asServiceRole.entities.Category.filter(catQuery, 'name', 500);
 
         const sourceSlugs = ['faturas_de_cartao', 'passivos_de_transicao'];
         const sourceCats = allCats.filter(c => sourceSlugs.includes(c.slug));
         const sourceIds = sourceCats.map(c => c.id);
 
-        const faturaCat = allCats.find(c => c.slug === 'fatura' && c.type === 'transfer');
+        const faturaCat = allCats.find(c => c.slug === 'fatura');
 
         if (!faturaCat) {
             return Response.json({
-                error: 'Categoria "fatura" (type=transfer) não encontrada. Crie-a antes de migrar.',
-                available_transfer_cats: allCats.filter(c => c.type === 'transfer').map(c => ({ id: c.id, name: c.name, slug: c.slug }))
+                error: 'Categoria "fatura" não encontrada.',
+                all_slugs: allCats.map(c => ({ id: c.id, name: c.name, slug: c.slug, type: c.type }))
             }, { status: 400 });
         }
 
         // 2. Busca todas as transactions de despesa
-        const allTxs = await base44.entities.Transaction.filter({ type: 'expense' }, '-date', 5000);
+        const txQuery = family_id ? { family_id, type: 'expense' } : { type: 'expense' };
+        const allTxs = await base44.asServiceRole.entities.Transaction.filter(txQuery, '-date', 5000);
 
         // 3. Filtra as que usam category_id ou category slug das fontes
         const targets = allTxs.filter(t =>
@@ -68,7 +71,7 @@ Deno.serve(async (req) => {
         const errors = [];
         for (const t of targets) {
             try {
-                await base44.entities.Transaction.update(t.id, {
+                await base44.asServiceRole.entities.Transaction.update(t.id, {
                     category: faturaCat.slug,
                     category_id: faturaCat.id
                 });

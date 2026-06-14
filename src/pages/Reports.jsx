@@ -42,6 +42,32 @@ export default function Reports() {
     setIsDebugLoading(false);
   };
 
+  const [migrateData, setMigrateData] = useState(null);
+  const [isMigrateLoading, setIsMigrateLoading] = useState(false);
+
+  const runMigratePreview = async () => {
+    setIsMigrateLoading(true);
+    try {
+      const res = await base44.functions.invoke('migrateFaturasToTransfer', {});
+      setMigrateData(res.data);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setIsMigrateLoading(false);
+  };
+
+  const runMigrateExecute = async () => {
+    if (!window.confirm(`Confirma migração de ${migrateData?.to_update_count} transações para categoria "fatura"?`)) return;
+    setIsMigrateLoading(true);
+    try {
+      const res = await base44.functions.invoke('migrateFaturasToTransfer', { execute: true });
+      setMigrateData(res.data);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setIsMigrateLoading(false);
+  };
+
   const { data: newReportRes } = useQuery({
     queryKey: ['reportData', currentMonth.getMonth() + 1, currentMonth.getFullYear()],
     queryFn: () => base44.functions.invoke('getReportData', { month: currentMonth.getMonth() + 1, year: currentMonth.getFullYear() }),
@@ -448,9 +474,14 @@ export default function Reports() {
           <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
           <p className="text-muted-foreground text-sm mt-1">Visão financeira completa</p>
         </div>
-        <Button onClick={runDebug} disabled={isDebugLoading} className="bg-amber-500 hover:bg-amber-600 text-white">
-          {isDebugLoading ? 'Carregando...' : '🐛 Debug Maio'}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={runDebug} disabled={isDebugLoading} className="bg-amber-500 hover:bg-amber-600 text-white">
+            {isDebugLoading ? 'Carregando...' : '🐛 Debug Maio'}
+          </Button>
+          <Button onClick={runMigratePreview} disabled={isMigrateLoading} className="bg-purple-600 hover:bg-purple-700 text-white">
+            {isMigrateLoading ? 'Carregando...' : '🔄 Preview Migração Faturas'}
+          </Button>
+        </div>
       </div>
 
       {debugData && (
@@ -465,6 +496,25 @@ export default function Reports() {
             </div>
           </div>
           <pre>{JSON.stringify(debugData, null, 2)}</pre>
+        </div>
+      )}
+
+      {migrateData && (
+        <div className="bg-slate-900 text-purple-300 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[400px] w-full mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-white font-bold text-sm">
+              {migrateData.mode === 'execute' ? '✅ Migração Executada' : `🔍 Preview: ${migrateData.to_update_count} transações para migrar`}
+            </span>
+            <div className="flex gap-2">
+              {migrateData.mode !== 'execute' && migrateData.to_update_count > 0 && (
+                <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={runMigrateExecute} disabled={isMigrateLoading}>
+                  ▶ Executar Migração
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setMigrateData(null)}>Fechar</Button>
+            </div>
+          </div>
+          <pre>{JSON.stringify(migrateData, null, 2)}</pre>
         </div>
       )}
 

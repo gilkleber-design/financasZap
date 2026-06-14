@@ -56,6 +56,19 @@ export default function Reports() {
     setIsMigrateLoading(false);
   };
 
+  const [diagData, setDiagData] = useState(null);
+  const [isDiagLoading, setIsDiagLoading] = useState(false);
+  const runDiagnostics = async () => {
+    setIsDiagLoading(true);
+    try {
+      const res = await base44.functions.invoke('diagnosticTests', {});
+      setDiagData(res.data);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setIsDiagLoading(false);
+  };
+
   const runMigrateExecute = async () => {
     if (!window.confirm(`Confirma migração de ${migrateData?.to_update_count} transações para categoria "fatura"?`)) return;
     setIsMigrateLoading(true);
@@ -481,6 +494,9 @@ export default function Reports() {
           <Button onClick={runMigratePreview} disabled={isMigrateLoading} className="bg-purple-600 hover:bg-purple-700 text-white">
             {isMigrateLoading ? 'Carregando...' : '🔄 Preview Migração Faturas'}
           </Button>
+          <Button onClick={runDiagnostics} disabled={isDiagLoading} className="bg-slate-600 hover:bg-slate-700 text-white">
+            {isDiagLoading ? 'Rodando...' : '🔬 Diagnósticos (5 perguntas)'}
+          </Button>
         </div>
       </div>
 
@@ -496,6 +512,19 @@ export default function Reports() {
             </div>
           </div>
           <pre>{JSON.stringify(debugData, null, 2)}</pre>
+        </div>
+      )}
+
+      {diagData && (
+        <div className="bg-slate-900 text-cyan-300 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[500px] w-full mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-white font-bold text-sm">🔬 Resultados dos Diagnósticos</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => navigator.clipboard.writeText(JSON.stringify(diagData, null, 2))}>📋 Copiar</Button>
+              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setDiagData(null)}>Fechar</Button>
+            </div>
+          </div>
+          <pre>{JSON.stringify(diagData, null, 2)}</pre>
         </div>
       )}
 

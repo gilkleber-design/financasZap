@@ -69,6 +69,19 @@ export default function Reports() {
     setIsDiagLoading(false);
   };
 
+  const [createCatData, setCreateCatData] = useState(null);
+  const [isCreateCatLoading, setIsCreateCatLoading] = useState(false);
+  const runCreateFaturaCategory = async () => {
+    setIsCreateCatLoading(true);
+    try {
+      const res = await base44.functions.invoke('createFaturaCategory', {});
+      setCreateCatData(res.data);
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setIsCreateCatLoading(false);
+  };
+
   const runMigrateExecute = async () => {
     if (!window.confirm(`Confirma migração de ${migrateData?.to_update_count} transações para categoria "fatura"?`)) return;
     setIsMigrateLoading(true);
@@ -497,6 +510,9 @@ export default function Reports() {
           <Button onClick={runDiagnostics} disabled={isDiagLoading} className="bg-slate-600 hover:bg-slate-700 text-white">
             {isDiagLoading ? 'Rodando...' : '🔬 Diagnósticos (5 perguntas)'}
           </Button>
+          <Button onClick={runCreateFaturaCategory} disabled={isCreateCatLoading} className="bg-teal-600 hover:bg-teal-700 text-white">
+            {isCreateCatLoading ? 'Criando...' : '🏷️ Passo A — Criar cat. fatura'}
+          </Button>
         </div>
       </div>
 
@@ -512,6 +528,19 @@ export default function Reports() {
             </div>
           </div>
           <pre>{JSON.stringify(debugData, null, 2)}</pre>
+        </div>
+      )}
+
+      {createCatData && (
+        <div className="bg-slate-900 text-teal-300 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[300px] w-full mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-white font-bold text-sm">🏷️ Passo A — Criar categoria fatura</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => navigator.clipboard.writeText(JSON.stringify(createCatData, null, 2))}>📋 Copiar</Button>
+              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setCreateCatData(null)}>Fechar</Button>
+            </div>
+          </div>
+          <pre>{JSON.stringify(createCatData, null, 2)}</pre>
         </div>
       )}
 

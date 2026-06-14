@@ -9,53 +9,45 @@ Deno.serve(async (req) => {
         const body = await req.json().catch(() => ({}));
         const execute = body.execute === true;
 
-        const family_id = user.data?.family_id || user.family_id;
-        if (!family_id) return Response.json({ error: 'family_id não encontrado no usuário' }, { status: 400 });
+        // 1. Busca categorias via RLS (user-scoped, sem asServiceRole)
+        const myCats = await base44.entities.Category.list('name', 500);
 
-        // 1. Busca todas as categorias da família do usuário (user-scoped, RLS ok)
-        const allCats = await base44.entities.Category.filter({ family_id }, 'name', 500);
-
-        // Categorias fonte (antigas) — slugs que devem virar "fatura"
         const SOURCE_SLUGS = ['faturas_de_cartao', 'passivos_de_transicao'];
-        const sourceCats = allCats.filter(c => SOURCE_SLUGS.includes(c.slug));
+        const sourceCats = myCats.filter(c => SOURCE_SLUGS.includes(c.slug));
         const sourceIds = sourceCats.map(c => c.id);
-        const sourceSlugs = sourceCats.map(c => c.slug);
+        const sourceSlugsFound = sourceCats.map(c => c.slug);
 
-        // Categoria destino "fatura" da família do usuário
-        const faturaCat = allCats.find(c => c.slug === 'fatura');
-
+        const faturaCat = myCats.find(c => c.slug === 'fatura');
         if (!faturaCat) {
             return Response.json({
-                error: 'Categoria "fatura" não encontrada na família do usuário.',
-                all_slugs: allCats.map(c => c.slug),
-                family_id
+                error: 'Categoria "fatura" não encontrada. Rode createFaturaCategory primeiro.',
+                all_slugs: myCats.map(c => c.slug)
             }, { status: 400 });
         }
 
-        // 2. Busca transactions de despesa do usuário (user-scoped, RLS ok)
-        const allTxs = await base44.entities.Transaction.filter({ type: 'expense' }, '-date', 5000);
+        // 2. Busca transactions via RLS (user-scoped)
+        const allTxs = await base44.entities.Transaction.list('-date', 5000);
 
-        // Filtra as que usam as categorias fonte (por id ou slug)
+        // 3. Filtra as que usam categorias fonte (por id ou slug)
         const toMigrate = allTxs.filter(t =>
             sourceIds.includes(t.category_id) ||
-            sourceSlugs.includes(t.category)
+            sourceSlugsFound.includes(t.category)
         );
 
         if (!execute) {
             return Response.json({
                 mode: 'preview',
-                family_id,
                 fatura_cat: { id: faturaCat.id, name: faturaCat.name, slug: faturaCat.slug, type: faturaCat.type },
                 source_cats: sourceCats.map(c => ({ id: c.id, slug: c.slug, name: c.name })),
                 to_update_count: toMigrate.length,
-                sample: toMigrate.slice(0, 10).map(t => ({
+                sample: toMigrate.slice(0, 15).map(t => ({
                     id: t.id, date: t.date, description: t.description,
                     amount: t.amount, category: t.category, category_id: t.category_id
                 }))
             });
         }
 
-        // 3. Executa atualização (user-scoped, transactions pertencem ao usuário)
+        // 4. Executa atualização
         let updated = 0;
         const errors = [];
         for (const t of toMigrate) {
@@ -72,7 +64,6 @@ Deno.serve(async (req) => {
 
         return Response.json({
             mode: 'execute',
-            family_id,
             total_attempted: toMigrate.length,
             updated,
             errors_count: errors.length,

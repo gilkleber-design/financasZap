@@ -27,7 +27,11 @@ export default function ReconciliationConfront({ confronto }) {
             {diferenca >= 0 ? '+' : ''}{fmt(diferenca)}
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5">
-            {!hasDiff ? 'Fechado ✓' : diferenca > 0 ? 'Gastou além do previsto' : 'Contas sem pagamento'}
+            {!hasDiff
+              ? 'Atividade e Contas a Pagar batem'
+              : diferenca > 0
+                ? 'Atividade maior que Contas a Pagar — ver listas abaixo'
+                : 'Contas a Pagar maior que Atividade — há compromissos não pagos'}
           </div>
         </div>
       </div>

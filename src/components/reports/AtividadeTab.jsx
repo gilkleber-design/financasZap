@@ -38,6 +38,25 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
         </button>
       </div>
 
+      {/* Bug 4: card vermelho para itens sem categoria — topo da aba */}
+      {data.semCategoria?.count > 0 && (
+        <button
+          onClick={() => setDrawer({ categoryName: 'Sem Categoria', total: data.semCategoria.total, items: data.semCategoria.items })}
+          className="w-full flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-3 hover:bg-red-100 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+            <span className="text-sm font-bold text-red-700">
+              {data.semCategoria.count} {data.semCategoria.count === 1 ? 'registro sem categoria' : 'registros sem categoria'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-sm font-bold text-red-700">{fmt(data.semCategoria.total)}</span>
+            <span className="text-xs text-red-500 underline">classificar →</span>
+          </div>
+        </button>
+      )}
+
       {/* Fluxo de Caixa 6 meses */}
       <Card className="bg-white border-[0.5px] border-[#E8EDF2] rounded-[16px] p-5">
         <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Fluxo de Caixa — Últimos 6 Meses</h3>
@@ -94,7 +113,8 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
         )}
       </Card>
 
-      <OverviewPlannedVsActual items={data.plannedVsActual} currentMonth={currentMonth} />
+      {/* Bug 1 + 2: passa aggregation em vez de plannedVsActual */}
+      <OverviewPlannedVsActual aggregation={aggregation} currentMonth={currentMonth} />
 
       <OverviewFiscalSummary
         totalGross={fiscal.totalBruto}

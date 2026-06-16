@@ -7,12 +7,12 @@ const CARDS = [
   { key: 'provisionadas', label: 'Provisionadas',  color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-blue-200',    dot: 'bg-blue-400' },
 ];
 
-export default function PayableStatusCards({ byStatus }) {
+export default function PayableStatusCards({ byStatus, incluirCartao }) {
   if (!byStatus) return null;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {CARDS.map(c => {
-        const s = byStatus[c.key] || { total: 0, count: 0 };
+        const s = byStatus[c.key] || { total: 0, count: 0, jaContado: 0 };
         return (
           <div key={c.key} className={`rounded-xl border ${c.border} ${c.bg} p-4`}>
             <div className="flex items-center gap-2 mb-2">
@@ -21,6 +21,12 @@ export default function PayableStatusCards({ byStatus }) {
             </div>
             <div className={`text-xl font-bold ${c.color}`}>{fmt(s.total)}</div>
             <div className="text-xs text-slate-400 mt-0.5">{s.count} {s.count === 1 ? 'item' : 'itens'}</div>
+            {/* Bug 6: sublinha "já contados em Atividade" */}
+            {incluirCartao && s.jaContado > 0 && (
+              <div className="text-[10px] text-slate-400 mt-1 border-t border-dashed border-slate-200 pt-1">
+                {fmt(s.jaContado)} já contados em Atividade
+              </div>
+            )}
           </div>
         );
       })}

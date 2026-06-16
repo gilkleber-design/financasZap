@@ -16,11 +16,22 @@ Deno.serve(async (req) => {
             ]
         });
 
-        const safeMembers = familyMembers.map(u => ({
+        // Também inclui usuários que ainda não têm family_id (recém convidados)
+        const allUsers = await base44.asServiceRole.entities.User.filter({});
+        const pendingMembers = allUsers.filter(u =>
+            !u.family_id &&
+            u.id !== user.id &&
+            !familyMembers.find(fm => fm.id === u.id)
+        );
+
+        const allMembers = [...familyMembers, ...pendingMembers];
+
+        const safeMembers = allMembers.map(u => ({
             id: u.id,
             full_name: u.full_name,
             email: u.email,
             role: u.role,
+            family_id: u.family_id || u.data?.family_id || null,
             is_owner: u.id === targetFamilyId
         }));
 

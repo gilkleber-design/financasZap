@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Trash2, Building2, MessageSquare, CreditCard, Landmark, Tag, ChevronDown, ChevronUp, Pencil, UserPlus, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, Building2, MessageSquare, CreditCard, Landmark, Tag, ChevronDown, ChevronUp, Pencil, UserPlus, ShieldCheck, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 
@@ -88,6 +88,11 @@ export default function Settings() {
   const inviteMember = useMutation({
     mutationFn: (email) => base44.users.inviteUser(email, 'user'),
     onSuccess: () => {queryClient.invalidateQueries(['workspace_members']);setShowInviteForm(false);setInviteEmail('');toast.success('Convite enviado!');}
+  });
+
+  const linkToFamily = useMutation({
+    mutationFn: (memberId) => base44.functions.invoke('setFamilyMember', { member_id: memberId }),
+    onSuccess: () => {queryClient.invalidateQueries(['workspace_members']);toast.success('Membro vinculado à família!');}
   });
 
 
@@ -200,9 +205,22 @@ export default function Settings() {
             <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
                <div className="flex items-center gap-3">
                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">{m.full_name?.substring(0, 2).toUpperCase() || '??'}</div>
-                 <div><p className="text-sm font-medium">{m.full_name || m.email}</p><Badge variant={m.role === 'admin' ? 'default' : 'outline'} className="text-[9px] h-4">{m.role === 'admin' ? 'Admin' : 'Membro'}</Badge></div>
-               </div>
-               {m.id !== currentUser?.id && <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => deleteEntity('User', m.id)}><Trash2 className="w-3.5 h-3.5" /></Button>}
+                 <div>
+                     <p className="text-sm font-medium">{m.full_name || m.email}</p>
+                     <div className="flex items-center gap-1 flex-wrap">
+                       <Badge variant={m.role === 'admin' ? 'default' : 'outline'} className="text-[9px] h-4">{m.role === 'admin' ? 'Admin' : 'Membro'}</Badge>
+                       {!m.family_id && <Badge variant="outline" className="text-[9px] h-4 border-amber-400 text-amber-600">sem família</Badge>}
+                     </div>
+                   </div>
+                 </div>
+                 <div className="flex gap-1">
+                   {!m.family_id && m.id !== currentUser?.id && (
+                     <Button size="sm" variant="outline" className="h-8 text-xs text-primary border-primary/40" onClick={() => linkToFamily.mutate(m.id)} disabled={linkToFamily.isPending}>
+                       <Link2 className="w-3 h-3 mr-1" /> Vincular
+                     </Button>
+                   )}
+                   {m.id !== currentUser?.id && <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => deleteEntity('User', m.id)}><Trash2 className="w-3.5 h-3.5" /></Button>}
+                 </div>
              </div>
             )}
          </div>

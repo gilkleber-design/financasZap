@@ -6,6 +6,8 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+        const payload = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
+
         // Busca todos os payables da família
         const payables = await base44.entities.Payable.list('-due_date', 5000);
 
@@ -57,6 +59,18 @@ Deno.serve(async (req) => {
         const resumoPorPar = Object.entries(porPar)
             .map(([par, data]) => ({ par, count: data.count, total: data.total, items: data.items }))
             .sort((a, b) => b.count - a.count);
+
+        // Modo fix: corrige competencia = due_date para todos os divergentes
+        const { fix } = payload || {};
+        if (fix) {
+            const fixed = [];
+            for (const p of divergentes) {
+                const newCompetencia = p.due_date.slice(0, 10);
+                await base44.entities.Payable.update(p.id, { competencia: newCompetencia });
+                fixed.push({ id: p.id, description: p.description, old: p.mes_competencia, new: newCompetencia.slice(0, 7) });
+            }
+            return Response.json({ fixed_count: fixed.length, fixed });
+        }
 
         return Response.json({
             total_payables: payables.length,

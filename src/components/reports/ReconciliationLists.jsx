@@ -1,21 +1,22 @@
-import { useMemo } from 'react';
 import { ArrowUpRight, AlertTriangle } from 'lucide-react';
-import { categorizeByRoot } from '@/lib/categoryHierarchy';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-const STATUS_LABEL = {
-  pending: 'Pendente',
-  provisioned: 'Provisionado',
-  overdue: 'Vencido',
-};
+const STATUS_LABEL = { pending: 'Pendente', provisioned: 'Provisionado', overdue: 'Vencido' };
 
-function statusLabel(p) {
-  const today = new Date().toISOString().slice(0, 10);
-  if (p.status === 'pending' && p.due_date < today) return 'Vencido';
-  return STATUS_LABEL[p.status] || p.status;
+function safeDate(d) {
+  try {
+    const s = String(d);
+    const [y, m, day] = s.slice(0, 10).split('-');
+    return `${day}/${m}`;
+  } catch { return '--'; }
+}
+
+function monthLabel(m) {
+  if (!m) return '?';
+  const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const [y, mo] = m.split('-');
+  return `${months[Number(mo) - 1]}/${String(y).slice(2)}`;
 }
 
 function ListCard({ icon: Icon, iconColor, title, subtitle, count, total, items, renderRow }) {
@@ -27,9 +28,7 @@ function ListCard({ icon: Icon, iconColor, title, subtitle, count, total, items,
           <div className="font-semibold text-sm text-slate-800">{title}</div>
           <div className="text-[11px] text-slate-400">{subtitle}</div>
         </div>
-        <div className="text-right shrink-0">
-          <div className="text-xs font-bold text-slate-600">{count} itens · {fmt(total)}</div>
-        </div>
+        <div className="text-xs font-bold text-slate-600 shrink-0">{count} itens · {fmt(total)}</div>
       </div>
       {items.length === 0 ? (
         <div className="py-6 text-center text-sm text-slate-400">Nenhum item</div>
@@ -42,144 +41,79 @@ function ListCard({ icon: Icon, iconColor, title, subtitle, count, total, items,
   );
 }
 
-export default function ReconciliationLists({ transactions, payables, categories, selectedMonthStr }) {
-  // 3.2 Saiu sem obrigação
-  const saiuSemObrigacao = useMemo(() => {
-    return transactions.filter(t =>
-      t.type === 'expense' &&
-      format(new Date(t.date), 'yyyy-MM') === selectedMonthStr &&
-      !t.payable_id
-    );
-  }, [transactions, selectedMonthStr]);
-
-  // IDs de payables já conciliados (têm Transaction apontando pra eles)
-  const conciliatedPayableIds = useMemo(() => {
-    const ids = new Set();
-    transactions.forEach(t => { if (t.payable_id) ids.add(t.payable_id); });
-    return ids;
-  }, [transactions]);
-
-  // 3.3 Devia mas não saiu
-  const deviasMasNaoSaiu = useMemo(() => {
-    return payables.filter(p => {
-      const ref = p.competencia || p.due_date;
-      if (!ref) return false;
-      if (format(new Date(ref), 'yyyy-MM') !== selectedMonthStr) return false;
-      if (p.status === 'paid' || p.status === 'conciliated') return false;
-      if (conciliatedPayableIds.has(p.id)) return false;
-      return true;
-    });
-  }, [payables, selectedMonthStr, conciliatedPayableIds]);
-
-  // 3.4 Limbo
-  const limbo = useMemo(() => {
-    const payableMap = {};
-    payables.forEach(p => { payableMap[p.id] = p; });
-
-    return transactions.filter(t => {
-      if (t.type !== 'expense') return false;
-      if (format(new Date(t.date), 'yyyy-MM') !== selectedMonthStr) return false;
-      if (!t.payable_id) return false;
-      const p = payableMap[t.payable_id];
-      if (!p) return false;
-      const pRef = p.competencia || p.due_date;
-      if (!pRef) return false;
-      return format(new Date(pRef), 'yyyy-MM') !== selectedMonthStr;
-    }).map(t => {
-      const p = payableMap[t.payable_id];
-      const pRef = p?.competencia || p?.due_date;
-      return {
-        ...t,
-        payable_month: pRef ? format(new Date(pRef), 'MMM/yy', { locale: ptBR }) : '?',
-        tx_month: format(new Date(t.date), 'MMM/yy', { locale: ptBR }),
-      };
-    });
-  }, [transactions, payables, selectedMonthStr]);
-
-  const totalSaiu = saiuSemObrigacao.reduce((s, t) => s + (t.amount || 0), 0);
-  const totalDevia = deviasMasNaoSaiu.reduce((s, p) => s + (p.amount || 0), 0);
-  const totalLimbo = limbo.reduce((s, t) => s + (t.amount || 0), 0);
+export default function ReconciliationLists({ saiuSemObrigacao, deviaMasNaoSaiu, limbo }) {
+  const sso = saiuSemObrigacao || { total: 0, count: 0, items: [] };
+  const dmns = deviaMasNaoSaiu || { total: 0, count: 0, items: [] };
+  const limboData = limbo || { total: 0, count: 0, items: [] };
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* 3.2 Saiu sem obrigação */}
         <ListCard
           icon={ArrowUpRight}
           iconColor="text-slate-500"
           title="Saiu sem obrigação"
           subtitle="Transações avulsas — sem payable correspondente"
-          count={saiuSemObrigacao.length}
-          total={totalSaiu}
-          items={saiuSemObrigacao}
-          renderRow={(t) => {
-            const { rootName, rootColor } = categorizeByRoot(t, categories);
-            return (
-              <div key={t.id} className="px-4 py-2.5 flex items-center gap-3">
-                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: rootColor }} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-slate-700 truncate">{t.description}</div>
-                  <div className="text-[10px] text-slate-400">{format(new Date(t.date), 'dd/MM')} · {rootName}</div>
-                </div>
-                <div className="text-xs font-bold text-slate-800 shrink-0">{fmt(t.amount)}</div>
+          count={sso.count}
+          total={sso.total}
+          items={sso.items}
+          renderRow={(item) => (
+            <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.resolver?.rootColor || '#94A3B8' }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-slate-700 truncate">{item.description}</div>
+                <div className="text-[10px] text-slate-400">{safeDate(item.date)} · {item.resolver?.rootName || '—'}</div>
               </div>
-            );
-          }}
+              <div className="text-xs font-bold text-slate-800 shrink-0">{fmt(item.amount || item._amount)}</div>
+            </div>
+          )}
         />
 
-        {/* 3.3 Devia mas não saiu */}
         <ListCard
           icon={AlertTriangle}
           iconColor="text-amber-500"
           title="Devia mas não saiu"
           subtitle="Payables do mês sem transação registrada"
-          count={deviasMasNaoSaiu.length}
-          total={totalDevia}
-          items={deviasMasNaoSaiu}
-          renderRow={(p) => {
-            const { rootName, rootColor } = categorizeByRoot(p, categories);
-            return (
-              <div key={p.id} className="px-4 py-2.5 flex items-center gap-3">
-                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: rootColor }} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-slate-700 truncate">{p.description}</div>
-                  <div className="text-[10px] text-slate-400">{p.due_date ? format(new Date(p.due_date), 'dd/MM') : '--'} · {rootName}</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-xs font-bold text-slate-800">{fmt(p.amount)}</div>
-                  <div className="text-[10px] text-amber-600">{statusLabel(p)}</div>
-                </div>
+          count={dmns.count}
+          total={dmns.total}
+          items={dmns.items}
+          renderRow={(item) => (
+            <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.resolver?.rootColor || '#94A3B8' }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-slate-700 truncate">{item.description}</div>
+                <div className="text-[10px] text-slate-400">{item.dueDate ? safeDate(item.dueDate) : safeDate(item.due_date)} · {item.resolver?.rootName || '—'}</div>
               </div>
-            );
-          }}
+              <div className="text-right shrink-0">
+                <div className="text-xs font-bold text-slate-800">{fmt(item.amount || item._amount)}</div>
+                <div className="text-[10px] text-amber-600">{STATUS_LABEL[item.status] || item.status}</div>
+              </div>
+            </div>
+          )}
         />
       </div>
 
-      {/* 3.4 Limbo */}
       <ListCard
         icon={AlertTriangle}
         iconColor="text-red-500"
         title="Limbo — saiu este mês mas o payable está em outro"
         subtitle="Estas despesas somem da aba Contas a Pagar porque a competência do payable não bate com a data da transação"
-        count={limbo.length}
-        total={totalLimbo}
-        items={limbo}
-        renderRow={(t) => {
-          const { rootName, rootColor } = categorizeByRoot(t, categories);
-          return (
-            <div key={t.id} className="px-4 py-2.5 flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: rootColor }} />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-slate-700 truncate">{t.description}</div>
-                <div className="text-[10px] text-slate-400">{format(new Date(t.date), 'dd/MM')} · {rootName}</div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-xs font-bold text-slate-800">{fmt(t.amount)}</div>
-                <div className="text-[10px] text-red-500 font-medium">{t.payable_month} → {t.tx_month}</div>
-              </div>
+        count={limboData.count}
+        total={limboData.total}
+        items={limboData.items}
+        renderRow={(item) => (
+          <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
+            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.resolver?.rootColor || '#94A3B8' }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-slate-700 truncate">{item.description}</div>
+              <div className="text-[10px] text-slate-400">{safeDate(item.date)} · {item.resolver?.rootName || '—'}</div>
             </div>
-          );
-        }}
+            <div className="text-right shrink-0">
+              <div className="text-xs font-bold text-slate-800">{fmt(item.amount || item._amount)}</div>
+              <div className="text-[10px] text-red-500 font-medium">{monthLabel(item.payableCompetenciaMonth)} → {monthLabel(String(item.date).slice(0, 7))}</div>
+            </div>
+          </div>
+        )}
       />
     </div>
   );

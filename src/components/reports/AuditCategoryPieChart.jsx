@@ -1,38 +1,20 @@
-import { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { categorizeByRoot } from '@/lib/categoryHierarchy';
 
-const fmt = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-export default function AuditCategoryPieChart({ auditData, categories }) {
-  const chartData = useMemo(() => {
-    const grouped = {};
-    (auditData || []).forEach(item => {
-      const { rootId, rootName, rootColor } = categorizeByRoot(item, categories || []);
-      if (!grouped[rootId]) {
-        grouped[rootId] = { name: rootName, value: 0, color: rootColor };
-      }
-      grouped[rootId].value += Number(item.amount || 0);
-    });
-
-    return Object.values(grouped).sort((a, b) => b.value - a.value);
-  }, [auditData, categories]);
-
-  const total = chartData.reduce((sum, item) => sum + item.value, 0);
-
-  if (!chartData.length) return null;
+export default function AuditCategoryPieChart({ aggregation = [], onCategoryClick }) {
+  const total = aggregation.reduce((s, i) => s + i.total, 0);
+  if (!aggregation.length) return null;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr] items-center rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-      <div className="h-[260px] w-full">
+    <div className="grid gap-6 lg:grid-cols-[260px_1fr] items-center rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="h-[240px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
-              {chartData.map((entry) => (
-                <Cell key={entry.name} fill={entry.color} />
-              ))}
+            <Pie data={aggregation.map(i => ({ name: i.categoryName, value: i.total }))} cx="50%" cy="50%" innerRadius={55} outerRadius={88} paddingAngle={3} dataKey="value">
+              {aggregation.map((item, i) => <Cell key={i} fill={item.color || '#94A3B8'} />)}
             </Pie>
-            <Tooltip formatter={(value) => fmt(value)} />
+            <Tooltip formatter={(v) => fmt(v)} />
           </PieChart>
         </ResponsiveContainer>
       </div>
@@ -42,21 +24,20 @@ export default function AuditCategoryPieChart({ auditData, categories }) {
           <h3 className="text-base font-semibold text-slate-950">Despesas por categoria</h3>
           <p className="text-sm text-muted-foreground">Total: {fmt(total)}</p>
         </div>
-
-        <div className="space-y-2 max-h-[260px] overflow-auto pr-1">
-          {chartData.map((item) => {
-            const percent = total > 0 ? (item.value / total) * 100 : 0;
+        <div className="space-y-1.5 max-h-[240px] overflow-auto pr-1">
+          {aggregation.map((item, i) => {
+            const pct = total > 0 ? (item.total / total * 100).toFixed(1) : 0;
             return (
-              <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                  <span className="truncate text-sm font-medium text-slate-700">{item.name}</span>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold text-slate-950">{fmt(item.value)}</div>
-                  <div className="text-xs text-muted-foreground">{percent.toFixed(1)}%</div>
-                </div>
-              </div>
+              <button
+                key={i}
+                onClick={() => onCategoryClick && onCategoryClick({ categoryName: item.categoryName, total: item.total, items: item.items })}
+                className="w-full flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 hover:bg-slate-100 transition-colors text-left"
+              >
+                <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: item.color || '#94A3B8' }} />
+                <span className="flex-1 truncate text-sm font-medium text-slate-700">{item.categoryName}</span>
+                <span className="text-sm font-semibold text-slate-950 shrink-0">{fmt(item.total)}</span>
+                <span className="text-xs text-muted-foreground w-10 text-right shrink-0">{pct}%</span>
+              </button>
             );
           })}
         </div>

@@ -6,13 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Search } from 'lucide-react';
 import { format } from 'date-fns';
 
-const CATEGORY_LABELS = {
-  alimentacao: 'Alimentação', transporte: 'Transporte', moradia: 'Moradia',
-  saude: 'Saúde', educacao: 'Educação', lazer: 'Lazer', vestuario: 'Vestuário',
-  servicos: 'Serviços', impostos: 'Impostos', transferencia_liquidacao: 'Transferência',
-  outros: 'Outros',
-};
-
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 const sanitizeDescription = (desc) => {
@@ -20,15 +13,32 @@ const sanitizeDescription = (desc) => {
   return desc.replace(/\s+(SAO PAULO|SALVADOR|CURITIBA|VITORIA|RIO DE JANEIRO|BELO HORIZONTE|BRASILIA|FORTALEZA|RECIFE|MANAUS|PORTO ALEGRE|BRA|BR)$/gi, '').trim();
 };
 
+const STATUS_CONFIG = {
+  paid:        { label: 'Pago',         className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  conciliated: { label: 'Conciliado',   className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  pending:     { label: 'Pendente',     className: 'bg-slate-100 text-slate-600 border-slate-200' },
+  provisioned: { label: 'Provisionado', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+};
+
+function statusBadge(item) {
+  const today = new Date().toISOString().slice(0, 10);
+  let key = item.status || 'pending';
+  // Vencido = pending com due_date passado
+  const label = key === 'pending' && item.due_date < today ? 'Vencido' : (STATUS_CONFIG[key]?.label || key);
+  const cls = key === 'pending' && item.due_date < today
+    ? 'bg-red-100 text-red-700 border-red-200'
+    : (STATUS_CONFIG[key]?.className || 'bg-slate-100 text-slate-600');
+  return <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border ${cls}`}>{label}</span>;
+}
+
 export default function AuditReportAccordion({ payables = [], onRowClick, categories = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [openCategories, setOpenCategories] = useState([]);
 
   const organizedData = useMemo(() => {
-    // 1. Mapas de busca por ID e por Nome (Slug) para evitar erros de vínculo
     const catMap = {};
     const slugToId = {};
-    categories.forEach(c => { 
+    categories.forEach(c => {
       catMap[String(c.id)] = c;
       if (c.slug) slugToId[c.slug.toLowerCase()] = String(c.id);
     });
@@ -37,17 +47,15 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
     const subcategoryIdsFound = new Set();
 
     payables.forEach(item => {
-      const desc = sanitizeDescription(item.description).toLowerCase();
+      const desc = sanitizeDescription(item.description || '').toLowerCase();
       if (searchTerm && !desc.includes(searchTerm.toLowerCase())) return;
 
-      // Tenta achar o ID da categoria, seja pelo ID salvo ou pelo slug
       let currentCatId = item.category_id ? String(item.category_id) : (slugToId[item.category?.toLowerCase()] || 'outros');
       let currentCatData = catMap[currentCatId];
 
       let rootId = currentCatId;
       let subId = null;
 
-      // LÓGICA DE ANINHAMENTO FORÇADA
       if (currentCatData && currentCatData.parent_id) {
         rootId = String(currentCatData.parent_id);
         subId = currentCatId;
@@ -55,22 +63,23 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
       }
 
       if (!groups[rootId]) {
-        groups[rootId] = { 
-          id: rootId, 
-          label: catMap[rootId]?.name || CATEGORY_LABELS[rootId] || rootId, 
-          items: [], 
+        groups[rootId] = {
+          id: rootId,
+          label: catMap[rootId]?.name || rootId,
+          color: catMap[rootId]?.color || '#94A3B8',
+          items: [],
           subcategories: {},
-          total: 0 
+          total: 0
         };
       }
 
       if (subId) {
         if (!groups[rootId].subcategories[subId]) {
-          groups[rootId].subcategories[subId] = { 
-            id: subId, 
-            label: catMap[subId]?.name || subId, 
-            items: [], 
-            total: 0 
+          groups[rootId].subcategories[subId] = {
+            id: subId,
+            label: catMap[subId]?.name || subId,
+            items: [],
+            total: 0
           };
         }
         groups[rootId].subcategories[subId].items.push(item);
@@ -78,14 +87,13 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
       } else {
         groups[rootId].items.push(item);
       }
-      
+
       groups[rootId].total += (item.amount || 0);
     });
 
     return Object.values(groups)
       .filter(group => !subcategoryIdsFound.has(String(group.id)))
       .sort((a, b) => b.total - a.total);
-
   }, [payables, searchTerm, categories]);
 
   const totalGeral = organizedData.reduce((s, c) => s + c.total, 0);
@@ -95,10 +103,10 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
       <div className="flex gap-3 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar por descrição..." 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
+          <Input
+            placeholder="Buscar por descrição..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-9"
           />
         </div>
@@ -109,7 +117,7 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
       ) : (
         <Card className="border-0 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Auditoria de Despesas</CardTitle>
+            <CardTitle className="text-base">Detalhamento por categoria</CardTitle>
             <Badge variant="secondary" className="text-sm">{fmt(totalGeral)}</Badge>
           </CardHeader>
           <CardContent>
@@ -118,7 +126,10 @@ export default function AuditReportAccordion({ payables = [], onRowClick, catego
                 <AccordionItem key={cat.id} value={String(cat.id)} className="border-b last:border-0">
                   <AccordionTrigger className="py-4 hover:no-underline">
                     <div className="flex items-center justify-between w-full pr-4">
-                      <span className="font-bold text-slate-700 capitalize">{cat.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                        <span className="font-bold text-slate-700 capitalize">{cat.label}</span>
+                      </div>
                       <Badge variant="default" className="bg-primary/90">{fmt(cat.total)}</Badge>
                     </div>
                   </AccordionTrigger>
@@ -152,18 +163,20 @@ function TableRender({ items, onRowClick, isSub = false }) {
           <tr>
             <th className="text-left py-2 px-1 font-medium">Data</th>
             <th className="text-left py-2 px-1 font-medium">Descrição</th>
+            <th className="text-center py-2 px-1 font-medium">Status</th>
             <th className="text-right py-2 px-1 font-medium">Valor</th>
             <th className="text-center py-2 px-1 font-medium w-16">Parcela</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {items.map(item => (
-            <tr key={item.id} onClick={() => onRowClick(item)} className="hover:bg-primary/5 cursor-pointer transition-colors">
-              <td className="py-2 px-1">{format(new Date(item.due_date), 'dd/MM/yyyy')}</td>
+            <tr key={item.id} onClick={() => onRowClick && onRowClick(item)} className="hover:bg-primary/5 cursor-pointer transition-colors">
+              <td className="py-2 px-1 whitespace-nowrap">{format(new Date(item.due_date), 'dd/MM/yy')}</td>
               <td className="py-2 px-1 font-medium text-slate-700">{sanitizeDescription(item.description)}</td>
+              <td className="py-2 px-1 text-center">{statusBadge(item)}</td>
               <td className="py-2 px-1 text-right font-bold text-slate-900">{fmt(item.amount)}</td>
               <td className="py-2 px-1 text-center text-[10px]">
-                {item.installment_number ? `${item.installment_number}/${item.installment_count || item.installment_total}` : '-'}
+                {item.installment_number ? `${item.installment_number}/${item.installment_count || item.installment_total || '?'}` : '-'}
               </td>
             </tr>
           ))}

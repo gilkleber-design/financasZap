@@ -1,6 +1,4 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-
-const USE_NEW_REPORT_DATA = false;
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card } from '@/components/ui/card';
@@ -16,6 +14,10 @@ import ConsolidatedReportModal from '@/components/reports/ConsolidatedReportModa
 import AuditCategoryPieChart from '@/components/reports/AuditCategoryPieChart';
 import OverviewPlannedVsActual from '@/components/reports/OverviewPlannedVsActual';
 import OverviewFiscalSummary from '@/components/reports/OverviewFiscalSummary';
+import PayableStatusCards from '@/components/reports/PayableStatusCards';
+import ReconciliationConfront from '@/components/reports/ReconciliationConfront';
+import ReconciliationLists from '@/components/reports/ReconciliationLists';
+import { categorizeByRoot } from '@/lib/categoryHierarchy';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -25,83 +27,7 @@ export default function Reports() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [consolidatedModalOpen, setConsolidatedModalOpen] = useState(false);
 
-  const searchParams = new URLSearchParams(window.location.search);
-  const verifyMode = searchParams.get('verify') === '1';
-  const debugMode = searchParams.get('debug') === '1';
-  const [debugData, setDebugData] = useState(null);
-  const [isDebugLoading, setIsDebugLoading] = useState(false);
-
-  const runDebug = async () => {
-    setIsDebugLoading(true);
-    try {
-      const res = await base44.functions.invoke('debugMayExpenses');
-      setDebugData(res.data);
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setIsDebugLoading(false);
-  };
-
-  const [migrateData, setMigrateData] = useState(null);
-  const [isMigrateLoading, setIsMigrateLoading] = useState(false);
-
-  const runMigratePreview = async () => {
-    setIsMigrateLoading(true);
-    try {
-      const res = await base44.functions.invoke('migrateFaturasToTransfer', {});
-      setMigrateData(res.data);
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setIsMigrateLoading(false);
-  };
-
-  const [diagData, setDiagData] = useState(null);
-  const [isDiagLoading, setIsDiagLoading] = useState(false);
-  const runDiagnostics = async () => {
-    setIsDiagLoading(true);
-    try {
-      const res = await base44.functions.invoke('diagnosticTests', {});
-      setDiagData(res.data);
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setIsDiagLoading(false);
-  };
-
-  const [createCatData, setCreateCatData] = useState(null);
-  const [isCreateCatLoading, setIsCreateCatLoading] = useState(false);
-  const runCreateFaturaCategory = async () => {
-    setIsCreateCatLoading(true);
-    try {
-      const res = await base44.functions.invoke('createFaturaCategory', {});
-      setCreateCatData(res.data);
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setIsCreateCatLoading(false);
-  };
-
-  const runMigrateExecute = async () => {
-    if (!window.confirm(`Confirma migração de ${migrateData?.to_update_count} transações para categoria "fatura"?`)) return;
-    setIsMigrateLoading(true);
-    try {
-      const res = await base44.functions.invoke('migrateFaturasToTransfer', { execute: true });
-      setMigrateData(res.data);
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-    setIsMigrateLoading(false);
-  };
-
-  const { data: newReportRes } = useQuery({
-    queryKey: ['reportData', currentMonth.getMonth() + 1, currentMonth.getFullYear()],
-    queryFn: () => base44.functions.invoke('getReportData', { month: currentMonth.getMonth() + 1, year: currentMonth.getFullYear() }),
-    enabled: USE_NEW_REPORT_DATA || verifyMode,
-  });
-  const newReport = newReportRes?.data;
-
-  const currentYear = new Date().getFullYear();
+  const selectedMonthStr = format(currentMonth, 'yyyy-MM');
   const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
 
@@ -140,174 +66,83 @@ export default function Reports() {
     setDrawerOpen(true);
   };
 
-  const categoryBySlug = useMemo(
-    () => categories.reduce((acc, category) => {
-      const slug = String(category.slug || '').toLowerCase();
-      if (slug) acc[slug] = category;
-      return acc;
-    }, {}),
-    [categories]
-  );
+  // ---- ABA 1: REALIZADO ----
+  // Fonte única: transactions filtradas por t.date no mês
+  const monthTx = useMemo(() => {
+    return transactions.filter(t => t.date >= monthStart && t.date <= monthEnd);
+  }, [transactions, monthStart, monthEnd]);
 
-  const getCategoryNameBySlug = useCallback((slug) => {
-    const normalizedSlug = String(slug || '').toLowerCase();
-    return categoryBySlug[normalizedSlug]?.name || 'Outros';
-  }, [categoryBySlug]);
-
-  // ---- LÓGICA DE AUDITORIA ----
-  const selectedMonthStr = format(currentMonth, 'yyyy-MM');
-  
-  const filteredPayables = payables.filter(p => {
-    if (p.is_card_invoice_payable) return false; // fatura consolidada: itens já contam individualmente
-    // Parcelas de cartão competem no vencimento de cada parcela; demais usam competencia.
-    const ref = p.installment_group_id ? p.due_date : (p.competencia || p.due_date);
-    const payableMonth = format(new Date(ref), 'yyyy-MM');
-    return payableMonth === selectedMonthStr;
-  });
-
-  const orphanTransactions = transactions.filter(t => 
-    t.type === 'expense' && 
-    !t.payable_id && 
-    format(new Date(t.date), 'yyyy-MM') === selectedMonthStr
-  );
-
-  const mappedOrphans = orphanTransactions.map(t => ({
-    id: t.id,
-    description: `${t.description} (Avulsa)`,
-    amount: t.amount,
-    due_date: t.date,
-    competencia: t.date,
-    category: t.category,
-    status: 'paid', 
-    transaction_id: t.id,
-    is_orphan: true 
-  }));
-
-  const auditData = [...filteredPayables, ...mappedOrphans];
-  // -----------------------------------------------
-
-  // Fluxo de Caixa (Últimos 6 meses)
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = subMonths(new Date(), 5 - i);
+  // Fluxo de Caixa — 6 meses anteriores ao mês selecionado
+  const months = useMemo(() => Array.from({ length: 6 }, (_, i) => {
+    const d = subMonths(currentMonth, 5 - i);
     const start = format(startOfMonth(d), 'yyyy-MM-dd');
     const end = format(endOfMonth(d), 'yyyy-MM-dd');
-    const monthFiltered = transactions.filter(t => t.date >= start && t.date <= end && new Date(t.date).getFullYear() === currentYear);
-    const income = monthFiltered.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount || t.amount), 0);
+    const monthFiltered = transactions.filter(t => t.date >= start && t.date <= end);
+    const income = monthFiltered.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount ?? t.amount), 0);
     const expense = monthFiltered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     return {
-      name: format(d, 'MMM', { locale: ptBR }),
+      name: format(d, 'MMM/yy', { locale: ptBR }),
       Receitas: income,
       Despesas: expense,
       Saldo: income - expense,
     };
-  });
+  }), [transactions, currentMonth]);
 
-  // Estabilizando monthTx para o Linter não reclamar
-  const monthTx = useMemo(() => {
-    return transactions.filter(t => t.date >= monthStart && t.date <= monthEnd && new Date(t.date).getFullYear() === currentYear);
-  }, [transactions, monthStart, monthEnd, currentYear]);
-
-  // Parcelas/contas de CARTÃO do mês (regime de competência).
-  // Compras parceladas no cartão viram Payable (sem Transaction), então
-  // precisam ser somadas às despesas por categoria pela competência.
-  const cardPayablesThisMonth = useMemo(() => {
-    return payables.filter(p => {
-      if (p.origin_type !== 'card') return false;
-      if (p.is_card_invoice_payable) return false; // ignora a fatura consolidada (evita dupla contagem)
-      // Parcelas de cartão competem no mês do vencimento de cada parcela (due_date),
-      // pois a competencia costuma vir igual à data da compra em todas as parcelas.
-      const ref = p.installment_group_id ? p.due_date : (p.competencia || p.due_date);
-      if (!ref) return false;
-      return format(new Date(ref), 'yyyy-MM') === selectedMonthStr;
+  // Donut despesas por categoria — agrupado por raiz via categorizeByRoot
+  const categoryData = useMemo(() => {
+    const grouped = {};
+    monthTx.filter(t => t.type === 'expense').forEach(t => {
+      const { rootId, rootName, rootColor } = categorizeByRoot(t, categories);
+      if (!grouped[rootId]) grouped[rootId] = { name: rootName, color: rootColor, value: 0 };
+      grouped[rootId].value += (t.amount || 0);
     });
-  }, [payables, selectedMonthStr]);
-
-  // Agrupamento de Categorias
-  const mapaCategoria = {};
-  let valorPassivosTransicao = 0;
-
-  const acumularDespesa = (slug, amount) => {
-    if (slug === 'passivos_de_transicao') {
-      valorPassivosTransicao += amount;
-      return;
+    const all = Object.values(grouped).sort((a, b) => b.value - a.value);
+    if (all.length > 6) {
+      const others = all.slice(6).reduce((s, i) => s + i.value, 0);
+      return [...all.slice(0, 6), { name: 'Demais Categorias', color: '#E2E8F0', value: others }];
     }
-    if (!mapaCategoria[slug]) mapaCategoria[slug] = 0;
-    mapaCategoria[slug] += amount;
-  };
+    return all;
+  }, [monthTx, categories]);
 
-  monthTx.filter(t => t.type === 'expense').forEach(t => {
-    acumularDespesa(String(t.category || 'outros').toLowerCase(), t.amount || 0);
-  });
-
-  // Nota: 'passivos_de_transicao' ainda excluída abaixo via acumularDespesa (hardcode local mantido só para essa categoria legada)
-
-  cardPayablesThisMonth.forEach(p => {
-    acumularDespesa(String(p.category || 'outros').toLowerCase(), p.amount || 0);
-  });
-
-  // Ordena todas as categorias
-  const allCategoryData = Object.entries(mapaCategoria)
-    .map(([slug, value]) => ({
-      name: getCategoryNameBySlug(slug),
-      color: categoryBySlug[slug]?.color || '#94A3B8', 
-      value
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  // Regra de Triagem: Top 6 + "Demais Categorias"
-  let categoryData = allCategoryData;
-  if (allCategoryData.length > 6) {
-    const top6 = allCategoryData.slice(0, 6);
-    const othersValue = allCategoryData.slice(6).reduce((sum, item) => sum + item.value, 0);
-    categoryData = [
-      ...top6,
-      { name: 'Demais Categorias', color: '#E2E8F0', value: othersValue } 
-    ];
-  }
-
-  // Orçado vs Realizado
+  // Planejado vs Realizado — agrupado por categoria raiz
   const plannedVsActual = useMemo(() => {
-    const categoryIdToSlug = new Map(categories.map((category) => [category.id, String(category.slug || '').toLowerCase()]));
-
-    const budgetBySlug = budgets.reduce((acc, budget) => {
-      const slug = categoryIdToSlug.get(budget.category_id);
-      if (!slug) return acc;
-      if (budget.month === currentMonth.getMonth() + 1 && budget.year === currentMonth.getFullYear()) {
-        acc[slug] = Number(budget.amount || 0);
+    const categoryIdToSlug = new Map(categories.map(c => [c.id, String(c.slug || '').toLowerCase()]));
+    const budgetBySlug = budgets.reduce((acc, b) => {
+      const slug = categoryIdToSlug.get(b.category_id);
+      if (slug && b.month === currentMonth.getMonth() + 1 && b.year === currentMonth.getFullYear()) {
+        acc[slug] = Number(b.amount || 0);
       }
       return acc;
     }, {});
 
-    const actualBySlug = monthTx
-      .filter((tx) => tx.type === 'expense')
-      .reduce((acc, tx) => {
-        const slug = String(tx.category || 'outros').toLowerCase();
-        if (slug === 'passivos_de_transicao') return acc;
-        acc[slug] = (acc[slug] || 0) + Number(tx.amount || 0);
-        return acc;
-      }, {});
-
-    // Inclui parcelas/contas de cartão do mês (competência) no realizado
-    cardPayablesThisMonth.forEach((p) => {
-      const slug = String(p.category || 'outros').toLowerCase();
-      if (slug === 'passivos_de_transicao') return;
-      actualBySlug[slug] = (actualBySlug[slug] || 0) + Number(p.amount || 0);
+    // Também montar budget por root category id
+    const budgetByRootId = {};
+    budgets.forEach(b => {
+      if (b.month !== currentMonth.getMonth() + 1 || b.year !== currentMonth.getFullYear()) return;
+      const cat = categories.find(c => c.id === b.category_id);
+      if (!cat) return;
+      const rootId = cat.parent_id ? cat.parent_id : cat.id;
+      budgetByRootId[rootId] = (budgetByRootId[rootId] || 0) + Number(b.amount || 0);
     });
 
-    const items = Object.keys({ ...budgetBySlug, ...actualBySlug }).map((slug) => {
-      const actual = actualBySlug[slug] || 0;
-      const limit = Number(budgetBySlug[slug] || 0);
+    const actualByRootId = {};
+    const rootMeta = {};
+    monthTx.filter(t => t.type === 'expense').forEach(t => {
+      const { rootId, rootName, rootColor } = categorizeByRoot(t, categories);
+      if (!actualByRootId[rootId]) actualByRootId[rootId] = 0;
+      actualByRootId[rootId] += Number(t.amount || 0);
+      if (!rootMeta[rootId]) rootMeta[rootId] = { name: rootName, slug: rootId };
+    });
+
+    const allIds = new Set([...Object.keys(budgetByRootId), ...Object.keys(actualByRootId)]);
+    const items = Array.from(allIds).map(rootId => {
+      const actual = actualByRootId[rootId] || 0;
+      const limit = budgetByRootId[rootId] || 0;
       const hasLimit = limit > 0;
       const percent = hasLimit ? (actual / limit) * 100 : 0;
-
-      return {
-        slug,
-        name: getCategoryNameBySlug(slug),
-        actual,
-        limit,
-        hasLimit,
-        percent,
-      };
+      const cat = categories.find(c => c.id === rootId);
+      const name = cat?.name || rootMeta[rootId]?.name || rootId;
+      return { slug: rootId, name, actual, limit, hasLimit, percent };
     });
 
     return items.sort((a, b) => {
@@ -316,10 +151,10 @@ export default function Reports() {
       if (b.hasLimit) return 1;
       return b.actual - a.actual;
     });
-  }, [budgets, categories, currentMonth, monthTx, getCategoryNameBySlug, cardPayablesThisMonth]);
+  }, [budgets, categories, currentMonth, monthTx]);
 
   // Resumo Fiscal
-  const receivedReceivables = receivables.filter((item) => item.status === 'received' && item.due_date >= monthStart && item.due_date <= monthEnd);
+  const receivedReceivables = receivables.filter(item => item.status === 'received' && item.due_date >= monthStart && item.due_date <= monthEnd);
   const fiscalBySource = receivedReceivables.reduce((acc, item) => {
     const key = item.income_source_id || 'outras';
     if (!acc[key]) acc[key] = { gross: 0, tax: 0 };
@@ -329,170 +164,34 @@ export default function Reports() {
     acc[key].tax += tax;
     return acc;
   }, {});
-
-  const totalGross = receivedReceivables.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const totalTax = Object.values(fiscalBySource).reduce((sum, item) => sum + item.tax, 0);
+  const totalGross = receivedReceivables.reduce((s, item) => s + Number(item.amount || 0), 0);
+  const totalTax = Object.values(fiscalBySource).reduce((s, item) => s + item.tax, 0);
   const totalNet = totalGross - totalTax;
   const effectiveRate = totalGross > 0 ? `${((totalTax / totalGross) * 100).toFixed(1)}%` : '0.0%';
   const sourceRows = Object.entries(fiscalBySource)
     .map(([sourceId, data]) => ({
-      name: sourceId === 'outras' ? 'Outras' : (incomeSources.find((source) => source.id === sourceId)?.name || 'PJ não identificada'),
+      name: sourceId === 'outras' ? 'Outras' : (incomeSources.find(s => s.id === sourceId)?.name || 'PJ não identificada'),
       tax: data.tax,
     }))
     .sort((a, b) => b.tax - a.tax);
 
-  // --- ADAPTERS INLINE ---
-  const adaptToLegacyPlannedItems = (byCategory) => {
-    if (!byCategory) return [];
-    const budgetBySlug = budgets.reduce((acc, budget) => {
-      const categoryIdToSlug = new Map(categories.map((category) => [category.id, String(category.slug || '').toLowerCase()]));
-      const slug = categoryIdToSlug.get(budget.category_id);
-      if (slug && budget.month === currentMonth.getMonth() + 1 && budget.year === currentMonth.getFullYear()) {
-        acc[slug] = Number(budget.amount || 0);
-      }
-      return acc;
-    }, {});
-    
-    const flattenCategories = (cats) => {
-        let result = [];
-        cats.forEach(c => {
-           result.push(c);
-           if (c.children) result.push(...flattenCategories(c.children));
-        });
-        return result;
-    };
-    
-    const allCats = flattenCategories(byCategory);
-    
-    const items = allCats.map(cat => {
-      const slug = cat.slug;
-      const actual = cat.paid;
-      const limit = Number(budgetBySlug[slug] || 0);
-      const hasLimit = limit > 0;
-      const percent = hasLimit ? (actual / limit) * 100 : 0;
-      return { slug, name: cat.name, actual, limit, hasLimit, percent };
-    });
-    
-    return items.sort((a, b) => {
-      if (a.hasLimit && b.hasLimit) return b.percent - a.percent;
-      if (a.hasLimit) return -1;
-      if (b.hasLimit) return 1;
-      return b.actual - a.actual;
-    });
-  };
+  // ---- ABA 2: CONTAS A PAGAR ----
+  // Fonte única: payables filtrados por competencia || due_date no mês (sem orphans)
+  const filteredPayables = useMemo(() => payables.filter(p => {
+    if (p.is_card_invoice_payable) return false;
+    const ref = p.competencia || p.due_date;
+    if (!ref) return false;
+    return format(new Date(ref), 'yyyy-MM') === selectedMonthStr;
+  }), [payables, selectedMonthStr]);
 
-  const adaptCashflow = (report) => {
-    if (!report?.cashflow_6m) return [];
-    return report.cashflow_6m.map(m => ({
-      name: m.label.split('/')[0],
-      Receitas: m.income_net,
-      Despesas: m.expense_gross,
-      Saldo: m.balance
-    }));
-  };
+  // ---- ABA 3: RECONCILIAÇÃO ----
+  const realizadoExpense = useMemo(() =>
+    monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0),
+  [monthTx]);
 
-  const adaptCategoryData = (byCategory) => {
-    if (!byCategory) return [];
-    const all = byCategory.map(c => ({
-      name: c.name,
-      color: c.color || '#94A3B8',
-      value: c.paid
-    })).filter(c => c.value > 0).sort((a,b) => b.value - a.value);
-    
-    if (all.length > 6) {
-      const top6 = all.slice(0, 6);
-      const others = all.slice(6).reduce((s, i) => s + i.value, 0);
-      return [...top6, { name: 'Demais Categorias', color: '#E2E8F0', value: others }];
-    }
-    return all;
-  };
-
-  const adaptFiscalSummary = (report) => {
-    if (!report?.fiscal) return { totalGross: 0, totalTax: 0, totalNet: 0, effectiveRate: '0.0%', sourceRows: [] };
-    const f = report.fiscal;
-    const sourceRows = (f.by_source || [])
-      .map(s => ({ name: s.source_name, tax: s.tax_amount }))
-      .sort((a, b) => b.tax - a.tax);
-    return {
-      totalGross: f.total_gross,
-      totalTax: f.total_tax,
-      totalNet: f.total_net,
-      effectiveRate: f.effective_rate,
-      sourceRows
-    };
-  };
-
-  const adaptAuditData = (report) => {
-    if (!report?.expense?.items) return [];
-    return report.expense.items.map(item => ({
-      ...item,
-      is_orphan: item._model === 'Transaction'
-    }));
-  };
-
-  const displayAuditData = USE_NEW_REPORT_DATA && newReport ? adaptAuditData(newReport) : auditData;
-  const displayMonths = USE_NEW_REPORT_DATA && newReport ? adaptCashflow(newReport) : months;
-  const displayCategoryData = USE_NEW_REPORT_DATA && newReport ? adaptCategoryData(newReport.expense.by_category) : categoryData;
-  const displayPlannedVsActual = USE_NEW_REPORT_DATA && newReport ? adaptToLegacyPlannedItems(newReport.expense.by_category) : plannedVsActual;
-  const displayFiscal = USE_NEW_REPORT_DATA && newReport ? adaptFiscalSummary(newReport) : { totalGross, totalTax, totalNet, effectiveRate, sourceRows };
-
-  // --- VERIFY MODE ---
-  useEffect(() => {
-    if (verifyMode && newReport) {
-      console.log("=== INICIANDO VERIFY MODE ===");
-      
-      // 1. Expense Realized
-      const legacyExpense = allCategoryData.reduce((sum, c) => sum + c.value, 0);
-      const newExpense = newReport.expense.realized_total;
-      if (Math.abs(legacyExpense - newExpense) > 0.01) {
-        console.warn(`[VERIFY] Divergência em Expense Realized. Legacy: ${legacyExpense}, Novo: ${newExpense}`);
-      }
-
-      // 2. Income Realized
-      const legacyIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + (t.net_amount !== undefined ? t.net_amount : t.amount || 0), 0);
-      const newIncome = newReport.income.realized_total;
-      if (Math.abs(legacyIncome - newIncome) > 0.01) {
-        console.warn(`[VERIFY] Divergência em Income Realized. Legacy: ${legacyIncome}, Novo: ${newIncome}`);
-      }
-
-      // 3. Expense Expected - REMOVIDO
-      // (Legacy usa limites do budget, Novo usa soma de Payables. Não são comparáveis).
-
-      // 4. Fiscal
-      if (Math.abs(totalGross - newReport.fiscal.total_gross) > 0.01) {
-        console.warn(`[VERIFY] Divergência em Fiscal Gross. Legacy: ${totalGross}, Novo: ${newReport.fiscal.total_gross}`);
-      }
-      if (Math.abs(totalNet - newReport.fiscal.total_net) > 0.01) {
-        console.warn(`[VERIFY] Divergência em Fiscal Net. Legacy: ${totalNet}, Novo: ${newReport.fiscal.total_net}`);
-      }
-
-      // 5. Cashflow 6 Meses Completo
-      for (let i = 0; i < 6; i++) {
-        const lCash = months[i];
-        const nCash = newReport.cashflow_6m[i];
-        if (lCash && nCash) {
-           if (Math.abs(lCash.Receitas - nCash.income_net) > 0.01) {
-              console.warn(`[VERIFY] Divergência em Cashflow Receitas (${lCash.name}). Legacy: ${lCash.Receitas}, Novo: ${nCash.income_net}`);
-           }
-           if (Math.abs(lCash.Despesas - nCash.expense_gross) > 0.01) {
-              console.warn(`[VERIFY] Divergência em Cashflow Despesas (${lCash.name}). Legacy: ${lCash.Despesas}, Novo: ${nCash.expense_gross}`);
-           }
-        }
-      }
-
-      // 6. Planned vs Actual by Category
-      plannedVsActual.forEach(lItem => {
-        const nItem = displayPlannedVsActual.find(n => n.slug === lItem.slug);
-        if (nItem) {
-           if (Math.abs(lItem.actual - nItem.actual) > 0.01) {
-              console.warn(`[VERIFY] Categoria "${lItem.name}" divergência em Actual. Legacy: ${lItem.actual}, Novo: ${nItem.actual}`);
-           }
-        }
-      });
-      
-      console.log("=== FIM VERIFY MODE ===");
-    }
-  }, [verifyMode, newReport, allCategoryData, totalGross, totalNet, months, monthTx, plannedVsActual, displayPlannedVsActual]);
+  const contasAPagarTotal = useMemo(() =>
+    filteredPayables.reduce((s, p) => s + (p.amount || 0), 0),
+  [filteredPayables]);
 
   return (
     <div className="p-6 space-y-6">
@@ -501,104 +200,39 @@ export default function Reports() {
           <h1 className="text-2xl font-sora font-bold">Relatórios</h1>
           <p className="text-muted-foreground text-sm mt-1">Visão financeira completa</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button onClick={runDebug} disabled={isDebugLoading} className="bg-amber-500 hover:bg-amber-600 text-white">
-            {isDebugLoading ? 'Carregando...' : '🐛 Debug Maio'}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+            <ChevronLeft className="w-4 h-4" />
           </Button>
-          <Button onClick={runMigratePreview} disabled={isMigrateLoading} className="bg-purple-600 hover:bg-purple-700 text-white">
-            {isMigrateLoading ? 'Carregando...' : '🔄 Preview Migração Faturas'}
-          </Button>
-          <Button onClick={runDiagnostics} disabled={isDiagLoading} className="bg-slate-600 hover:bg-slate-700 text-white">
-            {isDiagLoading ? 'Rodando...' : '🔬 Diagnósticos (5 perguntas)'}
-          </Button>
-          <Button onClick={runCreateFaturaCategory} disabled={isCreateCatLoading} className="bg-teal-600 hover:bg-teal-700 text-white">
-            {isCreateCatLoading ? 'Criando...' : '🏷️ Passo A — Criar cat. fatura'}
+          <span className="text-sm font-medium min-w-[140px] text-center capitalize">
+            {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+          </span>
+          <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+            <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {debugData && (
-        <div className="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[400px] w-full mb-6">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-white font-bold text-sm">Resultados do Debug de Maio</span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => {
-                navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
-              }}>📋 Copiar</Button>
-              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setDebugData(null)}>Fechar</Button>
-            </div>
-          </div>
-          <pre>{JSON.stringify(debugData, null, 2)}</pre>
-        </div>
-      )}
-
-      {createCatData && (
-        <div className="bg-slate-900 text-teal-300 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[300px] w-full mb-6">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-white font-bold text-sm">🏷️ Passo A — Criar categoria fatura</span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => navigator.clipboard.writeText(JSON.stringify(createCatData, null, 2))}>📋 Copiar</Button>
-              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setCreateCatData(null)}>Fechar</Button>
-            </div>
-          </div>
-          <pre>{JSON.stringify(createCatData, null, 2)}</pre>
-        </div>
-      )}
-
-      {diagData && (
-        <div className="bg-slate-900 text-cyan-300 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[500px] w-full mb-6">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-white font-bold text-sm">🔬 Resultados dos Diagnósticos</span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => navigator.clipboard.writeText(JSON.stringify(diagData, null, 2))}>📋 Copiar</Button>
-              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setDiagData(null)}>Fechar</Button>
-            </div>
-          </div>
-          <pre>{JSON.stringify(diagData, null, 2)}</pre>
-        </div>
-      )}
-
-      {migrateData && (
-        <div className="bg-slate-900 text-purple-300 p-4 rounded-xl overflow-auto text-xs font-mono max-h-[400px] w-full mb-6">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-white font-bold text-sm">
-              {migrateData.mode === 'execute' ? '✅ Migração Executada' : `🔍 Preview: ${migrateData.to_update_count} transações para migrar`}
-            </span>
-            <div className="flex gap-2">
-              {migrateData.mode !== 'execute' && migrateData.to_update_count > 0 && (
-                <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={runMigrateExecute} disabled={isMigrateLoading}>
-                  ▶ Executar Migração
-                </Button>
-              )}
-              <Button size="sm" variant="ghost" className="text-white hover:bg-slate-800" onClick={() => setMigrateData(null)}>Fechar</Button>
-            </div>
-          </div>
-          <pre>{JSON.stringify(migrateData, null, 2)}</pre>
-        </div>
-      )}
-
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 bg-[#E8EDF2] p-1 rounded-xl">
-          <TabsTrigger 
-            value="overview" 
-            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#0D3B66] font-semibold text-[#7B92A8] transition-all"
-          >
-            Visão Geral
+      <Tabs defaultValue="realizado" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 bg-[#E8EDF2] p-1 rounded-xl">
+          <TabsTrigger value="realizado" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#0D3B66] font-semibold text-[#7B92A8] transition-all">
+            Realizado
           </TabsTrigger>
-          <TabsTrigger 
-            value="audit" 
-            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#0D3B66] font-semibold text-[#7B92A8] transition-all"
-          >
-            Auditoria
+          <TabsTrigger value="contas" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#0D3B66] font-semibold text-[#7B92A8] transition-all">
+            Contas a Pagar
+          </TabsTrigger>
+          <TabsTrigger value="reconciliacao" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#0D3B66] font-semibold text-[#7B92A8] transition-all">
+            Reconciliação
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-6 space-y-6">
-          
+        {/* ===== ABA 1: REALIZADO ===== */}
+        <TabsContent value="realizado" className="mt-6 space-y-6">
+
           <div className="bg-white border-[0.5px] border-[#E8EDF2] border-l-[4px] border-l-[#0D3B66] shadow-[0_1px_4px_rgba(13,59,102,0.06)] rounded-xl py-4 px-[18px] flex items-center justify-between gap-4">
             <div>
               <h3 className="text-[14px] font-bold text-[#0D3B66] mb-0.5">Relatório Consolidado</h3>
-              <p className="text-[12px] text-[#7B92A8]">Acesse o fechamento detalhado de {format(currentMonth, 'MMMM/yyyy', { locale: ptBR })}</p>
+              <p className="text-[12px] text-[#7B92A8]">Movimentação financeira efetiva de {format(currentMonth, 'MMMM/yyyy', { locale: ptBR })}</p>
             </div>
             <button
               onClick={() => setConsolidatedModalOpen(true)}
@@ -609,125 +243,98 @@ export default function Reports() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            
-            {/* GRÁFICO 1: Fluxo de Caixa */}
+            {/* Fluxo de Caixa */}
             <Card className="bg-white border-[0.5px] border-[#E8EDF2] rounded-[16px] p-5 shadow-[0_1px_4px_rgba(13,59,102,0.06)]">
               <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Fluxo de Caixa — Últimos 6 Meses</h3>
               <div className="relative h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={displayMonths} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <BarChart data={months} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#F0F4F8" />
-                    <XAxis 
-                      dataKey="name" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#7B92A8', fontSize: 11 }} 
-                      dy={10}
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#7B92A8', fontSize: 10 }}
-                      tickFormatter={v => `R$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} 
-                    />
-                    <Tooltip 
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7B92A8', fontSize: 11 }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7B92A8', fontSize: 10 }} tickFormatter={v => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
+                    <Tooltip
                       cursor={{ fill: 'rgba(13, 59, 102, 0.05)' }}
                       contentStyle={{ backgroundColor: '#0D3B66', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
                       itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                       formatter={(v) => [fmt(v), '']}
                     />
-                    <Legend 
-                      iconType="circle" 
-                      wrapperStyle={{ fontSize: '11px', color: '#7B92A8', paddingTop: '10px' }} 
-                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#7B92A8', paddingTop: '10px' }} />
                     <Bar dataKey="Receitas" fill="#0FA3A3" radius={[6, 6, 0, 0]} barSize={24} />
                     <Bar dataKey="Despesas" fill="#F08080" radius={[6, 6, 0, 0]} barSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-[9px] text-[#7B92A8] italic mt-2.5">* despesas registradas a partir de mai/26</p>
             </Card>
 
-            {/* GRÁFICO 2: Despesas por Categoria (Doughnut) */}
+            {/* Donut por categoria */}
             <Card className="bg-white border-[0.5px] border-[#E8EDF2] rounded-[16px] p-5 shadow-[0_1px_4px_rgba(13,59,102,0.06)]">
               <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Despesas por Categoria (Mês Atual)</h3>
               <div className="relative h-[200px]">
-                {displayCategoryData.length === 0 ? (
+                {categoryData.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Nenhuma despesa neste mês</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie 
-                        data={displayCategoryData} 
-                        cx="50%" 
-                        cy="50%" 
-                        innerRadius="62%" 
-                        outerRadius={80} 
-                        dataKey="value"
-                        stroke="#FFFFFF"
-                        strokeWidth={2}
-                      >
-                        {displayCategoryData.map((item, i) => (
-                          <Cell key={item.name || i} fill={item.color} />
-                        ))}
+                      <Pie data={categoryData} cx="50%" cy="50%" innerRadius="62%" outerRadius={80} dataKey="value" stroke="#FFFFFF" strokeWidth={2}>
+                        {categoryData.map((item, i) => <Cell key={item.name || i} fill={item.color} />)}
                       </Pie>
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{ backgroundColor: '#0D3B66', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
-                        itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                         formatter={(value, name) => {
-                          const total = displayCategoryData.reduce((acc, curr) => acc + curr.value, 0);
+                          const total = categoryData.reduce((acc, curr) => acc + curr.value, 0);
                           const pct = ((value / total) * 100).toFixed(1);
                           return [`${fmt(value)} (${pct}%)`, name];
                         }}
                       />
-                      <Legend 
-                        iconType="circle" 
-                        wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} 
-                        formatter={(value) => <span style={{ color: '#7B92A8' }}>{value}</span>}
-                      />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} formatter={(value) => <span style={{ color: '#7B92A8' }}>{value}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
               </div>
-              {valorPassivosTransicao > 0 && (
-                <div className="mt-4 rounded-r-md border-l-[3px] border-l-[#F0A030] bg-[#FFF8EC] px-3 py-2 text-[11px] text-[#C0622A]">
-                  ⚠ Passivos de Transição ({fmt(valorPassivosTransicao)}) excluídos desta visão — categoria temporária de migração
-                </div>
-              )}
             </Card>
           </div>
 
-          <OverviewPlannedVsActual items={displayPlannedVsActual} currentMonth={currentMonth} />
+          <OverviewPlannedVsActual items={plannedVsActual} currentMonth={currentMonth} />
 
           <OverviewFiscalSummary
-            totalGross={displayFiscal.totalGross}
-            totalTax={displayFiscal.totalTax}
-            totalNet={displayFiscal.totalNet}
-            effectiveRate={displayFiscal.effectiveRate}
-            sourceRows={displayFiscal.sourceRows}
+            totalGross={totalGross}
+            totalTax={totalTax}
+            totalNet={totalNet}
+            effectiveRate={effectiveRate}
+            sourceRows={sourceRows}
           />
         </TabsContent>
 
-        <TabsContent value="audit" className="mt-6 space-y-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="text-sm font-medium min-w-[140px] text-center capitalize">
-              {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-            </span>
-            <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
+        {/* ===== ABA 2: CONTAS A PAGAR ===== */}
+        <TabsContent value="contas" className="mt-6 space-y-6">
+          <p className="text-sm text-muted-foreground">Contas com competência em {format(currentMonth, 'MMMM/yyyy', { locale: ptBR })} — pagas, pendentes e vencidas</p>
 
-          <AuditCategoryPieChart auditData={displayAuditData} categories={categories} />
+          <PayableStatusCards payables={filteredPayables} />
 
-          <AuditReportAccordion 
-             payables={displayAuditData} 
-             onRowClick={handlePayableClick} 
-             categories={categories}
-           />
+          <AuditCategoryPieChart auditData={filteredPayables} categories={categories} />
+
+          <AuditReportAccordion
+            payables={filteredPayables}
+            onRowClick={handlePayableClick}
+            categories={categories}
+          />
+        </TabsContent>
+
+        {/* ===== ABA 3: RECONCILIAÇÃO ===== */}
+        <TabsContent value="reconciliacao" className="mt-6 space-y-6">
+          <p className="text-sm text-muted-foreground">Por que o Realizado e as Contas a Pagar não fecham?</p>
+
+          <ReconciliationConfront
+            realizado={realizadoExpense}
+            contasAPagar={contasAPagarTotal}
+          />
+
+          <ReconciliationLists
+            transactions={transactions}
+            payables={payables}
+            categories={categories}
+            selectedMonthStr={selectedMonthStr}
+          />
         </TabsContent>
       </Tabs>
 

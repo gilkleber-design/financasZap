@@ -66,11 +66,11 @@ export default function AuditReportAccordion({ aggregation = [], onRowClick, onC
                     <div className="flex items-center justify-between w-full pr-4">
                       <div className="flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cat.color || '#94A3B8' }} />
-                        <span className="font-bold text-slate-700">{cat.name}</span>
+                        <span className="font-bold text-slate-700">{cat.categoryName}</span>
                       </div>
                       <button
                         className="ml-auto mr-2"
-                        onClick={e => { e.stopPropagation(); onCategoryClick && onCategoryClick({ categoryName: cat.name, total: cat.total, items: cat.items }); }}
+                        onClick={e => { e.stopPropagation(); onCategoryClick && onCategoryClick({ categoryName: cat.categoryName, total: cat.total, items: cat.items }); }}
                       >
                         <Badge variant="default" className="bg-primary/90">{fmt(cat.total)}</Badge>
                       </button>

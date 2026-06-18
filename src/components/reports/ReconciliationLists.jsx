@@ -59,10 +59,10 @@ export default function ReconciliationLists({ saiuSemObrigacao, deviaMasNaoSaiu,
           items={sso.items}
           renderRow={(item) => (
             <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.resolver?.rootColor || '#94A3B8' }} />
+              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.cat?.color || '#94A3B8' }} />
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-medium text-slate-700 truncate">{item.description}</div>
-                <div className="text-[10px] text-slate-400">{safeDate(item.date)} · {item.resolver?.rootName || '—'}</div>
+                <div className="text-[10px] text-slate-400">{safeDate(item.date)} · {item.cat?.rootName || '—'}</div>
               </div>
               <div className="text-xs font-bold text-slate-800 shrink-0">{fmt(item.amount || item._amount)}</div>
             </div>
@@ -79,10 +79,10 @@ export default function ReconciliationLists({ saiuSemObrigacao, deviaMasNaoSaiu,
           items={dmns.items}
           renderRow={(item) => (
             <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.resolver?.rootColor || '#94A3B8' }} />
+              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.cat?.color || '#94A3B8' }} />
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-medium text-slate-700 truncate">{item.description}</div>
-                <div className="text-[10px] text-slate-400">{item.dueDate ? safeDate(item.dueDate) : safeDate(item.due_date)} · {item.resolver?.rootName || '—'}</div>
+                <div className="text-[10px] text-slate-400">{item.due ? safeDate(item.due) : safeDate(item.date)} · {item.cat?.rootName || '—'}</div>
               </div>
               <div className="text-right shrink-0">
                 <div className="text-xs font-bold text-slate-800">{fmt(item.amount || item._amount)}</div>
@@ -103,10 +103,10 @@ export default function ReconciliationLists({ saiuSemObrigacao, deviaMasNaoSaiu,
         items={limboData.items}
         renderRow={(item) => (
           <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
-            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.resolver?.rootColor || '#94A3B8' }} />
+            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.cat?.color || '#94A3B8' }} />
             <div className="flex-1 min-w-0">
               <div className="text-xs font-medium text-slate-700 truncate">{item.description}</div>
-              <div className="text-[10px] text-slate-400">{safeDate(item.date)} · {item.resolver?.rootName || '—'}</div>
+              <div className="text-[10px] text-slate-400">{safeDate(item.date)} · {item.cat?.rootName || '—'}</div>
             </div>
             <div className="text-right shrink-0">
               <div className="text-xs font-bold text-slate-800">{fmt(item.amount || item._amount)}</div>

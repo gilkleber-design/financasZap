@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,22 @@ import { ptBR } from 'date-fns/locale';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-// Bug 1 + 2: recebe aggregation (byCategoryLeaf ou byCategoryRoot) da camada
-// Cada item já tem: categoryId, categoryName, total (actual), budget, color
-export default function OverviewPlannedVsActual({ aggregation, currentMonth }) {
+// Recebe aggregation (byCategoryLeaf ou byCategoryRoot), budgets e month.
+// Budget lookup acontece aqui por categoryId — componente NÃO recalcula atividade.
+export default function OverviewPlannedVsActual({ aggregation, budgets = [], month, currentMonth }) {
+  const budgetByCatId = useMemo(() => {
+    const [yearStr, monthStr] = (month || '').split('-');
+    const yearNum = Number(yearStr);
+    const monthNum = Number(monthStr);
+    const map = {};
+    for (const b of budgets) {
+      if (b.month === monthNum && b.year === yearNum) {
+        map[b.category_id] = (map[b.category_id] || 0) + Number(b.amount || 0);
+      }
+    }
+    return map;
+  }, [budgets, month]);
+
   return (
     <Card className="border border-[#E8EDF2] shadow-sm">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -28,17 +41,17 @@ export default function OverviewPlannedVsActual({ aggregation, currentMonth }) {
           </p>
         ) : (
           aggregation.map((item) => {
-            const hasLimit = item.budget > 0;
+            const limit = budgetByCatId[item.id] || 0;
+            const hasLimit = limit > 0;
             const actual = item.total;
-            const limit = item.budget;
             const overLimit = hasLimit && actual > limit;
             const cappedPercent = hasLimit ? Math.min((actual / limit) * 100, 100) : 0;
             return (
-              <div key={item.categoryId} className="flex flex-col gap-3 rounded-[10px] border border-[#E8EDF2] bg-white px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
+              <div key={item.id} className="flex flex-col gap-3 rounded-[10px] border border-[#E8EDF2] bg-white px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
                 <div className="min-w-0 lg:w-52 lg:flex-shrink-0">
                   <div className="flex items-center gap-2">
                     {item.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />}
-                    <span className="text-xs font-bold text-[#0D3B66]">{item.categoryName}</span>
+                    <span className="text-xs font-bold text-[#0D3B66]">{item.name}</span>
                     {!hasLimit && <Badge className="bg-[#FFECEC] px-1.5 py-0 text-[9px] font-bold text-[#C0392B] hover:bg-[#FFECEC]">sem limite</Badge>}
                   </div>
                 </div>

@@ -1,488 +1,198 @@
-import { resolveCategory, buildCategoryIndexes } from './categoryResolver.js';
+// src/lib/reports/reportsData.js
+//
+// Função pura. Recebe entidades + mês + toggle e devolve a estrutura usada
+// pela tela /relatorios. Toda a matemática mora aqui.
+// Componentes consomem fatias prontas e não recalculam nada.
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+export function buildReportsData({ transactions, payables, categories, month, incluirCartao }) {
+  // ---------------- 1. Resolver categoria (uma única função) ----------------
+  const catById = new Map();
+  const catBySlug = new Map();
+  for (const c of categories) {
+    catById.set(c.id, c);
+    if (c.slug) catBySlug.set(String(c.slug).toLowerCase(), c);
+  }
 
-function addToGroup(groups, key, item, resolver) {
-  if (!groups[key]) {
-    groups[key] = {
-      categoryId: resolver.rootId === key ? resolver.rootId : resolver.leafId,
-      categoryName: resolver.rootId === key ? resolver.rootName : resolver.leafName,
-      color: resolver.rootColor,
-      total: 0,
-      budget: 0,
-      count: 0,
-      items: [],
+  function resolveCategory(record) {
+    const byId = record.category_id ? catById.get(record.category_id) : null;
+    const bySlug = record.category ? catBySlug.get(String(record.category).toLowerCase()) : null;
+    const cat = byId || bySlug;
+    if (!cat) return { id: null, name: '(sem categoria)', rootId: null, rootName: '(sem categoria)', type: null, color: null };
+
+    let root = cat;
+    for (let i = 0; i < 10 && root.parent_id; i++) {
+      const parent = catById.get(root.parent_id);
+      if (!parent) break;
+      root = parent;
+    }
+    return {
+      id: cat.id, name: cat.name,
+      rootId: root.id, rootName: root.name,
+      type: cat.type, color: root.color || cat.color || null,
     };
   }
-  groups[key].total += item._amount;
-  groups[key].count += 1;
-  groups[key].items.push(item);
-}
 
-function sortGroups(groups) {
-  return Object.values(groups).sort((a, b) => b.total - a.total);
-}
+  // ---------------- 2. Filtros de mês ----------------
+  const txMonth = t => String(t.date || '').slice(0, 7);
+  // Cartão: vencimento = competência por definição (parcela cai no mês da fatura)
+  const payMonth = p => p.origin_type === 'card'
+    ? String(p.due_date || '').slice(0, 7)
+    : String(p.competencia || p.due_date || '').slice(0, 7);
 
-// Bug 7: Payables origin_type='card' usam due_date como mês canônico
-function payableMonth(payable) {
-  if (payable.origin_type === 'card') {
-    return String(payable.due_date || '').slice(0, 7);
-  }
-  return String(payable.competencia || payable.due_date || '').slice(0, 7);
-}
+  // ---------------- 3. Conciliação ----------------
+  const conciliatedPayableIds = new Set(
+    transactions.filter(t => t.payable_id).map(t => t.payable_id)
+  );
 
-/**
- * Função pura. Recebe entidades brutas + configuração, retorna estrutura canônica.
- */
-export function buildReportsData({ transactions, payables, categories, receivables, budgets, incomeSources, month, incluirCartao }) {
-  const { categoriesById, categoriesBySlug } = buildCategoryIndexes(categories);
-  const today = TODAY();
-
-  // ----------- HELPERS -----------
-  const inMonth = (dateStr) => dateStr && String(dateStr).slice(0, 7) === month;
-
-  function resolveRec(record) {
-    return resolveCategory(record, categoriesById, categoriesBySlug);
-  }
-
-  // ----------- PAYABLES DO MÊS (Bug 7: usa payableMonth) -----------
-  const payablesDoMes = payables.filter(p => payableMonth(p) === month);
-
-  // Payables indexados por ID
-  const payablesById = {};
-  payables.forEach(p => { payablesById[p.id] = p; });
-
-  // IDs de payables que têm Transaction conciliada (em qualquer data)
-  const conciliatedPayableIds = new Set();
-  transactions.forEach(t => { if (t.payable_id) conciliatedPayableIds.add(t.payable_id); });
-
-  // ----------- TRANSACTIONS DO MÊS -----------
-  const txDoMes = transactions.filter(t => inMonth(t.date));
-
-  // ----------- PROVISIONADOS DE CARTÃO (para toggle) -----------
-  const provisionadosCartao = incluirCartao
-    ? payablesDoMes.filter(p => {
-        if (p.status !== 'provisioned') return false;
-        if (p.origin_type !== 'card') return false;
-        if (conciliatedPayableIds.has(p.id)) return false;
-        const r = resolveRec(p);
-        if (r.leafType === 'transfer') return false;
-        return true;
-      })
-    : [];
-
-  const provisionadosIds = new Set(provisionadosCartao.map(p => p.id));
-
-  // ----------- ATIVIDADE: montar items -----------
-  // Bug 4: separar itens sem categoria
+  // ---------------- 4. Itens da Atividade ----------------
   const atividadeItems = [];
-  const atividadeSemCatItems = [];
 
-  txDoMes.forEach(t => {
-    if (t.type !== 'expense') return;
-    const r = resolveRec(t);
-    if (r.leafType === 'transfer') return;
-    const item = {
-      id: t.id,
+  // 4a. Transações efetivas (exclui transferências como Fatura)
+  for (const t of transactions) {
+    if (txMonth(t) !== month) continue;
+    if (t.type !== 'expense') continue;
+    const cat = resolveCategory(t);
+    if (cat.type === 'transfer') continue;
+    atividadeItems.push({
       source: 'transaction',
-      date: t.date,
+      id: t.id,
+      date: String(t.date || '').slice(0, 10),
       description: t.description,
       amount: Number(t.amount || 0),
-      _amount: Number(t.amount || 0),
-      type: t.type,
       payableId: t.payable_id || null,
-      resolver: r,
-      status: t.status,
-    };
-    if (!r.leafId) {
-      atividadeSemCatItems.push(item);
-    } else {
-      atividadeItems.push(item);
-    }
-  });
-
-  provisionadosCartao.forEach(p => {
-    const r = resolveRec(p);
-    const item = {
-      id: p.id,
-      source: 'payable_card',
-      date: p.competencia || p.due_date,
-      description: p.description,
-      amount: Number(p.amount || 0),
-      _amount: Number(p.amount || 0),
-      type: 'expense',
-      payableId: p.id,
-      resolver: r,
-      status: p.status,
-    };
-    if (!r.leafId) {
-      atividadeSemCatItems.push(item);
-    } else {
-      atividadeItems.push(item);
-    }
-  });
-
-  const atividadeTotal = atividadeItems.reduce((s, i) => s + i._amount, 0);
-
-  // Receitas do mês
-  const totalReceitas = txDoMes
-    .filter(t => t.type === 'income')
-    .reduce((s, t) => s + Number(t.net_amount || t.amount || 0), 0);
-
-  // ----------- BUDGET por categoria (Bug 1 fix) -----------
-  const [yearStr, monthStr] = month.split('-');
-  const yearNum = Number(yearStr);
-  const monthNum = Number(monthStr);
-  const budgetsDoMes = (budgets || []).filter(b => b.month === monthNum && b.year === yearNum);
-
-  // Budget por leafId e rootId
-  const budgetByLeafId = {};
-  const budgetByRootId = {};
-  budgetsDoMes.forEach(b => {
-    const cat = categoriesById[b.category_id];
-    if (!cat) return;
-    const rootId = cat.parent_id ? String(cat.parent_id) : String(cat.id);
-    budgetByLeafId[String(cat.id)] = (budgetByLeafId[String(cat.id)] || 0) + Number(b.amount || 0);
-    budgetByRootId[rootId] = (budgetByRootId[rootId] || 0) + Number(b.amount || 0);
-  });
-
-  // Agrupamentos atividade
-  const atividadeLeafGroups = {};
-  const atividadeRootGroups = {};
-  atividadeItems.forEach(item => {
-    const r = item.resolver;
-    const leafKey = r.leafId;
-    const rootKey = r.rootId || r.leafId;
-
-    addToGroup(atividadeLeafGroups, leafKey, item, { ...r, rootId: leafKey, rootName: r.leafName });
-    addToGroup(atividadeRootGroups, rootKey, item, r);
-  });
-
-  // Corrigir nomes e injetar budget nos leaf groups
-  Object.entries(atividadeLeafGroups).forEach(([key, g]) => {
-    const cat = categoriesById[key];
-    if (cat) { g.categoryId = cat.id; g.categoryName = cat.name; g.color = cat.color || '#94A3B8'; }
-    g.budget = budgetByLeafId[key] || 0;
-  });
-  // Injetar budget nos root groups
-  Object.entries(atividadeRootGroups).forEach(([key, g]) => {
-    const cat = categoriesById[key];
-    if (cat) { g.categoryId = cat.id; g.categoryName = cat.name; g.color = cat.color || '#94A3B8'; }
-    g.budget = budgetByRootId[key] || 0;
-  });
-
-  // ----------- ATIVIDADE: byMonth6 -----------
-  const byMonth6 = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(month + '-01');
-    d.setMonth(d.getMonth() - (5 - i));
-    const m = d.toISOString().slice(0, 7);
-
-    const txM = transactions.filter(t => inMonthKey(t.date, m));
-    const provM = incluirCartao
-      ? payables.filter(p => {
-          if (payableMonth(p) !== m) return false;
-          if (p.status !== 'provisioned') return false;
-          if (p.origin_type !== 'card') return false;
-          if (conciliatedPayableIds.has(p.id)) return false;
-          const r = resolveRec(p);
-          return r.leafType !== 'transfer';
-        })
-      : [];
-
-    const despesas = txM.filter(t => {
-      if (t.type !== 'expense') return false;
-      const r = resolveRec(t);
-      return r.leafType !== 'transfer';
-    }).reduce((s, t) => s + Number(t.amount || 0), 0)
-      + provM.reduce((s, p) => s + Number(p.amount || 0), 0);
-
-    const receitas = txM.filter(t => t.type === 'income')
-      .reduce((s, t) => s + Number(t.net_amount || t.amount || 0), 0);
-
-    return {
-      monthKey: m,
-      name: formatMonthLabel(m),
-      receitas,
-      despesas,
-      Receitas: receitas,
-      Despesas: despesas,
-      saldo: receitas - despesas,
-    };
-  });
-
-  // ----------- CONTAS A PAGAR -----------
-  // Bug 4: separar itens sem categoria
-  const contasItems = [];
-  const contasSemCatItems = [];
-
-  payablesDoMes.forEach(p => {
-    const r = resolveRec(p);
-    const jaContadoEmAtividade = provisionadosIds.has(p.id);
-    const item = {
-      id: p.id,
-      dueDate: p.due_date,
-      competencia: p.competencia,
-      description: p.description,
-      amount: Number(p.amount || 0),
-      _amount: Number(p.amount || 0),
-      status: p.status,
-      resolver: r,
-      jaContadoEmAtividade,
-      origin_type: p.origin_type,
-      installment_number: p.installment_number,
-      installment_count: p.installment_count,
-    };
-    if (!r.leafId) {
-      contasSemCatItems.push(item);
-    } else {
-      contasItems.push(item);
-    }
-  });
-
-  const allContasItems = [...contasItems, ...contasSemCatItems];
-
-  const contasJaContadas = allContasItems.filter(i => i.jaContadoEmAtividade);
-  const contasPendentesTotal = allContasItems
-    .filter(i => i.status !== 'paid' && i.status !== 'conciliated')
-    .reduce((s, i) => s + i._amount, 0);
-  const contasJaContadasTotal = contasJaContadas.reduce((s, i) => s + i._amount, 0);
-  const contasTotal = contasPendentesTotal - (incluirCartao ? contasJaContadasTotal : 0);
-
-  // byStatus (usa allContasItems para não perder os sem categoria nos cards)
-  const pagas = allContasItems.filter(i => i.status === 'paid' || i.status === 'conciliated');
-  const pendentes = allContasItems.filter(i => i.status === 'pending' && i.dueDate >= today);
-  const vencidas = allContasItems.filter(i => i.status === 'pending' && i.dueDate < today);
-  const provisionadas = allContasItems.filter(i => i.status === 'provisioned');
-
-  const sum = arr => arr.reduce((s, i) => s + i._amount, 0);
-  const totalBrutoCap = allContasItems.reduce((s, i) => s + i._amount, 0);
-
-  // Agrupamentos contas (apenas itens COM categoria — Bug 4)
-  const contasLeafGroups = {};
-  const contasRootGroups = {};
-  contasItems.forEach(item => {
-    const r = item.resolver;
-    const leafKey = r.leafId;
-    const rootKey = r.rootId || r.leafId;
-    addToGroup(contasLeafGroups, leafKey, item, { ...r, rootId: leafKey, rootName: r.leafName });
-    addToGroup(contasRootGroups, rootKey, item, r);
-  });
-  Object.entries(contasLeafGroups).forEach(([key, g]) => {
-    const cat = categoriesById[key];
-    if (cat) { g.categoryId = cat.id; g.categoryName = cat.name; g.color = cat.color || '#94A3B8'; }
-  });
-  Object.entries(contasRootGroups).forEach(([key, g]) => {
-    const cat = categoriesById[key];
-    if (cat) { g.categoryId = cat.id; g.categoryName = cat.name; g.color = cat.color || '#94A3B8'; }
-  });
-
-  // ----------- RECONCILIAÇÃO -----------
-  const ssoItems = txDoMes.filter(t => {
-    if (t.type !== 'expense') return false;
-    if (t.payable_id) return false;
-    const r = resolveRec(t);
-    return r.leafType !== 'transfer';
-  }).map(t => ({ ...t, _amount: Number(t.amount || 0), resolver: resolveRec(t) }));
-
-  const dmnsItems = payablesDoMes.filter(p => {
-    if (p.status === 'paid' || p.status === 'conciliated') return false;
-    if (conciliatedPayableIds.has(p.id)) return false;
-    if (incluirCartao && provisionadosIds.has(p.id)) return false;
-    return true;
-  }).map(p => ({ ...p, _amount: Number(p.amount || 0), resolver: resolveRec(p) }));
-
-  const limboItems = txDoMes.filter(t => {
-    if (t.type !== 'expense') return false;
-    if (!t.payable_id) return false;
-    const p = payablesById[t.payable_id];
-    if (!p) return false;
-    if (payableMonth(p) === month) return false;
-    return true;
-  }).map(t => {
-    const p = payablesById[t.payable_id];
-    return {
-      ...t,
-      _amount: Number(t.amount || 0),
-      resolver: resolveRec(t),
-      payableCompetenciaMonth: p ? payableMonth(p) : null,
-    };
-  });
-
-  const txConciliaPayableDoMes = txDoMes.filter(t => {
-    if (!t.payable_id) return false;
-    const p = payablesById[t.payable_id];
-    if (!p) return false;
-    return payableMonth(p) === month;
-  });
-  const sumTxConcilia = txConciliaPayableDoMes.reduce((s, t) => s + Number(t.amount || 0), 0);
-  const sumProvisionadosContados = provisionadosCartao.reduce((s, p) => s + Number(p.amount || 0), 0);
-
-  const confrontoAtividade = atividadeTotal;
-  const confrontoContas = contasTotal;
-  const diferenca = confrontoAtividade - confrontoContas;
-
-  const somaExplicada = (ssoItems.reduce((s, i) => s + i._amount, 0))
-    + (limboItems.reduce((s, i) => s + i._amount, 0))
-    + sumTxConcilia
-    + sumProvisionadosContados;
-  const diferencaInexplicada = Math.abs(atividadeTotal - somaExplicada);
-  const confrontoFecha = diferencaInexplicada < 1.0;
-
-  // Drift: transações
-  const transacoesComDrift = transactions.filter(t => {
-    const r = resolveRec(t);
-    return r.drift.hasMismatch || r.drift.leafInactive || !r.drift.catIdValid && (t.category_id || t.category);
-  }).slice(0, 50).map(t => {
-    const r = resolveRec(t);
-    return { id: t.id, description: t.description, amount: t.amount, date: t.date, drift: r.drift };
-  });
-
-  const payablesComDrift = payables.filter(p => {
-    const r = resolveRec(p);
-    return r.drift.hasMismatch || r.drift.leafInactive || !r.drift.catIdValid && (p.category_id || p.category);
-  }).slice(0, 50).map(p => {
-    const r = resolveRec(p);
-    return { id: p.id, description: p.description, amount: p.amount, drift: r.drift };
-  });
-
-  const categoriasOrfas = categories.filter(c => {
-    if (!c.parent_id) return false;
-    return !categoriesById[String(c.parent_id)];
-  }).map(c => ({ id: c.id, name: c.name, slug: c.slug, missingParentId: c.parent_id }));
-
-  // ----------- FISCAL (Bug 3: lookup nome do IncomeSource) -----------
-  const incomeSourcesMap = {};
-  (incomeSources || []).forEach(s => { incomeSourcesMap[s.id] = s; });
-
-  const recebidosDoMes = (receivables || []).filter(r =>
-    r.status === 'received' && inMonth(r.due_date)
-  );
-  const fiscalBySource = {};
-  recebidosDoMes.forEach(item => {
-    const key = item.income_source_id || 'outras';
-    if (!fiscalBySource[key]) fiscalBySource[key] = { gross: 0, tax: 0 };
-    const gross = Number(item.amount || 0);
-    const tax = gross * (Number(item.tax_rate || 0) / 100);
-    fiscalBySource[key].gross += gross;
-    fiscalBySource[key].tax += tax;
-  });
-  const totalBruto = Object.values(fiscalBySource).reduce((s, i) => s + i.gross, 0);
-  const totalImpostos = Object.values(fiscalBySource).reduce((s, i) => s + i.tax, 0);
-  const totalLiquido = totalBruto - totalImpostos;
-  const aliquotaEfetiva = totalBruto > 0 ? `${((totalImpostos / totalBruto) * 100).toFixed(1)}%` : '0.0%';
-  const sourceRows = Object.entries(fiscalBySource).map(([sourceId, data]) => {
-    const source = incomeSourcesMap[sourceId];
-    return {
-      sourceId,
-      name: source ? source.name : sourceId === 'outras' ? 'Outras' : '(fonte não encontrada)',
-      tax: data.tax,
-      gross: data.gross,
-    };
-  }).sort((a, b) => b.tax - a.tax);
-
-  // ----------- PlannedVsActual: usa byCategoryRoot/Leaf já com budget embutido -----------
-  // (Bug 1 + 2: consome aggregation com budget já embutido, sem recalcular)
-  // Combinar budgets que não têm grupo com atividadeRootGroups
-  const allRootIds = new Set([
-    ...Object.keys(budgetByRootId),
-    ...Object.keys(atividadeRootGroups),
-  ]);
-  const plannedVsActual = Array.from(allRootIds)
-    .filter(rootId => rootId !== 'sem_categoria')
-    .map(rootId => {
-      const actual = atividadeRootGroups[rootId]?.total || 0;
-      const limit = budgetByRootId[rootId] || 0;
-      const hasLimit = limit > 0;
-      const percent = hasLimit ? (actual / limit) * 100 : 0;
-      const cat = categoriesById[rootId];
-      const name = cat?.name || atividadeRootGroups[rootId]?.categoryName || rootId;
-      return { rootId, name, actual, limit, hasLimit, percent };
-    }).sort((a, b) => {
-      if (a.hasLimit && b.hasLimit) return b.percent - a.percent;
-      if (a.hasLimit) return -1;
-      if (b.hasLimit) return 1;
-      return b.actual - a.actual;
+      cat,
     });
+  }
 
-  return {
-    atividade: {
-      total: atividadeTotal,
-      totalReceitas,
-      byCategoryLeaf: sortGroups(atividadeLeafGroups),
-      byCategoryRoot: sortGroups(atividadeRootGroups),
-      byMonth6,
-      plannedVsActual,
-      semCategoria: {
-        total: atividadeSemCatItems.reduce((s, i) => s + i._amount, 0),
-        count: atividadeSemCatItems.length,
-        items: atividadeSemCatItems,
-      },
-      items: atividadeItems,
-    },
-    contasAPagar: {
-      total: contasTotal,
-      totalBruto: totalBrutoCap,
-      totalJaContado: contasJaContadasTotal,
-      byStatus: {
-        pagas:         { total: sum(pagas),         count: pagas.length,         items: pagas,         jaContado: sum(pagas.filter(i => i.jaContadoEmAtividade)) },
-        pendentes:     { total: sum(pendentes),     count: pendentes.length,     items: pendentes,     jaContado: sum(pendentes.filter(i => i.jaContadoEmAtividade)) },
-        vencidas:      { total: sum(vencidas),      count: vencidas.length,      items: vencidas,      jaContado: sum(vencidas.filter(i => i.jaContadoEmAtividade)) },
-        provisionadas: { total: sum(provisionadas), count: provisionadas.length, items: provisionadas, jaContado: sum(provisionadas.filter(i => i.jaContadoEmAtividade)) },
-      },
-      byCategoryLeaf: sortGroups(contasLeafGroups),
-      byCategoryRoot: sortGroups(contasRootGroups),
-      semCategoria: {
-        total: contasSemCatItems.reduce((s, i) => s + i._amount, 0),
-        count: contasSemCatItems.length,
-        items: contasSemCatItems,
-      },
-      items: allContasItems,
-    },
-    reconciliacao: {
-      confronto: {
-        atividade: confrontoAtividade,
-        contasAPagar: confrontoContas,
-        diferenca,
-      },
-      saiuSemObrigacao: {
-        total: ssoItems.reduce((s, i) => s + i._amount, 0),
-        count: ssoItems.length,
-        items: ssoItems,
-      },
-      deviaMasNaoSaiu: {
-        total: dmnsItems.reduce((s, i) => s + i._amount, 0),
-        count: dmnsItems.length,
-        items: dmnsItems,
-      },
-      limbo: {
-        total: limboItems.reduce((s, i) => s + i._amount, 0),
-        count: limboItems.length,
-        items: limboItems,
-      },
-    },
-    fiscal: {
-      totalBruto,
-      totalImpostos,
-      totalLiquido,
-      aliquotaEfetiva,
-      sourceRows,
-    },
-    invariantes: {
-      confrontoFecha,
-      diferencaInexplicada,
-      transacoesComDrift,
-      payablesComDrift,
-      categoriasOrfas,
+  // 4b. Provisionados de cartão sem conciliação (toggle ON)
+  if (incluirCartao) {
+    for (const p of payables) {
+      if (payMonth(p) !== month) continue;
+      if (p.status !== 'provisioned') continue;
+      if (p.origin_type !== 'card') continue;
+      if (conciliatedPayableIds.has(p.id)) continue;
+      const cat = resolveCategory(p);
+      if (cat.type === 'transfer') continue;
+      atividadeItems.push({
+        source: 'payable_card',
+        id: p.id,
+        date: String(p.due_date || '').slice(0, 10),
+        description: p.description,
+        amount: Number(p.amount || 0),
+        payableId: p.id,
+        cat,
+      });
+    }
+  }
+
+  const atividadeOK = atividadeItems.filter(i => i.cat.id !== null);
+  const atividadeSemCat = atividadeItems.filter(i => i.cat.id === null);
+
+  const atividade = {
+    total: sum(atividadeOK),
+    items: atividadeOK,
+    semCategoria: { total: sum(atividadeSemCat), count: atividadeSemCat.length, items: atividadeSemCat },
+    byCategoryLeaf: groupBy(atividadeOK, i => i.cat.id, i => ({ id: i.cat.id, name: i.cat.name, color: i.cat.color })),
+    byCategoryRoot: groupBy(atividadeOK, i => i.cat.rootId, i => ({ id: i.cat.rootId, name: i.cat.rootName, color: i.cat.color })),
+  };
+
+  // ---------------- 5. Itens da Contas a Pagar ----------------
+  const today = new Date().toISOString().slice(0, 10);
+  const statusOf = i => {
+    if (i.status === 'paid' || i.status === 'conciliated') return 'pagas';
+    if (i.status === 'provisioned') return 'provisionadas';
+    if (i.status === 'pending' && i.due < today) return 'vencidas';
+    return 'pendentes';
+  };
+
+  const cpAll = [];
+  for (const p of payables) {
+    if (payMonth(p) !== month) continue;
+    const cat = resolveCategory(p);
+    const jaContadoEmAtividade =
+      incluirCartao &&
+      p.origin_type === 'card' &&
+      p.status === 'provisioned' &&
+      !conciliatedPayableIds.has(p.id) &&
+      cat.type !== 'transfer' &&
+      cat.id !== null;
+    cpAll.push({
+      source: 'payable',
+      id: p.id,
+      due: String(p.due_date || '').slice(0, 10),
+      description: p.description,
+      amount: Number(p.amount || 0),
+      status: p.status,
+      payableId: p.id,
+      cat,
+      jaContadoEmAtividade,
+    });
+  }
+
+  const cpOK = cpAll.filter(i => i.cat.id !== null);
+  const cpSemCat = cpAll.filter(i => i.cat.id === null);
+  const jaContadosTotal = cpOK.filter(i => i.jaContadoEmAtividade).reduce((s, i) => s + i.amount, 0);
+
+  const contasAPagar = {
+    total: sum(cpOK) - jaContadosTotal,
+    totalBruto: sum(cpOK),
+    jaContadosTotal,
+    items: cpOK,
+    semCategoria: { total: sum(cpSemCat), count: cpSemCat.length, items: cpSemCat },
+    byCategoryLeaf: groupBy(cpOK, i => i.cat.id, i => ({ id: i.cat.id, name: i.cat.name, color: i.cat.color })),
+    byCategoryRoot: groupBy(cpOK, i => i.cat.rootId, i => ({ id: i.cat.rootId, name: i.cat.rootName, color: i.cat.color })),
+    byStatus: {
+      pagas:         pickStatus(cpOK, 'pagas', statusOf),
+      pendentes:     pickStatus(cpOK, 'pendentes', statusOf),
+      vencidas:      pickStatus(cpOK, 'vencidas', statusOf),
+      provisionadas: pickStatus(cpOK, 'provisionadas', statusOf),
     },
   };
+
+  // ---------------- 6. Reconciliação ----------------
+  const payById = new Map(payables.map(p => [p.id, p]));
+
+  const sso = atividadeOK.filter(i => i.source === 'transaction' && !i.payableId);
+  const dms = cpOK.filter(i => i.status !== 'paid' && i.status !== 'conciliated' && !i.jaContadoEmAtividade);
+  const limbo = atividadeOK.filter(i => {
+    if (i.source !== 'transaction' || !i.payableId) return false;
+    const p = payById.get(i.payableId);
+    return p ? payMonth(p) !== month : false;
+  });
+
+  const reconciliacao = {
+    confronto: {
+      atividade: atividade.total,
+      contasAPagar: contasAPagar.total,
+      diferenca: atividade.total - contasAPagar.total,
+    },
+    saiuSemObrigacao: { total: sum(sso), count: sso.length, items: sso },
+    deviaMasNaoSaiu:  { total: sum(dms), count: dms.length, items: dms },
+    limbo:            { total: sum(limbo), count: limbo.length, items: limbo },
+  };
+
+  return { atividade, contasAPagar, reconciliacao };
 }
 
-function inMonthKey(dateStr, m) {
-  return dateStr && String(dateStr).slice(0, 7) === m;
+// ---------------- Helpers ----------------
+function sum(items) { return items.reduce((s, i) => s + Number(i.amount || 0), 0); }
+
+function groupBy(items, keyFn, metaFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) {
+      map.set(key, { key, ...metaFn(item), total: 0, count: 0, items: [] });
+    }
+    const agg = map.get(key);
+    agg.total += Number(item.amount || 0);
+    agg.count++;
+    agg.items.push(item);
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total);
 }
 
-function formatMonthLabel(m) {
-  const [y, mo] = m.split('-');
-  const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  return `${months[Number(mo) - 1]}/${String(y).slice(2)}`;
+function pickStatus(items, s, statusOf) {
+  const sel = items.filter(i => statusOf(i) === s);
+  return { total: sum(sel), count: sel.length, items: sel };
 }

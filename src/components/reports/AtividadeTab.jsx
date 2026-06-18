@@ -7,7 +7,7 @@ import CategoryAuditDrawer from './CategoryAuditDrawer.jsx';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, onOpenConsolidated, currentMonth }) {
+export default function AtividadeTab({ data, byMonth6, fiscal, grouping, incluirCartao, onOpenConsolidated, currentMonth, budgets, month }) {
   const [drawer, setDrawer] = useState(null); // { categoryName, total, items }
 
   const aggregation = grouping === 'root' ? data.byCategoryRoot : data.byCategoryLeaf;
@@ -17,7 +17,7 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
   const demais = aggregation.slice(6);
   const demaisTotal = demais.reduce((s, i) => s + i.total, 0);
   const donutData = demaisTotal > 0
-    ? [...top6, { categoryName: 'Demais', color: '#E2E8F0', total: demaisTotal, items: demais.flatMap(i => i.items) }]
+    ? [...top6, { name: 'Demais', color: '#E2E8F0', total: demaisTotal, items: demais.flatMap(i => i.items) }]
     : top6;
 
   return (
@@ -62,7 +62,7 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
         <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Fluxo de Caixa — Últimos 6 Meses</h3>
         <div className="h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.byMonth6} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+            <BarChart data={byMonth6 || []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#F0F4F8" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7B92A8', fontSize: 11 }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7B92A8', fontSize: 10 }} tickFormatter={v => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />
@@ -89,7 +89,7 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
             <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={donutData.map(i => ({ name: i.categoryName, value: i.total }))} cx="50%" cy="50%" innerRadius="60%" outerRadius={80} dataKey="value" stroke="#fff" strokeWidth={2}>
+                  <Pie data={donutData.map(i => ({ name: i.name, value: i.total }))} cx="50%" cy="50%" innerRadius="60%" outerRadius={80} dataKey="value" stroke="#fff" strokeWidth={2}>
                     {donutData.map((item, i) => <Cell key={i} fill={item.color} />)}
                   </Pie>
                   <Tooltip contentStyle={{ backgroundColor: '#0D3B66', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }} formatter={(v) => [fmt(v), '']} />
@@ -100,11 +100,11 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
               {donutData.map((item, i) => (
                 <button
                   key={i}
-                  onClick={() => setDrawer({ categoryName: item.categoryName, total: item.total, items: item.items || [] })}
+                  onClick={() => setDrawer({ categoryName: item.name, total: item.total, items: item.items || [] })}
                   className="w-full flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 hover:bg-slate-100 transition-colors text-left"
                 >
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                  <span className="flex-1 text-xs font-medium text-slate-700 truncate">{item.categoryName}</span>
+                  <span className="flex-1 text-xs font-medium text-slate-700 truncate">{item.name}</span>
                   <span className="text-xs font-semibold text-slate-800 shrink-0">{fmt(item.total)}</span>
                 </button>
               ))}
@@ -114,7 +114,7 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
       </Card>
 
       {/* Bug 1 + 2: passa aggregation em vez de plannedVsActual */}
-      <OverviewPlannedVsActual aggregation={aggregation} currentMonth={currentMonth} />
+      <OverviewPlannedVsActual aggregation={aggregation} budgets={budgets} month={month} currentMonth={currentMonth} />
 
       <OverviewFiscalSummary
         totalGross={fiscal.totalBruto}

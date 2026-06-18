@@ -64,11 +64,11 @@ export function buildReportsData({ transactions, payables, categories, month, in
     });
   }
 
-  // 4b. Provisionados de cartão sem conciliação (toggle ON)
+  // 4b. Pendentes/provisionados de cartão sem conciliação (toggle ON)
   if (incluirCartao) {
     for (const p of payables) {
       if (payMonth(p) !== month) continue;
-      if (p.status !== 'provisioned') continue;
+      if (p.status !== 'provisioned' && p.status !== 'pending') continue;
       if (p.origin_type !== 'card') continue;
       if (conciliatedPayableIds.has(p.id)) continue;
       const cat = resolveCategory(p);
@@ -112,7 +112,7 @@ export function buildReportsData({ transactions, payables, categories, month, in
     const jaContadoEmAtividade =
       incluirCartao &&
       p.origin_type === 'card' &&
-      p.status === 'provisioned' &&
+      (p.status === 'provisioned' || p.status === 'pending') &&
       !conciliatedPayableIds.has(p.id) &&
       cat.type !== 'transfer' &&
       cat.id !== null;

@@ -71,7 +71,7 @@ export function useReportsData(month, incluirCartao) {
       const provM = incluirCartao
         ? payables.filter(p => {
             if (resolvePayMonth(p) !== m) return false;
-            if (p.status !== 'provisioned') return false;
+            if (p.status !== 'provisioned' && p.status !== 'pending') return false;
             if (p.origin_type !== 'card') return false;
             return !conciliatedIds.has(p.id);
           }).reduce((s, p) => s + Number(p.amount || 0), 0)

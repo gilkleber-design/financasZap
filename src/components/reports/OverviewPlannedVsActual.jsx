@@ -34,7 +34,7 @@ export default function OverviewPlannedVsActual({ aggregation, currentMonth }) {
             const overLimit = hasLimit && actual > limit;
             const cappedPercent = hasLimit ? Math.min((actual / limit) * 100, 100) : 0;
             return (
-              <div key={item.categoryId} className="flex flex-col gap-3 rounded-[10px] border border-[#E8EDF2] bg-white px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
+              <div key={item.id || item.categoryId} className="flex flex-col gap-3 rounded-[10px] border border-[#E8EDF2] bg-white px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
                 <div className="min-w-0 lg:w-52 lg:flex-shrink-0">
                   <div className="flex items-center gap-2">
                     {item.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />}

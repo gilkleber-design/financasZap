@@ -33,7 +33,7 @@ export default function ContasAPagarTab({ data, grouping, incluirCartao, onRowCl
       )}
 
       {/* Bug 6: banner explicativo */}
-      {incluirCartao && data.totalJaContado > 0 && (
+      {incluirCartao && (data.jaContadosTotal || data.totalJaContado) > 0 && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex flex-col gap-1">
           <p className="text-xs text-blue-700 font-medium">
             O total ajustado desconta os Payables já contados na aba Atividade (toggle "Incluir cartão" ON). Os cards abaixo mostram totais brutos.
@@ -41,7 +41,7 @@ export default function ContasAPagarTab({ data, grouping, incluirCartao, onRowCl
           <div className="flex flex-wrap gap-3 text-xs text-blue-600 mt-0.5">
             <span>Total bruto <b>{fmt(data.totalBruto)}</b></span>
             <span>·</span>
-            <span>Já contados em Atividade <b>{fmt(data.totalJaContado)}</b></span>
+            <span>Já contados em Atividade <b>{fmt(data.jaContadosTotal || data.totalJaContado)}</b></span>
             <span>·</span>
             <span>Ajustado <b>{fmt(data.total)}</b></span>
           </div>

@@ -85,6 +85,7 @@ export default function Reports() {
             <TabsContent value="atividade" className="mt-6">
               <AtividadeTab
                 data={rd.atividade}
+                byMonth6={rd.byMonth6}
                 fiscal={rd.fiscal}
                 grouping={grouping}
                 incluirCartao={incluirCartao}

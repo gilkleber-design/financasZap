@@ -7,7 +7,7 @@ import CategoryAuditDrawer from './CategoryAuditDrawer.jsx';
 
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, onOpenConsolidated, currentMonth }) {
+export default function AtividadeTab({ data, byMonth6, fiscal, grouping, incluirCartao, onOpenConsolidated, currentMonth }) {
   const [drawer, setDrawer] = useState(null); // { categoryName, total, items }
 
   const aggregation = grouping === 'root' ? data.byCategoryRoot : data.byCategoryLeaf;
@@ -62,7 +62,7 @@ export default function AtividadeTab({ data, fiscal, grouping, incluirCartao, on
         <h3 className="text-[13px] font-bold text-[#0D3B66] mb-4">Fluxo de Caixa — Últimos 6 Meses</h3>
         <div className="h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.byMonth6} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+            <BarChart data={byMonth6} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#F0F4F8" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7B92A8', fontSize: 11 }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7B92A8', fontSize: 10 }} tickFormatter={v => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} />

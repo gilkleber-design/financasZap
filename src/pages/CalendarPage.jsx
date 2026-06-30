@@ -137,7 +137,11 @@ export default function CalendarPage() {
     queryKey: ['monthly_closure', monthNumber, yearNumber],
     queryFn: () => base44.entities.MonthlyClosure.filter({ month: monthNumber, year: yearNumber }),
   });
-  const isMonthClosed = closure?.[0]?.status === 'closed';
+  // Pega o closure mais recente (maior created_date) para determinar o status atual
+  const latestClosure = closure?.length > 0
+    ? closure.reduce((latest, c) => !latest || c.created_date > latest.created_date ? c : latest, null)
+    : null;
+  const isMonthClosed = latestClosure?.status === 'closed';
 
   const handleSaveShifts = async (newShifts, meta) => {
     if (meta?.isAvista && newShifts.length === 1) {
